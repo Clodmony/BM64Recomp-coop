@@ -32,10 +32,14 @@ Last updated 2026-10-18 (#2 split into the issue group #6–#10; next: the group
   downed-and-respawn) are **proposals**, not decisions, until #4 confirms them
   on a build.
 - Next issue: **#2**. Scratch for #3 kept until #4 is done.
-- #2 is split into an **issue group** (#6–#10) meant to be done in one
-  session, one branch and one pull request (owner asked for a group that
-  can be implemented in one go). Proposed in the #2 comment; the owner
-  confirms at the end of this session.
+- #2 is split into an **issue group** (#6–#10, milestone *Europe build
+  runs*), done in **one session, one branch `coop/2-europe-build`, one draft
+  pull request** that closes #2 and #6–#10 (owner, confirmed).
+- **Issue groups are allowed in general** (owner): a milestone of linked
+  issues may be one session, one branch, one pull request. AGENTS.md
+  (*Workflow*, "One issue per session") still says otherwise; the group's
+  pull request adds that wording, since only this file lands without a pull
+  request.
 
 ## Open pull requests
 
