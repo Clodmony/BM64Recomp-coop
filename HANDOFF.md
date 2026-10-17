@@ -12,14 +12,19 @@ Last updated 2026-10-18 (project setup).
 
 - Fork of `RevoSucks/BM64Recomp`. `master` = upstream `master` (`726adc9`).
   Default branch `bm64recomp-coop`, created from `726adc9`. Ruleset
-  "Protected" blocks force-pushes and deletion on both. Issues are on; none
-  filed yet.
+  "Protected" blocks force-pushes and deletion on both. Issues are on: #2
+  (Europe ROM support) and #3 (story-mode single-player audit) are open.
 - The setup (AGENTS.md, CLAUDE.md, this file, `tools/verify.sh`,
   `tools/n64recomp.sh`, `.superset/`, `.githooks/pre-commit`, `coop-ci.yml`,
   `docs/coop/building.md`, the README notice) is on branch
   `coop/setup-workflow`, draft PR #1.
 - Verify on `coop/setup-workflow`, 2026-10-18, no ROM: 5/5 stages passed,
   `recomp` skipped, `build` compile only (549 objects, not linked).
+  `coop-ci` on #1 passed.
+- Actions: only `coop-ci` is active. Upstream's `validate-internal`,
+  `validate-external` and `update-pr-artifacts` are disabled (they need a
+  private ROM secret; `validate.yml` is only called by them). Their failed
+  runs on #1 from before the disabling can be ignored.
 - Local git config of the clone: Claude identity, `upstream` with push
   `DISABLED`, `core.hooksPath .githooks`, `pushguard.romDir` set to the
   owner's N64 ROM folder.
@@ -31,32 +36,44 @@ Last updated 2026-10-18 (project setup).
 
 ## Waiting for the owner
 
-- **Actions on the fork.** GitHub lists no workflows on the fork yet: open
-  the repository's Actions tab once and enable workflows. Then disable
-  upstream's, which need a private ROM secret and would fail on every pull
-  request:
-  `for w in validate.yml validate-internal.yml validate-external.yml update-pr-artifacts.yml; do gh workflow disable $w -R Clodmony/BM64Recomp-coop; done`
-  (a session can run this once the owner has enabled Actions).
-- **The ROM.** Linking and running need the 1.0 US ROM; the owner's ROM
-  folder has only the Europe release. To get a full build: a US dump,
-  decompressed with [Bomberhackers/bm64](https://github.com/Bomberhackers/bm64),
-  at `~/dev-scratch/BM64Recomp-coop/rom/bm64.decomp.us.z64`
-  ([docs/coop/building.md](docs/coop/building.md)). Until then every
-  session checks compile-only and says so.
+- **The ROM.** The recomp accepts only the 1.0 US ROM; the owner's ROM
+  folder has only the Europe release. Either a US dump (decompressed with
+  [Bomberhackers/bm64](https://github.com/Bomberhackers/bm64), at
+  `~/dev-scratch/BM64Recomp-coop/rom/bm64.decomp.us.z64`), or #2 (Europe
+  support) makes linking and running possible. Until then every session
+  checks compile-only and says so.
 
-## Next candidates (issues to file first)
+## Next candidates
 
-1. **Co-op design** (`docs/coop/design.md`): what the Adventure mode
-   assumes about one player (player object, camera, HUD, input, stage
-   progress, saves), what Battle mode's four players already provide, and
-   the decisions for online and split-screen co-op. First steps: the
-   decompilation's player and controller code, `patches/` and the
-   `[[patches.hook]]` entries in `bm64.us.toml`.
-2. **Test harness**: run the game unattended in portable mode from scratch,
-   drive input from a script, read game state, take captures that stay
-   local. Needs the linked build (the ROM above).
-3. **Session core** for online co-op: host and client, protocol, transport,
-   logs, a development entry to start two instances on one machine.
+1. **#3, story-mode audit** (recommended first: it decides the co-op
+   approach and needs no linked build). Branch `coop/3-story-audit`. Start
+   from the Europe disassembly in scratch (below): map overlays to worlds,
+   follow how story code reaches `g_Players` (only main code references it
+   directly, 258 times) and the game-state block `D_802AC5C0` (lives +0x64,
+   credits +0x68, stage ID +0x16). Deliverable `docs/coop/design.md`.
+2. **#2, Europe ROM support**: an unpacker in `tools/` (port of
+   `scripts/unpack_eu.py` below), recompile from the Europe image, a
+   `GameEntry` for it, then link, boot and check PAL speed. Unblocks running
+   the game here.
+3. Issues still to file once #3 has answers: the player-2 spike in a story
+   stage, the **test harness** (unattended runs in portable mode, scripted
+   input, state probes, local captures; needs a linked build), the
+   **session core** for online co-op (lockstep: host and client, input
+   transport, shared seed, desync detection).
+
+## Scratch tooling (not in the repository)
+
+Under `~/dev-scratch/BM64Recomp-coop/`, made 2026-10-18:
+
+- `rom/bm64.decomp.eu.z64`: the Europe ROM unpacked like the US
+  decompressed ROM (a ROM copy: never commit or upload it).
+- `eu-disasm/<section>/`: spimdisasm output for all 98 code sections, named
+  with the US symbols (`<section>.syms.txt` beside each).
+- `scripts/unpack_eu.py`, `scripts/disasm_eu.py`,
+  `scripts/us_overlay_table.txt` (the decompilation's overlay offsets):
+  rerun with `python3 -I scripts/unpack_eu.py <rom> scripts/us_overlay_table.txt rom/bm64.decomp.eu.z64`, then
+  `python3 -I scripts/disasm_eu.py rom/bm64.decomp.eu.z64 <checkout>/BM64Syms eu-disasm venv/bin/spimdisasm`.
+- `venv/`: spimdisasm 1.42.4, rabbitizer 1.16.2.
 
 ## Working notes (stable, keep short)
 
@@ -69,4 +86,5 @@ Last updated 2026-10-18 (project setup).
 ## Cleanup the owner may approve
 
 - None yet. Scratch kept on purpose: `~/dev-scratch/BM64Recomp-coop/n64recomp/`
-  (N64Recomp cache) and `build/` (incremental CMake folders).
+  (N64Recomp cache), `build/` (incremental CMake folders) and the Europe
+  tooling above (until #2 and #3 are done).
