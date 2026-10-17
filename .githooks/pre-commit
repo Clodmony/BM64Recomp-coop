@@ -1,0 +1,42 @@
+#!/bin/sh
+# Refuses to commit game data. Staged blobs are checked because `git add -f`
+# bypasses .gitignore. Enabled by `git config core.hooksPath .githooks`
+# (.superset/setup.sh does it).
+
+set -e
+
+fail() {
+	echo "pre-commit: refusing to commit game data." >&2
+	echo "$1" >&2
+	echo "" >&2
+	echo "BM64Recomp needs the owner's own ROM. Keep ROMs, decompressed ROMs," >&2
+	echo "saves and captures outside the repository." >&2
+	exit 1
+}
+
+staged=$(git diff --cached --name-only --diff-filter=AM)
+[ -z "$staged" ] && exit 0
+
+blocked=$(printf '%s\n' "$staged" | grep -Ei '\.(z64|n64|v64|rom|eep|sra|fla|mpk|sav|srm)$' || true)
+[ -n "$blocked" ] && fail "  blocked by extension:
+$(printf '%s\n' "$blocked" | sed 's/^/    /')"
+
+# 4 MiB: below Bomberman 64's 8 MiB cartridge. bm64.us.toml is upstream's and
+# already larger.
+LIMIT=4194304
+large=""
+IFS='
+'
+for path in $staged; do
+	case "$path" in
+		bm64.us.toml) continue ;;
+	esac
+	size=$(git cat-file -s "$(git rev-parse ":$path")" 2>/dev/null || echo 0)
+	[ "$size" -ge "$LIMIT" ] && large="$large    $path ($size bytes)
+"
+done
+
+[ -n "$large" ] && fail "  suspiciously large for source:
+$large"
+
+exit 0
