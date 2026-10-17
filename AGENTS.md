@@ -19,6 +19,9 @@ Read before working:
 - [docs/coop/building.md](docs/coop/building.md): the build pipeline, which
   stages need the ROM, `tools/verify.sh`, the toolchain workarounds and how a
   test run keeps away from the owner's saves.
+- [docs/coop/design.md](docs/coop/design.md): where story mode assumes one
+  player (addresses, read from the Europe build) and the proposed co-op
+  approach; note its Europe/US address rule before using any address.
 - Upstream's [BUILDING.md](BUILDING.md) and [README.md](README.md).
 - Co-op design documents go under `docs/coop/` as the work creates them.
 
