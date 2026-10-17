@@ -6,7 +6,7 @@ repository so it survives any worktree path and any tool; per-checkout agent
 memory is not read by a session that starts in another worktree. State goes
 here; stable recipes go into `docs/coop/`; personal data and hardware never.
 
-Last updated 2026-10-18 (project setup).
+Last updated 2026-10-18 (project setup; #1 merged).
 
 ## Repository state
 
@@ -16,8 +16,9 @@ Last updated 2026-10-18 (project setup).
   (Europe ROM support) and #3 (story-mode single-player audit) are open.
 - The setup (AGENTS.md, CLAUDE.md, this file, `tools/verify.sh`,
   `tools/n64recomp.sh`, `.superset/`, `.githooks/pre-commit`, `coop-ci.yml`,
-  `docs/coop/building.md`, the README notice) is on branch
-  `coop/setup-workflow`, draft PR #1.
+  `docs/coop/building.md`, the README notice) is merged into
+  `bm64recomp-coop` (#1, at the owner's word, 2026-10-18); its branch is
+  deleted.
 - Verify on `coop/setup-workflow`, 2026-10-18, no ROM: 5/5 stages passed,
   `recomp` skipped, `build` compile only (549 objects, not linked).
   `coop-ci` on #1 passed.
@@ -31,8 +32,7 @@ Last updated 2026-10-18 (project setup).
 
 ## Open pull requests
 
-- #1 (draft), `coop/setup-workflow` → `bm64recomp-coop`: the workflow setup.
-  Needs the owner's review and merge.
+None.
 
 ## Waiting for the owner
 
@@ -45,7 +45,7 @@ Last updated 2026-10-18 (project setup).
 
 ## Next candidates
 
-1. **#3, story-mode audit** (recommended first: it decides the co-op
+1. **Next: #3, story-mode audit** (owner, 2026-10-18: it decides the co-op
    approach and needs no linked build). Branch `coop/3-story-audit`. Start
    from the Europe disassembly in scratch (below): map overlays to worlds,
    follow how story code reaches `g_Players` (only main code references it
