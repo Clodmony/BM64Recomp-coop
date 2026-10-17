@@ -1,0 +1,488 @@
+# Story mode co-op: the single-player audit and the design
+
+Issue #3. Battle mode already runs four players; the Adventure (story) mode is
+written for one. This page records where and how story mode assumes a single
+player, and proposes a co-op approach for each assumption. It is the base for
+the co-op issues that follow.
+
+**Status (2026-10-18).** Everything here was read from a disassembly of the
+**Europe** release, named with the US symbols in `BM64Syms/`. Nothing has been
+run: there is no linked build yet (the recompilation needs the US ROM, #2 would
+add Europe). Every finding is to be re-checked on a US build. "Read" means the
+instructions show it; "inferred" means an interpretation beyond them.
+
+**Scope (owner, 2026-10-18).** The work targets **online** co-op. Local couch
+co-op (split-screen or a shared screen) is dropped for now; its notes stay
+below, marked, for when it comes back. The other proposals (player 2 in slot
+4, shared lives) are proposals until the spike (#4) confirms them.
+
+## How this was read
+
+- **Disassembly.** The Europe ROM, unpacked like the US decompressed ROM, was
+  disassembled section by section with spimdisasm (boot, main code at
+  0x80225800, and all 95 overlay sections, which all load at 0x80043000). The
+  function layout matches US; main-code bss does not (next section).
+- **Calls from overlays into main code.** Overlays never call or address main
+  code directly. Each overlay starts with a table of 8-byte stubs,
+  `jr $zero; addiu $t0, $zero, 0xTTII`, which jump through the secure-call
+  table `TT` (the decompilation's *zerojmp*), entry `II`. `BM64Syms` names
+  them `<target>__0x<area>__secure_call`; in the Europe ROM all 68108 named
+  stubs decode to the same target for the same table entry. The counts below
+  resolve every stub from its encoding, including stubs spimdisasm left as
+  data. Table 0x10 is the player-helper table (`func_80245CDC`,
+  `func_802512C0`, `func_8024557C`, `func_802457D8`, `func_80243DDC`, …).
+- **Overlay data access.** No overlay has a `%hi/%lo` reference to main-code
+  data: overlays reach game state only through main helpers and the pointers
+  they return. That is what makes most of the co-op work possible from main
+  code alone.
+
+### Addresses: the Europe bss is 0x10 lower
+
+Main-code `.bss` sits **0x10 lower in Europe than in US**; functions and main
+`.data` (0x802A0000–0x802A4xxx) are at the same addresses, and so is low bss
+(0x80063000–0x800BEA60: `g_Players`, `g_EnemySlots`, the save block). Proof:
+upstream's US patches of `func_80242270` (HUD), `func_80243A50` and
+`func_80225840` against the same Europe functions (US `D_802AC610`,
+`D_802AC770`, `D_802AC884`, `D_802AC5C0` appear as Europe 0x802AC600,
+0x802AC760, 0x802AC874, 0x802AC5B0), and the bss clear range (US
+0x802A5300–0x802B36D0, Europe 0x802A52F0–0x802B36C0).
+
+So a US symbol name printed on a main-bss operand of the Europe disassembly
+names a **different** variable. This page gives main-bss globals by their
+**US address**, with the Europe one in brackets; patches use the US address.
+Functions are given by name (the same in both builds).
+
+Two statements in the issue change with this:
+
+- Lives and credits are not fields of the block at `D_802AC5C0`. They are
+  +0x14 and +0x18 of the story session block at US 0x802AC610 (Europe
+  0x802AC600), which upstream's cheats already call `D_802AC624` (lives) and
+  `D_802AC628` (credits). The address the issue gives, `D_802AC5C0`+0x64, is
+  the same US address, 0x802AC624.
+- There is no 16-bit stage ID at `D_802AC5C0`+0x16. What picks a stage is
+  the **overlay ID**, a 16-bit value the game keeps in a word at US
+  0x802AC5D4 (see the game flow below); US 0x802AC5D6 is that word's low
+  half.
+
+## Overlay map
+
+Overlays are chosen by a 16-bit overlay ID, not by a stage number.
+`func_8022691C(id)`, called only from boot (`func_8023A3E0`) and from the main
+process `func_8023DB0C`, looks the ID up in the bank table at ROM 0x30800
+(`gOverlaySizes` in BM64Syms), then in the bank's header file, decompresses the file to
+0x80043000 and keeps the dispatcher the overlay returns.
+`func_802268F4(code)` sends it event codes: 2 init, the entry code, 4, 5 after
+the fade, 3 every frame, 0xC on leaving, 0xB on stage clear.
+
+| Sections | Overlay IDs | Role |
+|---|---|---|
+| ovl_1_subovl_1–4 | 0x14–0x17 | debug maps ("debmap0 : Mapchange happened!") |
+| ovl_2_subovl_1, 2 | 0x19, 0x1A | story cutscenes; 0x1A is the opening after a new file |
+| ovl_2_subovl_3, 4 | 0x1C, 0x1D | ending director (staff roll) and final ending scene |
+| ovl_2_subovl_5 | 0x1B | attract/intro demo |
+| ovl_2_subovl_6 | 0x24 | Controller Pak manager (boot with START held) |
+| ovl_3_subovl_1 | 0x20 | title / main menu ("Adventure / Battle / Custom / Options") |
+| ovl_3_subovl_2 | 0x21 | Adventure world map and stage select |
+| ovl_3_subovl_3, 7 | 0x23, 0x22 | Battle setup menu, battle results |
+| ovl_3_subovl_4, 5, 6 | 0x25, 0x26, 0x1F | Custom (parts), Options, file select |
+| ovl_4_subovl_1–10 | 0x28–0x31 | Green Garden: stage 1 rooms 0x28–0x2C, stage 3 rooms 0x2D–0x30, stage 2 "Friend or Foe?" rival stage 0x31 |
+| ovl_5_subovl_1–7 | 0x38–0x3E | Blue Resort: stage 1 0x38–0x3B, stage 3 0x3C–0x3D, rival stage "VS Artemis" 0x3E |
+| ovl_6_subovl_1–15 | 0x48–0x56 | Red Mountain: stage 1 0x48–0x4F, stage 3 0x50–0x55, rival stage "VS Orion" 0x56 |
+| ovl_7_subovl_1–10 | 0x58–0x61 | White Glacier: stage 1 0x58–0x5D, stage 3 0x5E–0x61 |
+| ovl_8_subovl_1–13 | 0x68–0x74 | Black Fortress: stage 1 0x68–0x6D, stage 3 0x6E–0x73, rival stage "VS Altair" 0x74 (three rivals) |
+| ovl_9_subovl_1–5 | 0x78–0x7E | Rainbow Palace (hidden world): stage 1 0x78–0x79, stage 3 0x7B–0x7C, rival stage "Final Battle!" 0x7E |
+| ovl_9_subovl_6 | 0x62 | White Glacier rival stage "VS Regulus" (stored in bank 9) |
+| ovl_10_subovl_1, 2 | 0x88, 0x89 | bosses: Green Garden, Blue Resort |
+| ovl_11_subovl_1, 2 | 0x8A, 0x8B | bosses: Red Mountain, White Glacier |
+| ovl_12_subovl_1, 2 | 0x8C, 0x8D | bosses: Black Fortress, Rainbow Palace |
+| ovl_13_subovl_1 | 0x9B | unknown, debug-like; nothing requests it |
+| ovl_14_subovl_1–10 | 0x90–0x99 | Battle arenas |
+
+Read: the IDs, the menus' text, the transitions between IDs and the two
+identical world tables (`D_802A04C8` in main, `D_ovl3_2_8004A19C` on the world
+map: 6 worlds × 4 stages → first overlay ID). Inferred: the stage names come
+from the order of the game's stage-name list; the rival stages are confirmed by
+their `func_8025DC60` calls and the bosses by size. Each story stage is several
+**rooms**, one overlay per room.
+
+## Game flow and how a mode is chosen
+
+The main process `func_8023DB0C` loops forever. When a scene change is
+pending it fades out, calls `func_8023D0F8` (mode and player setup), loads the
+overlay, sends the init events and fades in. Every scene change goes through
+`func_8023AE6C(id, entry, fade)` (called from 69 overlay sections), which
+fills the flow block at US 0x802AC5D0 (Europe 0x802AC5C0, US name
+`g_LevelLoader`):
+
+| US address | Field |
+|---|---|
+| 0x802AC5D0 | flags: 0x1 scene change pending, 0x2 death retry pending, 0x4 battle, 0x8 rival stage, 0x20 boss stage, 0x10/0x80 frozen (death, stage clear), 0x40 paused |
+| 0x802AC5D4, 0x802AC5D8 | overlay ID and entry code to load |
+| 0x802AC5DC, 0x802AC5E0 | retry point: the ID and entry code a death reloads (`func_80243810` sets it) |
+| 0x802AC5E4 | fade flags |
+| 0x802AC5E8, 0x802AC5EC | world (0–5) and stage (0–3), derived from the ID |
+| 0x802AC610 | story session block (below), returned to overlays by `func_8023A840` |
+| 0x802AC660 | battle configuration block, returned by `func_8023A834` |
+
+Story or battle is decided **on every load from the overlay ID** by
+`func_8023D0F8` (read): IDs 0x90–0x99 set flag 0x4 (battle); an ID in a world
+range is a story room (world, stage and room derived; flag 0x8 on rival
+stages, 0x20 on boss stages); anything else is a menu or cutscene.
+
+## Single-player assumptions, with the proposed approach
+
+### 1. Who is a player: decided at every scene load
+
+`func_8023D0F8` (0x8023D168–0x8023D1B8, read) clears `controlType` (+0x24)
+and +0x68 of slots 0–3, then sets `g_Players[0].controlType = 1` and
+`g_Players[4].controlType = 0`. Battle IDs then set slots 0–3 from the battle
+configuration (US 0x802AC664 + 4·slot: 0 off, 1 human, 2 computer). In story
+mode **every room change, retry and continue leaves exactly one human, slot
+0.**
+
+The room's init then calls `func_80245CDC`, the shared player init: every
+boss, every battle arena and every stage room but three (ovl_5_subovl_1,
+ovl_5_subovl_6, ovl_7_subovl_1) call it, 89 calls in 83 sections. It sets
+the story slot (below) to 0, starts the player process `func_8024FFF0`, and
+calls `g_SpawnPlayer(slot)` for **every slot below 5 whose controlType is not
+0**. The spawn and update are already multi-player; only the slot reset makes
+story single-player.
+
+*Approach:* a hook at the end of the story slot reset in `func_8023D0F8` that
+sets the co-op slot human when a co-op session runs. Cheap. Not flag 0x4: it
+turns on battle timers, battle death rules and an extra enemy allocation.
+
+### 2. The story slot S: one global behind most player access
+
+US 0x802AC894 (Europe 0x802AC884) holds **S, the slot of the story player**
+(-1 = none). It is -1 at boot (`func_80243BF0`) and at stage teardown
+(`func_80245868`), 0 at stage init. `func_80243DDC` returns it (249 overlay
+calls, 67 sections), `func_8024585C(s)` sets it. 27 main functions read it.
+Story code reaches "the player" in three ways (read):
+
+1. **Wrappers that act on `g_Players[S]`** (all in table 0x10):
+
+   | Function | Overlay calls | Does |
+   |---|---|---|
+   | `func_802512C0(x, y, z)` | 222 / 66 sections | place S on a tile (room entry, teleports); worker `func_802511EC(slot, …)` |
+   | `func_802452E8(on)` | 182 / 52 | freeze or release S for a cutscene: flags 0x2010000 (control lock and damage guard), idle animation |
+   | `func_8024557C(out)` | 132 / 51 | S's tile coordinates |
+   | `func_80245280(on)` | 117 / 42 | freeze or release S without the animation |
+   | `func_8024A824(…)` | 114 / 58 | cutscene/warp set-up: camera focus on S's tile, flags on S |
+   | `func_80245F74(dir)` | 89 / 56 | set S's facing |
+   | `func_802457D8(x0, z0, x1, z1)` | 70 / 48 | is S inside a tile rectangle (exit and event triggers) |
+   | `func_802506B8(script)` | 32 / 25 | scripted walk of S (blocks until done) |
+   | `func_80250DC8` | 32 / 23 | one action step of S |
+   | `func_802456FC(…)` | 28 / 16 | rectangle test plus floor level |
+   | `func_80250E2C(wait)` | 27 / 16 | warp prelude: camera on S, waits for S |
+   | `func_802510C8` | 22 / 14 | release S from a carried state |
+   | `func_80243DEC(on)`, `func_802443A0(on)`, `func_8025068C(v)` | 14, 6, 5 | flags and fields of S |
+
+2. **Slot-taking helpers fed with S.** Overlays usually call
+   `func_80243DDC()` once and pass the slot on: `func_802443F4(slot)` (the
+   player's actor, 169 overlay calls), `func_80250338(slot, out)` (world
+   position, 139), `func_802444B8(slot, anim)`, `func_80243D2C(slot)` (hearts),
+   `g_AddPlayerBombCount(slot, n)`. 39 overlay globals keep a copy of S, and
+   about 112 call sites cache S's position every frame for enemies and bosses
+   to aim at.
+3. **Slot 0 by constant.** Some overlay sites pass 0 directly: 34 calls of
+   `func_802443F4(0)`, 15 of `func_802444B8(0, …)`, 15 of `func_80243D2C(0)`.
+   Main code also has fixed slot-0 writes (sections 6 and 7 below).
+
+The game already switches S temporarily: rival-bomber code does
+`func_8024585C(1); func_802452E8(on); func_8024585C(0)`, and `func_8023C170`
+applies the freeze to every player in a loop the same way. Nothing found
+sleeps between the switch and the restore. Every restore writes 0, so **S
+must stay 0 = player 1**, or those writes must change.
+
+*Approach:* keep S = 0 = player 1 as the story player. Make the behaviours
+that must include player 2 player-aware in **main code** (the wrappers, the
+triggers, the enemy AI), not in the 50+ overlays. Overlay sites that hard-code
+slot 0 stay player 1's: acceptable for a first version, listed per behaviour
+below.
+
+### 3. Player 2's slot: 4, not 1
+
+Story stages already host AI bombers. `func_8025DC60(slot, type, x, z)`
+(called only by the six rival stages) spawns a rival with controlType 2 into
+**slot 1** (ovl_4_subovl_10, ovl_5_subovl_7, ovl_6_subovl_15, ovl_9_subovl_6),
+**slots 1 and 2** (ovl_9_subovl_5, "Final Battle!") or **slots 1, 2 and 3**
+(ovl_8_subovl_13), points its AI at slot 0, and
+restores S = 0. Its AI process `func_802553D4` switches S to 1. A human in
+slot 1 would be overwritten there. In a rival stage, a death of any slot
+other than 0 counts as a rival defeated (`func_8023A870`, `func_8023F26C`),
+which could end the fight as won when player 2 dies.
+
+**Slot 4** is spawned by `func_80245CDC`, updated by `func_8024FFF0` (both
+loop over 5 slots), and zeroed by `func_8023D0F8`; no story code uses it (no
+constant 4 found). The per-slot player arrays in main code have 5 entries. Two
+things are missing for slot 4 (read):
+
+- **Model.** `g_SpawnPlayer` chooses model asset 0x4A–0x4D for slots 0–3; for
+  slot 4 it reads a stale register. It needs a model case (a patch of
+  `g_SpawnPlayer`, or re-assigning the parts after the spawn).
+- **Input.** There are only four pad buffers. The player update
+  `func_8024E088(slot)` reads pad = slot for controlType 1, so slot 4 would
+  read past them. For controlType 2 it reads the **command record**
+  `g_ComputerPlayerMovement` (US 0x802ACF08 + 0x10·slot: stick vector f32[3],
+  held buttons +0xC, newly pressed +0xE), which has 5 entries. Running player
+  2 as controlType 2 and filling record 4 from pad 1 each frame (one hook
+  before `func_8024E088`) gives slot 4 input with no change to the update.
+
+The command record is also the natural input point for **online** co-op:
+each side sends the record of its human slot, so both machines feed the same
+values to the same update (inferred; the session-core issue decides it).
+Whether the stick vector is camera-relative (then the record must be filled
+after the camera of the player who owns it) is open.
+
+*Approach:* player 2 in slot 4 as controlType 2, input through the command
+record, model case added. Cheap to moderate. Battle-only arrays sized 4 (the
+battle configuration, the out flags at US 0x802AC714) must stay unused by
+slot 4 or be checked. The spike (below) checks slot 4; slot 1 in a stage
+without rivals is its first step because it needs no input or model change.
+
+### 4. Spawning and placing player 2
+
+`g_SpawnPlayer(slot)` allocates the actor (`g_InitLevelClass`), places it at
+the slot's `spawnLocation` (+0x0), assigns the model and a shadow, and resets
+per-slot state. It does **not** set hearts, bombs, fire or controlType
+(read). Story rooms then place S with `func_802512C0`; no story code writes
+another slot's `spawnLocation`.
+
+*Approach:* when the co-op slot spawns, give it hearts (the game sets only
+slot 0's, to 1, in `func_8023DA04`; bombs and fire are already reset to 2 for
+all five slots by `func_80277E1C`), and patch
+`func_802511EC` so that placing slot 0 also places player 2 on a free tile
+next to it. Every room entry and story teleport (222 calls of
+`func_802512C0`) then carries player 2 along. Cheap, plus a walkable-tile
+check.
+
+### 5. Camera
+
+The camera process `func_80235D7C` (one for all modes) follows, when mode bit
+0x10 is set (`D_8008F428`), either an object set by `func_80235FD8` (7 calls,
+bosses) or **`func_802443F4(func_80243DDC())`, player S's actor** (read). Its
+C-button control reads pad 0 (`func_80235934`). Stage init snaps it to S
+(`func_80237664`); `func_802362D4` / `func_802362B8` set and clear mode bits
+(45 and 147 overlay calls). Battle clears the follow bits and leaves the
+camera static. No code frames several players. The camera state is a set of
+single globals; cutscenes write it through `func_8024A824` and `func_80250E2C`.
+
+*Approach:* online, each machine draws its own view, so its camera should
+follow its own player. Patch the target choice in `func_80235D7C` (one
+function) to a "camera slot" that is a per-machine setting, not game state.
+Whether the camera feeds back into the simulation (enemy activation, the stick
+vector) must be ruled out on a build, or the two machines diverge.
+
+*Local co-op (dropped for now):* a shared screen framing both players
+(target midpoint, distance from their separation, a leash) is the same one-function patch. **Split-screen** needs a
+second camera state and a second render of the scene per frame: the camera
+globals exist once and the HUD draws once per frame. That is the expensive
+part of the local mode and needs its own investigation.
+
+### 6. HUD
+
+The story stage HUD is one draw callback, `func_80242270`: the clock (elapsed
+time, red when over the target time) and the gem counter, read from the
+session block. It reads **no player slot** (read). Hearts, bombs and fire are
+not shown as numbers in a stage. The stage title card and the miss screen
+(`func_8023AF5C`, `func_8023E1D8`) show lives and **slot 0's** heart state
+(`g_Players[0].heartCount`, by constant). Battle registers a different HUD,
+`func_80241BB0`, which loops over slots 0–3 and draws a face per slot from the
+same icon sheet (asset 0x130, "dead" variant at +8).
+
+*Approach:* with shared gems and time the story HUD is already right. Add a
+per-player panel (face, hearts) as a **second draw object** registered next to
+the story HUD in `func_8023D0F8` (`func_8022A328`, the same call the game
+uses), using the battle faces. Upstream already patches `func_80242270`
+(widescreen), so co-op does not edit it. Cheap to moderate.
+
+### 7. Hearts, lives, credits, game over
+
+Per player already (read): hearts (+0x14), bombs (+0x1C), fire (+0x20) and
+bomb types (+0x18) live in `g_Players[slot]`. The damage handler
+`func_80248148(slot, cause)` takes a heart from that slot; item pickups
+(`func_802797BC`) find the slot whose actor touched the item. Stored once:
+the session block at US 0x802AC610 holds difficulty (+0x10), **lives**
+(+0x14, US 0x802AC624, 2 at start), **credits** (+0x18, US 0x802AC628, 3 at
+start, +1 per 50 gems, saved), **gems** (+0x1C), the target and elapsed time
+(+0x28, +0x30) and play time (+0x38). Overlays never touch lives, credits or
+gems: main code only.
+
+The death chain (read):
+
+1. At 0 hearts `func_80248148` calls `func_8023A870(slot, cause)`.
+2. Battle (flag 0x4), or a rival stage (flag 0x8) and slot ≠ 0: the slot is
+   out (US 0x802AC714 + 4·slot = 2), no retry.
+3. Story otherwise, **for any slot**: flags |= 0x92 (freeze, retry pending)
+   and the death process `func_8023F26C` starts. In the story case it takes
+   **slot 0's actor and slot 0** (0x8023F3A4–0x8023F3BC): a player 2 death
+   plays and ends as player 1's death.
+4. At lives 0 `func_8023E1D8` runs: Continue (credits −1, lives back to 2) or
+   game over, and it rolls back the gold cards collected in the stage.
+   Otherwise the **retry point reloads**: the room being played, from the
+   entry it was entered by. On the reload `func_8023D0F8` takes one life and
+   sets `g_Players[0]` hearts to 1.
+5. Further slot-0 constants: hearts := 1 on continue (0x8023E724) and on the
+   pause menu's retry (`func_802968BC`), remote bombs lost on death
+   (`func_80277DF4`, `g_Players[0]` only), the session start
+   `func_8023DA04`.
+
+*Approach (recommended):* a **shared lives and credits pool**, one counter,
+which fits the single save and an online host that owns it. While the partner
+is alive, a dying player is **downed and respawns** instead of reloading the
+room: patch `func_8023A870` so the co-op slot takes a branch like the battle
+one, spends a shared life, and respawns next to the partner after a delay
+(`func_8023EB28` is the game's own one-slot respawn). When the last player
+dies, the original path runs. The slot-0 constants in step 5 apply to every
+co-op slot (small patches or post-hooks). Moderate; the main co-op gameplay
+work. Per-player lives would need a second counter and two numbers on the
+cards: possible, not recommended first.
+
+### 8. Exits, goals, gold cards, items
+
+- **Exits and room triggers test S only** (read): `func_802457D8` /
+  `func_802456FC` (98 overlay calls) test S's tile against a rectangle, then
+  the overlay requests the room change with `func_8023AE6C`. The next room's
+  init respawns every slot, so a transition already brings every player
+  along; only the trigger and the exit fade (on S's actor) look at player 1.
+  *Approach:* patch the rectangle tests to return true when any co-op player
+  is inside (cheap, three small functions). Whether exits need both players
+  inside is a design choice; "any player" is the cheap default.
+- **Items: any player** (read): `func_802797BC` loops over slots 0–4 and gives
+  fire, bombs, bomb types and hearts to the slot that touched the item; gems
+  go to the shared counter. Exceptions: the "got item" notice only for S, and
+  the heart item treats slot 0 differently in rival stages. The item's
+  starting direction uses slot 0's position (cosmetic).
+- **Boss reward** (`func_80233E3C`, 3 boss overlays) flies to S; the item it
+  drops can be picked up by anyone.
+- **Gold cards**: no dedicated pickup was found. The stage clear
+  (`func_8023FD08`) awards cards from the shared counters, and the save holds
+  them as 120 shared flags (5 per stage). Who collected a card does not
+  matter for a shared campaign.
+- **Stage clear** waits for player S to stand idle (`func_8023AB90`) and uses
+  slot 0's actor: fine with player 1 as S.
+
+### 9. Enemies and bosses
+
+- **Damage reaches any slot** (read in the player update, inferred for the
+  setter): `func_8024FFF0` runs `func_8024E088(slot)` for every slot, which
+  turns that player's actor hit bits into `func_80248148(slot, cause)`. Enemy
+  contact, boss attacks and blasts therefore hurt player 2 as they would in
+  battle. Who sets the hit bits was not traced.
+- **Main-code enemy AI chases S** (read): `func_80283CF0` (chase on the same
+  floor), `func_8028854C` / `func_80288654` (line-up tests),
+  `func_80289F04`, `func_80289DB8`, `func_802881A0` (aimed moves), and
+  `func_80285A9C` places enemy spawns at a distance from S. `func_80282934`
+  (16 overlay calls) clears enemies around S.
+- **Overlay enemies and bosses aim at a per-frame cache of S's position** (the
+  112 call sites in section 2), e.g. the Black Fortress boss
+  (ovl_12_subovl_1).
+- **Rival bombers** target slot 0 through their AI record (`D_800BCFE8`,
+  stride 0x128: +0x10 target slot, +0x1C target actor), which their AI process
+  reads every pass.
+
+*Approach:* patch the main-code AI functions above (about 8) to pick the
+**nearest living co-op player**, and the clear to work around every player.
+Moderate. Rivals: rewrite their target fields every frame (cheap, inferred to
+work). Overlay bosses stay on player 1 at first. A later option is a director
+that switches S to the other player outside cutscenes (for instance when
+player 1 is down), cheap but only safe where no overlay keeps S-derived
+pointers across frames.
+
+### 10. Cutscenes and warps
+
+Cutscenes freeze S only (`func_802452E8`, `func_80245280`: control lock and
+damage guard), walk S with `func_802506B8` scripts, face S with
+`func_80245F74`, and point the single camera state at S's tile
+(`func_8024A824`, `func_80250E2C`). A second player would keep walking, keep
+taking damage and wander off-script.
+
+*Approach:* patch the freeze, flag and facing wrappers to apply to every
+co-op slot, the way `func_8023C170` already loops (cheap, five small
+functions, about 400 call sites covered). Scripted walks stay on player 1;
+player 2 stays frozen and is placed next to player 1 when the scene ends
+(the placement patch of section 4 covers teleports).
+
+### 11. Saving
+
+The EEPROM holds three files of 0x90 bytes, built only from the progress
+block at `D_8008E570` (flags and variables): play time, difficulty, credits,
+one name and **one set of custom parts** (head, body, arms, legs), the best
+time per stage, the 120 gold-card flags and unlock flags. None of it is per
+player and none of it touches `g_Players` or S (read). Lives, hearts, bombs,
+fire, world and stage are not saved. The game saves after every stage clear
+(`func_8023FD08`), from the pause menu, the Custom screen and the file select.
+
+Stage-local flags (`D_8008E640`, 0x400–0x43F; 331 test, 188 set and 105 clear
+calls from overlays) are switched during play: doors, switches, collected
+things. They are the same block, but a sync concern, not a save concern.
+
+*Approach:* **one campaign, one file**: the **host's** file. The guest does
+not write its EEPROM (its `func_802947AC` becomes a no-op), and gets the
+host's progress block at session start. Player 2's look: battle already
+applies custom parts per slot (`func_8023EB28` → `g_LoadCustomParts`), so the
+guest sends its own parts. Cheap. (Local co-op, dropped for now, would use the
+file chosen at the file select and give player 2 another file's parts.)
+
+## The approach in one table
+
+| Assumption | Where | Proposed approach | Cost |
+|---|---|---|---|
+| One human per scene load | `func_8023D0F8` | hook: the co-op slot stays human | cheap |
+| Player 2's slot | the six rival stages use 1–3; slot 4 has no model case or pad | slot 4, controlType 2, input via `g_ComputerPlayerMovement[4]`, model case | cheap–moderate |
+| Stats and placement | `g_SpawnPlayer`, `func_802511EC` | stats at spawn; place next to player 1 | cheap |
+| Story slot S | 18 wrappers, S restored to 0 everywhere | S stays player 1; make behaviours player-aware in main code | — |
+| Cutscene freeze, facing | `func_802452E8`, `func_80245280`, `func_80245F74`, … | loop over co-op slots | cheap |
+| Exit and room triggers | `func_802457D8`, `func_802456FC`, `func_802455A8` | any co-op player inside | cheap |
+| Enemy AI targets S | ~8 main AI functions | nearest living player | moderate |
+| Overlay bosses aim at S | per-frame caches in overlays | player 1 at first; later a director | none / cheap |
+| Rival AI targets slot 0 | AI record `D_800BCFE8` | retarget per frame | cheap |
+| A death is player 1's, room reloads | `func_8023A870`, `func_8023F26C` | shared lives; downed and respawn while the partner lives | moderate |
+| Slot-0 heart and power resets | `func_8023D0F8`, `func_8023E1D8`, `func_802968BC`, `func_80277DF4`, `func_8023DA04` | apply to every co-op slot | cheap |
+| Camera follows S | `func_80235D7C` | each machine follows its own player | cheap |
+| Split-screen (dropped for now) | one camera state, one render | second camera and render per frame | expensive |
+| HUD | `func_80242270` reads no slot; cards read slot 0 | keep; extra per-player panel as a second draw object | cheap–moderate |
+| Save | one file, one look | host's/chosen file is the campaign; guest does not save | cheap |
+| Stage-local flags | `D_8008E640` | lockstep keeps them equal (session core) | — |
+
+The cheap rows give a playable prototype once the session core carries the
+second player's input; the death rework and the enemy targeting are the real
+gameplay work.
+
+## The follow-up spike: player 2 in a story stage
+
+Issue #4. It needs a running build (a US ROM, or #2).
+
+1. **Slot 1, a room without rivals** (Green Garden stage 1, overlay 0x28):
+   a hook after the slot reset in `func_8023D0F8` sets
+   `g_Players[1].controlType = 1`, and a patch of `func_80245CDC` gives slot 1
+   hearts, bombs, fire and player 1's position plus one tile. Pad 1 drives it
+   with no input change.
+2. **Slot 4**: model case in `g_SpawnPlayer` (asset 0x4B), controlType 2,
+   pad 1 copied into `g_ComputerPlayerMovement[4]` before the player update.
+3. Placement: patch `func_802511EC` so placing slot 0 places the co-op slot
+   next to it.
+
+Observe and log (`recomp_printf` from the patches): the actor exists and
+renders with its own colour and shadow; pad 1 moves it, places and kicks
+bombs, pad 0 is unaffected; a hit takes its hearts; a room change frees and
+respawns it; a death today ends as player 1's death (expected); the camera,
+exits and cutscenes ignore it (expected). Also check that the patched main
+functions are reached from overlay stub calls, and that no actor pool or heap
+runs out with a second player and its bombs.
+
+## Open questions for a running build
+
+1. Every address on this page, the 0x10 bss shift in particular, on US.
+2. Is slot 4 free in every story room, and are all per-slot arrays used with
+   it at least 5 entries?
+3. Is the stick vector in the command record camera-relative?
+4. Does the camera feed anything back into the simulation?
+5. Who sets the actor hit bits; do enemies and bosses hit slot 4 like slot 0?
+6. Does retargeting the rival AI record make rivals chase another player?
+7. Which screens are overlay 0x9B and the game-over/continue targets (0x20 and
+   0x21 with entry 0x11)?
+8. Gold cards: the pickup path and what the 3 high bits of a stage record mean.
+9. How do the three rooms that never call `func_80245CDC` (ovl_5_subovl_1,
+    ovl_5_subovl_6, ovl_7_subovl_1) spawn the player?

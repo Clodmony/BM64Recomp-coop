@@ -6,29 +6,31 @@ repository so it survives any worktree path and any tool; per-checkout agent
 memory is not read by a session that starts in another worktree. State goes
 here; stable recipes go into `docs/coop/`; personal data and hardware never.
 
-Last updated 2026-10-18 (project setup; #1 merged).
+Last updated 2026-10-18 (#3 story-mode audit merged as #5; next #2).
 
 ## Repository state
 
 - Fork of `RevoSucks/BM64Recomp`. `master` = upstream `master` (`726adc9`).
-  Default branch `bm64recomp-coop`, created from `726adc9`. Ruleset
-  "Protected" blocks force-pushes and deletion on both. Issues are on: #2
-  (Europe ROM support) and #3 (story-mode single-player audit) are open.
-- The setup (AGENTS.md, CLAUDE.md, this file, `tools/verify.sh`,
-  `tools/n64recomp.sh`, `.superset/`, `.githooks/pre-commit`, `coop-ci.yml`,
-  `docs/coop/building.md`, the README notice) is merged into
-  `bm64recomp-coop` (#1, at the owner's word, 2026-10-18); its branch is
-  deleted.
-- Verify on `coop/setup-workflow`, 2026-10-18, no ROM: 5/5 stages passed,
-  `recomp` skipped, `build` compile only (549 objects, not linked).
-  `coop-ci` on #1 passed.
-- Actions: only `coop-ci` is active. Upstream's `validate-internal`,
-  `validate-external` and `update-pr-artifacts` are disabled (they need a
-  private ROM secret; `validate.yml` is only called by them). Their failed
-  runs on #1 from before the disabling can be ignored.
+  Default branch `bm64recomp-coop`. Ruleset "Protected" blocks force-pushes
+  and deletion on both.
+- Merged into `bm64recomp-coop`: #1 (workflow setup) and #5 (closes #3:
+  `docs/coop/design.md`, the story-mode single-player audit and the co-op
+  design). Branches of both deleted.
+- Open issues: #2 (Europe ROM support), #4 (spike: player 2 in a story stage).
+- Verify on `coop/3-story-audit`, 2026-10-18, no ROM: 5/5 stages passed,
+  `recomp` skipped, `build` compile only (not linked). Docs-only change.
 - Local git config of the clone: Claude identity, `upstream` with push
-  `DISABLED`, `core.hooksPath .githooks`, `pushguard.romDir` set to the
-  owner's N64 ROM folder.
+  `DISABLED`, `core.hooksPath .githooks`, `pushguard.romDir` set.
+
+## Owner decisions (2026-10-18)
+
+- **Scope: online co-op only for now.** Local couch co-op (split-screen or
+  shared screen) is dropped for now; AGENTS.md, README.md and design.md say so.
+- The design's other proposals (player 2 in **slot 4** driven through the AI
+  command record `g_ComputerPlayerMovement`, shared lives with
+  downed-and-respawn) are **proposals**, not decisions, until #4 confirms them
+  on a build.
+- Next issue: **#2**. Scratch for #3 kept until #4 is done.
 
 ## Open pull requests
 
@@ -36,44 +38,51 @@ None.
 
 ## Waiting for the owner
 
-- **The ROM.** The recomp accepts only the 1.0 US ROM; the owner's ROM
-  folder has only the Europe release. Either a US dump (decompressed with
-  [Bomberhackers/bm64](https://github.com/Bomberhackers/bm64), at
-  `~/dev-scratch/BM64Recomp-coop/rom/bm64.decomp.us.z64`), or #2 (Europe
-  support) makes linking and running possible. Until then every session
-  checks compile-only and says so.
+- **The ROM.** Linking and running need the decompressed 1.0 US ROM, or #2.
+  The owner has only the Europe release, hence #2 next. Until a build links,
+  every session checks compile-only and says so.
 
 ## Next candidates
 
-1. **Next: #3, story-mode audit** (owner, 2026-10-18: it decides the co-op
-   approach and needs no linked build). Branch `coop/3-story-audit`. Start
-   from the Europe disassembly in scratch (below): map overlays to worlds,
-   follow how story code reaches `g_Players` (only main code references it
-   directly, 258 times) and the game-state block `D_802AC5C0` (lives +0x64,
-   credits +0x68, stage ID +0x16). Deliverable `docs/coop/design.md`.
-2. **#2, Europe ROM support**: an unpacker in `tools/` (port of
-   `scripts/unpack_eu.py` below), recompile from the Europe image, a
-   `GameEntry` for it, then link, boot and check PAL speed. Unblocks running
-   the game here.
-3. Issues still to file once #3 has answers: the player-2 spike in a story
-   stage, the **test harness** (unattended runs in portable mode, scripted
-   input, state probes, local captures; needs a linked build), the
-   **session core** for online co-op (lockstep: host and client, input
-   transport, shared seed, desync detection).
+1. **Next: #2, Europe ROM support.** Branch `coop/2-europe-rom`. Start from
+   `~/dev-scratch/BM64Recomp-coop/scripts/unpack_eu.py` (port it into
+   `tools/`). Then a Europe recompiler config next to `bm64.us.toml`, a
+   `GameEntry` for it, link, boot, check PAL speed. **Address trap:** main
+   bss is 0x10 lower in Europe than US (design.md, *Addresses*); upstream's
+   patches name US bss addresses (`D_802AC610`, `D_802AC884`, …) and will
+   hit the wrong variables on Europe. #2 must handle that (separate symbol
+   file or per-version addresses in the patches). Consider moving the
+   disassembly, stub-check and xref scripts into `tools/` with it (no game
+   data in them).
+2. **#4, the spike**, once a build runs: slot 1 in Green Garden room 0x28
+   first, then slot 4 (model case, controlType 2, input via the command
+   record). Steps and what to log are in the issue and design.md.
+3. Issues still to file: the **test harness** (unattended runs in portable
+   mode, scripted input, state probes, local captures; needs a linked build)
+   and the **session core** for online co-op (lockstep, host and client,
+   input transport: design.md proposes the command record, shared seed,
+   desync detection; stage-local flags `D_8008E640` must stay equal).
 
 ## Scratch tooling (not in the repository)
 
-Under `~/dev-scratch/BM64Recomp-coop/`, made 2026-10-18:
+Under `~/dev-scratch/BM64Recomp-coop/`:
 
-- `rom/bm64.decomp.eu.z64`: the Europe ROM unpacked like the US
-  decompressed ROM (a ROM copy: never commit or upload it).
-- `eu-disasm/<section>/`: spimdisasm output for all 98 code sections, named
-  with the US symbols (`<section>.syms.txt` beside each).
-- `scripts/unpack_eu.py`, `scripts/disasm_eu.py`,
-  `scripts/us_overlay_table.txt` (the decompilation's overlay offsets):
-  rerun with `python3 -I scripts/unpack_eu.py <rom> scripts/us_overlay_table.txt rom/bm64.decomp.eu.z64`, then
+- `rom/bm64.decomp.eu.z64`: the Europe ROM unpacked (a ROM copy: never commit
+  or upload it).
+- `eu-disasm/<section>/`: spimdisasm output of all 98 sections with US
+  symbols; overlay call stubs named `sc_<target>`. Regenerate:
   `python3 -I scripts/disasm_eu.py rom/bm64.decomp.eu.z64 <checkout>/BM64Syms eu-disasm venv/bin/spimdisasm`.
-- `venv/`: spimdisasm 1.42.4, rabbitizer 1.16.2.
+- `xref/funcs.tsv`, `xref/callers.tsv`: per-function calls (every stub
+  resolved from its encoding) and globals. `python3 -I scripts/xref.py eu-disasm <checkout>/BM64Syms xref`.
+- `scripts/`: `unpack_eu.py`, `disasm_eu.py`, `check_stubs.py` (stub table
+  against the ROM), `xref.py`, `reach.py` (who touches a global),
+  `fn.sh <section> <func>` (print one function), `check_doc_syms.py` (every
+  symbol a markdown page cites exists in BM64Syms; run it on design.md after
+  edits).
+- `audit/`: the four topic notes behind design.md (`overlays.md`,
+  `players.md`, `state.md`, `world.md`, ~1500 lines with more addresses and
+  evidence) and their helper scripts in `tmp-*/`. Kept until #4 is done.
+- `ref/bm64/`: shallow clone of the decompilation. `venv/`: spimdisasm 1.42.4.
 
 ## Working notes (stable, keep short)
 
@@ -85,6 +94,6 @@ Under `~/dev-scratch/BM64Recomp-coop/`, made 2026-10-18:
 
 ## Cleanup the owner may approve
 
-- None yet. Scratch kept on purpose: `~/dev-scratch/BM64Recomp-coop/n64recomp/`
-  (N64Recomp cache), `build/` (incremental CMake folders) and the Europe
-  tooling above (until #2 and #3 are done).
+- After #4: delete `audit/` and `ref/` in scratch. After #2: decide whether
+  `eu-disasm/`, `xref/` and the scripts stay (or move into `tools/`).
+  Always kept: `n64recomp/`, `build/`, `rom/`.
