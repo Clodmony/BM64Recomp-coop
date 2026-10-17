@@ -17,7 +17,7 @@ Last updated 2026-10-18 (project setup).
 - The setup (AGENTS.md, CLAUDE.md, this file, `tools/verify.sh`,
   `tools/n64recomp.sh`, `.superset/`, `.githooks/pre-commit`, `coop-ci.yml`,
   `docs/coop/building.md`, the README notice) is on branch
-  `coop/setup-workflow`, in the setup's draft pull request.
+  `coop/setup-workflow`, draft PR #1.
 - Verify on `coop/setup-workflow`, 2026-10-18, no ROM: 5/5 stages passed,
   `recomp` skipped, `build` compile only (549 objects, not linked).
 - Local git config of the clone: Claude identity, `upstream` with push
@@ -26,8 +26,8 @@ Last updated 2026-10-18 (project setup).
 
 ## Open pull requests
 
-- The setup's draft PR, `coop/setup-workflow` → `bm64recomp-coop`. Needs the
-  owner's review and merge.
+- #1 (draft), `coop/setup-workflow` → `bm64recomp-coop`: the workflow setup.
+  Needs the owner's review and merge.
 
 ## Waiting for the owner
 
