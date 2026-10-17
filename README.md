@@ -1,4 +1,12 @@
 # Bomberman 64: Recompiled
+
+> [!NOTE]
+> **This is BM64Recomp-coop, a fork** of [RevoSucks/BM64Recomp](https://github.com/RevoSucks/BM64Recomp)
+> that adds a cooperative two-player Adventure campaign, online and as local
+> split-screen. It is work in progress on the `bm64recomp-coop` branch; `master`
+> is an unchanged copy of upstream. The co-op work is written entirely by an AI
+> coding agent (Claude) directed by the repository owner. The fork publishes no
+> builds. Please report issues with the co-op features here, not upstream.
 [Bomberman 64: Recompiled](https://github.com/RevoSucks/BM64Recomp) is a project that uses [N64: Recompiled](https://github.com/Mr-Wiseguy/N64Recomp) to **statically recompile** Bomberman 64 into a native port with many new features, enhancements, and extensive mod support. This project uses [RT64](https://github.com/rt64/rt64) as the rendering engine to provide some of these enhancements.
 
 ### **This repository and its releases do not contain game assets. The original game is required to build or run this project.**

@@ -1,0 +1,46 @@
+name: coop-ci
+
+# The co-op fork's CI: tools/verify.sh without a ROM (submodules, configs, the
+# patches compiled and recompiled in strict patch mode, every host object file
+# the game links compiled) on the integration branch and on pull requests into
+# it. Upstream's workflows (validate*, update-pr-artifacts) build from a private
+# decompressed ROM and publish artifacts; they are disabled in the fork's
+# Actions settings. Nothing here uploads builds or artifacts.
+on:
+  push:
+    branches: [bm64recomp-coop]
+  pull_request:
+    branches: [bm64recomp-coop]
+
+concurrency:
+  group: coop-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: tools/verify.sh (no ROM)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build clang lld llvm \
+            libsdl2-dev libgtk-3-dev libfreetype-dev
+      - name: cache N64Recomp
+        uses: actions/cache@v4
+        with:
+          path: ~/dev-scratch/BM64Recomp-coop/n64recomp
+          key: n64recomp-${{ runner.os }}-${{ hashFiles('.github/workflows/validate.yml') }}
+      - name: verify
+        run: tools/verify.sh
+      - name: summary
+        if: always()
+        run: |
+          summary=$(ls -d ~/dev-scratch/BM64Recomp-coop/verify/*/ | tail -n 1)summary.txt
+          { echo '```'; cat "$summary"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
