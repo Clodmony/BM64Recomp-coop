@@ -6,7 +6,7 @@ repository so it survives any worktree path and any tool; per-checkout agent
 memory is not read by a session that starts in another worktree. State goes
 here; stable recipes go into `docs/coop/`; personal data and hardware never.
 
-Last updated 2026-10-18 (#3 story-mode audit merged as #5; next #2).
+Last updated 2026-10-18 (#2 split into the issue group #6–#10; next: the group).
 
 ## Repository state
 
@@ -16,7 +16,8 @@ Last updated 2026-10-18 (#3 story-mode audit merged as #5; next #2).
 - Merged into `bm64recomp-coop`: #1 (workflow setup) and #5 (closes #3:
   `docs/coop/design.md`, the story-mode single-player audit and the co-op
   design). Branches of both deleted.
-- Open issues: #2 (Europe ROM support), #4 (spike: player 2 in a story stage).
+- Open issues: #2 (Europe ROM support) with its sub-issues #6–#10 (milestone
+  *Europe build runs*), #4 (spike: player 2 in a story stage).
 - Verify on `coop/3-story-audit`, 2026-10-18, no ROM: 5/5 stages passed,
   `recomp` skipped, `build` compile only (not linked). Docs-only change.
 - Local git config of the clone: Claude identity, `upstream` with push
@@ -31,6 +32,10 @@ Last updated 2026-10-18 (#3 story-mode audit merged as #5; next #2).
   downed-and-respawn) are **proposals**, not decisions, until #4 confirms them
   on a build.
 - Next issue: **#2**. Scratch for #3 kept until #4 is done.
+- #2 is split into an **issue group** (#6–#10) meant to be done in one
+  session, one branch and one pull request (owner asked for a group that
+  can be implemented in one go). Proposed in the #2 comment; the owner
+  confirms at the end of this session.
 
 ## Open pull requests
 
@@ -44,21 +49,23 @@ None.
 
 ## Next candidates
 
-1. **Next: #2, Europe ROM support.** Branch `coop/2-europe-rom`. Start from
-   `~/dev-scratch/BM64Recomp-coop/scripts/unpack_eu.py` (port it into
-   `tools/`). Then a Europe recompiler config next to `bm64.us.toml`, a
-   `GameEntry` for it, link, boot, check PAL speed. **Address trap:** main
-   bss is 0x10 lower in Europe than US (design.md, *Addresses*); upstream's
-   patches name US bss addresses (`D_802AC610`, `D_802AC884`, …) and will
-   hit the wrong variables on Europe. #2 must handle that (separate symbol
-   file or per-version addresses in the patches). Consider moving the
-   disassembly, stub-check and xref scripts into `tools/` with it (no game
-   data in them).
+1. **Next: the Europe group, #6–#10 (closes #2).** Branch
+   `coop/2-europe-build`, in order: #6 unpacker (port
+   `~/dev-scratch/BM64Recomp-coop/scripts/unpack_eu.py` into `tools/`), #7
+   Europe symbols for the shifted main bss (generator from
+   `BM64Syms/data_dump.toml`, check on the image), #8 build-time version
+   choice and a linked Europe build (`bm64.eu.toml`, `patches.eu.toml`,
+   `GameEntry` `bm64_eu`, `verify.sh --version eu`), #9 `tools/run.sh`
+   (portable folder, stored ROM `<game_id>.z64`, overlay-load log, boot =
+   overlay 0x20), #10 PAL speed (ultramodern's VI is a fixed 60 Hz:
+   measure, then fix game-side or host-side). Each issue lists its *Done
+   when*. Consider moving the disassembly, stub-check and xref scripts into
+   `tools/` with #7 (no game data in them).
 2. **#4, the spike**, once a build runs: slot 1 in Green Garden room 0x28
    first, then slot 4 (model case, controlType 2, input via the command
    record). Steps and what to log are in the issue and design.md.
-3. Issues still to file: the **test harness** (unattended runs in portable
-   mode, scripted input, state probes, local captures; needs a linked build)
+3. Issues still to file: the rest of the **test harness** (#9 is its first
+   piece: scripted input, state probes, local captures)
    and the **session core** for online co-op (lockstep, host and client,
    input transport: design.md proposes the command record, shared seed,
    desync detection; stage-local flags `D_8008E640` must stay equal).
