@@ -4,9 +4,9 @@ This repository ([Clodmony/BM64Recomp-coop](https://github.com/Clodmony/BM64Reco
 is a **public fork** of
 [RevoSucks/BM64Recomp](https://github.com/RevoSucks/BM64Recomp), the static
 recompilation of Bomberman 64 for PC. The fork adds a **cooperative
-two-player Adventure campaign**: **online co-op** (two players share one
-campaign over the network) and **local split-screen co-op** on one machine,
-built on one session core so both modes stay one feature. The co-op project
+two-player Adventure campaign**, played **online**: two players share one
+campaign over the network. Local split-screen co-op on one machine was part of
+the plan and is on hold (owner, 2026-10-18). The co-op project
 is built entirely with AI: every change after upstream commit `726adc9` is
 written by an AI coding agent directed by the repository owner. Keep that
 disclosure in `README.md` and here.

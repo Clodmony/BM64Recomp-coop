@@ -11,6 +11,11 @@ run: there is no linked build yet (the recompilation needs the US ROM, #2 would
 add Europe). Every finding is to be re-checked on a US build. "Read" means the
 instructions show it; "inferred" means an interpretation beyond them.
 
+**Scope (owner, 2026-10-18).** The work targets **online** co-op. Local couch
+co-op (split-screen or a shared screen) is dropped for now; its notes stay
+below, marked, for when it comes back. The other proposals (player 2 in slot
+4, shared lives) are proposals until the spike (#4) confirms them.
+
 ## How this was read
 
 - **Disassembly.** The Europe ROM, unpacked like the US decompressed ROM, was
@@ -267,9 +272,10 @@ single globals; cutscenes write it through `func_8024A824` and `func_80250E2C`.
 follow its own player. Patch the target choice in `func_80235D7C` (one
 function) to a "camera slot" that is a per-machine setting, not game state.
 Whether the camera feeds back into the simulation (enemy activation, the stick
-vector) must be ruled out on a build, or the two machines diverge. Local:
-a shared screen framing both players (target midpoint, distance from their
-separation, a leash) is the same one-function patch. **Split-screen** needs a
+vector) must be ruled out on a build, or the two machines diverge.
+
+*Local co-op (dropped for now):* a shared screen framing both players
+(target midpoint, distance from their separation, a leash) is the same one-function patch. **Split-screen** needs a
 second camera state and a second render of the scene per frame: the camera
 globals exist once and the HUD draws once per frame. That is the expensive
 part of the local mode and needs its own investigation.
@@ -412,13 +418,12 @@ Stage-local flags (`D_8008E640`, 0x400–0x43F; 331 test, 188 set and 105 clear
 calls from overlays) are switched during play: doors, switches, collected
 things. They are the same block, but a sync concern, not a save concern.
 
-*Approach:* **one campaign, one file**: the file chosen at the file select
-(local) or the **host's** file (online). The guest does not write its EEPROM
-(its `func_802947AC` becomes a no-op), and gets the host's progress block at
-session start. Player 2's look: battle already applies custom parts per slot
-(`func_8023EB28` → `g_LoadCustomParts`); online the guest sends its own
-parts, locally player 2 takes another file's parts or the default. Cheap,
-plus a menu for the local choice.
+*Approach:* **one campaign, one file**: the **host's** file. The guest does
+not write its EEPROM (its `func_802947AC` becomes a no-op), and gets the
+host's progress block at session start. Player 2's look: battle already
+applies custom parts per slot (`func_8023EB28` → `g_LoadCustomParts`), so the
+guest sends its own parts. Cheap. (Local co-op, dropped for now, would use the
+file chosen at the file select and give player 2 another file's parts.)
 
 ## The approach in one table
 
@@ -435,14 +440,15 @@ plus a menu for the local choice.
 | Rival AI targets slot 0 | AI record `D_800BCFE8` | retarget per frame | cheap |
 | A death is player 1's, room reloads | `func_8023A870`, `func_8023F26C` | shared lives; downed and respawn while the partner lives | moderate |
 | Slot-0 heart and power resets | `func_8023D0F8`, `func_8023E1D8`, `func_802968BC`, `func_80277DF4`, `func_8023DA04` | apply to every co-op slot | cheap |
-| Camera follows S | `func_80235D7C` | online: own player; local: shared framing | cheap |
-| Split-screen | one camera state, one render | second camera and render per frame | expensive |
+| Camera follows S | `func_80235D7C` | each machine follows its own player | cheap |
+| Split-screen (dropped for now) | one camera state, one render | second camera and render per frame | expensive |
 | HUD | `func_80242270` reads no slot; cards read slot 0 | keep; extra per-player panel as a second draw object | cheap–moderate |
 | Save | one file, one look | host's/chosen file is the campaign; guest does not save | cheap |
 | Stage-local flags | `D_8008E640` | lockstep keeps them equal (session core) | — |
 
-The cheap rows give a playable shared-screen co-op prototype; the death rework,
-the enemy targeting and split-screen are the real work.
+The cheap rows give a playable prototype once the session core carries the
+second player's input; the death rework and the enemy targeting are the real
+gameplay work.
 
 ## The follow-up spike: player 2 in a story stage
 
@@ -478,6 +484,5 @@ runs out with a second player and its bombs.
 7. Which screens are overlay 0x9B and the game-over/continue targets (0x20 and
    0x21 with entry 0x11)?
 8. Gold cards: the pickup path and what the 3 high bits of a stage record mean.
-9. Does the HUD draw once per frame or once per viewport (split-screen)?
-10. How do the three rooms that never call `func_80245CDC` (ovl_5_subovl_1,
+9. How do the three rooms that never call `func_80245CDC` (ovl_5_subovl_1,
     ovl_5_subovl_6, ovl_7_subovl_1) spawn the player?

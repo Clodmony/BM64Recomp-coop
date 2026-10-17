@@ -2,8 +2,8 @@
 
 > [!NOTE]
 > **This is BM64Recomp-coop, a fork** of [RevoSucks/BM64Recomp](https://github.com/RevoSucks/BM64Recomp)
-> that adds a cooperative two-player Adventure campaign, online and as local
-> split-screen. It is work in progress on the `bm64recomp-coop` branch; `master`
+> that adds a cooperative two-player Adventure campaign, played online. It is
+> work in progress on the `bm64recomp-coop` branch; `master`
 > is an unchanged copy of upstream. The co-op work is written entirely by an AI
 > coding agent (Claude) directed by the repository owner. The fork publishes no
 > builds. Please report issues with the co-op features here, not upstream.
