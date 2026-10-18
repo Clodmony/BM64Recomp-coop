@@ -6,8 +6,8 @@ repository so it survives any worktree path and any tool; per-checkout agent
 memory is not read by a session that starts in another worktree. State goes
 here; stable recipes go into `docs/coop/`; personal data and hardware never.
 
-Last updated 2026-10-18 (#26, the host's save and the build check, in draft
-PR #30, stacked on #25, #20, #15 and #12).
+Last updated 2026-10-18 (#27, each machine's camera on its own player, in
+draft PR #34, stacked on #30, #25, #20, #15 and #12).
 
 ## Repository state
 
@@ -20,7 +20,9 @@ PR #30, stacked on #25, #20, #15 and #12).
   PR #15), #13, #17, #18 (closed by PR #20), #14 and #16 (partly done in
   PR #20, kept open for leftover checks), #19 (the group), #21 (closed by
   PR #25), #11 (Europe follow-ups), #22–#24 (follow-ups of #19), #26 (closed
-  by PR #30), #27–#29 (follow-ups of #21), #31 (scripted pads on the title).
+  by PR #30), #27 (closed by PR #34), #28, #29 (follow-ups of #21), #31
+  (scripted pads on the title), #32 (`p2-slot4` fails for some seeds), #33
+  (cameras that turn, the client's C-buttons).
 - Local git config of the clone: Claude identity, `upstream` with push
   `DISABLED`, `core.hooksPath .githooks`, `pushguard.romDir` set.
 
@@ -38,6 +40,11 @@ PR #30, stacked on #25, #20, #15 and #12).
   the host's save, the hello checks the build (#26). Verify 2026-10-18:
   Europe `--full --scenarios`, all 8 stages, 167/167 checks (new:
   `save-file`, `session-save`, `session-build`); US not run.
+- **#34** `coop/27-camera`, draft, stacked on #30: each machine's camera
+  follows its own player (#27). Verify 2026-10-18: Europe `--full
+  --scenarios`, 7/8 stages, 175/185 checks; the 10 failures are all
+  `p2-slot4` and follow the clock seed (seed 2 fails the same on the #26
+  build: #32). New `session-camera` 18/18. US not run.
 - Owner (2026-10-18): review first, merge later in that order, when the
   owner says so. Each one merged shrinks the next one's diff.
 
@@ -55,6 +62,22 @@ PR #30, stacked on #25, #20, #15 and #12).
   host's save (not no-op saves); the build identity covering patches and
   hooks only (not host code, librecomp, mods) is enough for now, revisit
   with #29.
+- #27 next (chosen at the start of its session; no merges approved).
+
+## What #27 found and did (details: design.md, *The camera*)
+
+- A hook in `func_80235D7C` at 0x80235E28 swaps the followed slot (v0, S)
+  for the machine's own while that player is in play
+  (`patches/coop_camera.c`); `coop_camera_slot` in `src/coop/harness.cpp`
+  picks it: a live session's client 4, else the game's; `BM64_COOP_CAMERA`
+  overrides.
+- Camera globals (low bss, same in US and Europe): eye `D_8008F3E8`, yaw,
+  pitch and distance `D_8008F3F8[0..2]`; the look-at point is the actor +
+  100 in y. `D_80090020` is not the look-at point.
+- Open question 4: no feedback in room 0x29 (589 frames, same hashes; the
+  angles stay 90/45/2000 there). Rooms whose camera turns and the client's
+  C-buttons (pad 0 = host's) are #33.
+- Harness: a `coop: camera` probe line, `nearer PROBE camera A B` check.
 
 ## What #26 found and did (details: design.md, *The save and the build*)
 
@@ -77,20 +100,23 @@ PR #30, stacked on #25, #20, #15 and #12).
 
 ## Next candidates
 
-1. **Session follow-ups**: #27 (the client's camera on player 2; open
-   question 4; first: a per-machine camera target on the client, then
-   session-lockstep with same-hashes), #28 (host or join from the launcher;
-   first: ui_launcher.cpp's Start path and coop::autostart), #29 (two
-   machines, Windows/macOS; also whether two compilers give the same build
-   identity). #27 first: the client sees player 1's view today.
-2. **Rest of #14 and #16** (kept open, owner): a story teleport
+1. **Session follow-ups**: #33 (cameras that turn and the client's
+   C-buttons; first: find a story room with a turning camera, run
+   session-camera's moves there with same-hashes), #28 (host or join from the
+   launcher; first: ui_launcher.cpp's Start path and coop::autostart), #29
+   (two machines, Windows/macOS; also whether two compilers give the same
+   build identity).
+2. **#32**, `p2-slot4` fails for seed 2 (a hit of cause 1 takes no heart);
+   it makes every full verify fail for some clock seeds. First: compare
+   seeds 1 and 2 around the hit; or pin `#env BM64_COOP_SEED=1`.
+3. **Rest of #14 and #16** (kept open, owner): a story teleport
    (`func_802512C0` from a room script; find one with `xref/callers.tsv`
    beyond Green Garden stage 1) and a scene with player 2 already in the
    room, then a check that pad 1 does not move a frozen player 2.
-3. Follow-ups of #19: #22 (player 1 downed), #23 (freeze during player 1's
+4. Follow-ups of #19: #22 (player 1 downed), #23 (freeze during player 1's
    death animation), #24 (slot-0 resets, US run).
-4. **#11**, Europe follow-ups.
-5. **#31**, scripted pads on the title (needed to test the file select,
+5. **#11**, Europe follow-ups.
+6. **#31**, scripted pads on the title (needed to test the file select,
    Custom screen and pause menu through their own menus).
 
 ## Scratch (not in the repository)
@@ -136,6 +162,6 @@ Under `~/dev-scratch/BM64Recomp-coop/`:
 
 ## Cleanup the owner may approve
 
-- After #12, #15, #20, #25 and #30 are merged: delete their branches.
+- After #12, #15, #20, #25, #30 and #34 are merged: delete their branches.
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/` in scratch:
   when the player 2 follow-ups are done.
