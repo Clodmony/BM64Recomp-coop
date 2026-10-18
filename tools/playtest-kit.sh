@@ -9,6 +9,9 @@
 # tools/build-windows.sh build, each a portable folder: the game, its DLLs,
 # assets/, the controller database and portable.txt, so saves and settings
 # stay in the folder. No ROM: each player picks their own in the launcher.
+# A folder that exists is updated in place: the program files are replaced,
+# and what a game run from it left (settings, saves, logs) is kept; the zip
+# is made from a clean copy.
 # These are builds of the game: copy them to the playtest machines by hand,
 # never upload or publish them (AGENTS.md).
 set -euo pipefail
@@ -36,7 +39,6 @@ common() { # folder
 	cp "$root/docs/coop/playtest.md" "$1/PLAYTEST.md"
 }
 
-rm -rf "$out"
 if [ -x "$linux_exe" ]; then
 	common "$out/linux"
 	cp "$linux_exe" "$out/linux/"
@@ -56,7 +58,12 @@ fi
 if [ -f "$win_build/BM64Recompiled.exe" ]; then
 	common "$out/windows"
 	cp "$win_build"/{BM64Recompiled.exe,BM64Recompiled.pdb,SDL2.dll,dxcompiler.dll,dxil.dll} "$out/windows/"
-	(cd "$out" && rm -f windows.zip && python3 -I -m zipfile -c windows.zip windows)
+	stage="$out/.zip-stage"
+	rm -rf "$stage"
+	common "$stage/windows"
+	cp "$win_build"/{BM64Recompiled.exe,BM64Recompiled.pdb,SDL2.dll,dxcompiler.dll,dxil.dll} "$stage/windows/"
+	(cd "$stage" && rm -f ../windows.zip && python3 -I -m zipfile -c ../windows.zip windows)
+	rm -rf "$stage"
 	echo "windows: $out/windows (and windows.zip)"
 else
 	echo "no Windows build at $win_build (tools/build-windows.sh --version $version)" >&2
