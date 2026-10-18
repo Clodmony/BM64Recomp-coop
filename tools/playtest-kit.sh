@@ -42,8 +42,11 @@ if [ -x "$linux_exe" ]; then
 	cp "$linux_exe" "$out/linux/"
 	cat > "$out/linux/start.sh" <<'EOF'
 #!/bin/sh
-# Starts the game from this folder and keeps its log in coop.log.
-cd "$(dirname "$0")" && ./BM64Recompiled 2>&1 | tee coop.log
+# Starts the game from this folder and keeps its log in coop.log, the run
+# before's in coop.prev.log (a session sends it to the other side).
+cd "$(dirname "$0")" || exit 1
+[ -f coop.log ] && mv -f coop.log coop.prev.log
+./BM64Recompiled 2>&1 | tee coop.log
 EOF
 	chmod +x "$out/linux/start.sh"
 	echo "linux:   $out/linux"

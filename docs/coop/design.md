@@ -970,6 +970,27 @@ Start there). A game that reaches its first pad read more than 10 s after
 the other's would lose the session at its first step (inferred from the
 lockstep's 10 s wait; not seen in the runs).
 
+### The playtest's logs (#29)
+
+A playtest on two PCs needs the logs of both, the crashed one's most. Each
+game keeps its log in `coop.log` in its app folder (a Windows build without a
+console redirects its stdout and stderr there, `coop::start_log`; the Linux
+kit's `start.sh` tees it) and the run before's in `coop.prev.log`. A Windows
+crash writes its exception, place and stack to the log first, as
+`BM64Recompiled.exe+0x…`, which the kit's `.pdb` resolves
+(`llvm-symbolizer --obj=BM64Recompiled.exe 0x140000000+offset`); an invalid
+parameter to the C runtime and an abort too. Right after the hellos, before
+the save, each side sends its `coop.prev.log` (its last 256 KiB; the host
+first, so neither waits on a full socket buffer), and the other keeps it in
+`coop-logs/<time>-<host|client>.log`. A crash, a restart and a join so bring
+the crashed run's log to the other PC (`session-logs`; protocol 4).
+
+Run (Europe, 2026-10-18): `session-logs` passes; the Windows build crashed on
+purpose (`BM64_COOP_CRASH`) logs the exception, `BM64Recompiled.exe+0x74EE5`
+and 12 frames, which the `.pdb` names (`coop_log_overlay_load`,
+`func_8022691C`, …). Not run: the redirect on a real Windows PC (in Wine a
+game started from a terminal has a console).
+
 ### Not done
 
 - (#29) The Windows build (cross-compiled, building.md, *The Windows

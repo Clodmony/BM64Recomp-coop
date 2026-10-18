@@ -45,7 +45,6 @@ private:
     void apply_style(Style *style);
     void propagate_disabled(bool disabled);
     void handle_event(const Event &e);
-    void set_id(const std::string& new_id);
 
     // Style overrides.
     virtual void set_property(Rml::PropertyId property_id, const Rml::Property &property) override;
@@ -88,6 +87,7 @@ public:
     float get_client_width();
     float get_client_height();
     void enable_focus();
+    void set_id(const std::string& new_id); // coop: public, for set_nav targets (src/coop/session_ui.cpp)
     void focus();
     void blur();
     void queue_update();

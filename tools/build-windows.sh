@@ -10,8 +10,9 @@
 # accepts Microsoft's licence). The recompiled game (RecompiledFuncs/, from
 # tools/verify.sh) must exist for the version. The patches are built by the
 # Linux clang, as in the Linux build, so both builds have the same build
-# identity. The shaders are compiled by RT64's Linux dxc (their output is the
-# same on every platform): the generated build.ninja is pointed at it, so the
+# identity. The shaders are compiled by RT64's Windows dxc.exe in Wine
+# (tools/dxc-wine.sh, which turns the Unix paths into Wine paths), as in a
+# Windows build: the generated build.ninja is pointed at the wrapper, so the
 # submodule stays untouched. RelWithDebInfo as upstream's Windows CI, so a
 # crash's backtrace names functions (BM64Recompiled.pdb). Output:
 # ~/dev-scratch/BM64Recomp-coop/build/win-<version>/.
@@ -47,6 +48,7 @@ cmake -S . -B "$build" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
 	-DCMAKE_TOOLCHAIN_FILE="$root/tools/windows-cross.cmake" \
 	-DBM64_VERSION="$version" -DBM64_FUNCS_VERSION_CHECK=ON \
 	-DPATCHES_C_COMPILER=clang -DPATCHES_LD=ld.lld
-sed -i "s#$dxc_dir/bin/x64/dxc.exe#env LD_LIBRARY_PATH=$dxc_dir/lib/x64 $dxc_dir/bin/x64/dxc-linux#g" "$build/build.ninja"
+export WINEPREFIX="$scratch/win/prefix" WINEDEBUG=-all
+sed -i "s#$dxc_dir/bin/x64/dxc.exe#$root/tools/dxc-wine.sh#g" "$build/build.ninja"
 cmake --build "$build" --target BM64Recompiled -j "$(nproc)"
 ls -l "$build/BM64Recompiled.exe"

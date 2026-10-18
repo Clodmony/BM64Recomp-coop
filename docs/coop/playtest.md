@@ -65,18 +65,32 @@ On the first start the launcher asks for the ROM: pick your Europe ROM.
 - When player 1 is downed, player 2 is not handled well (#22, #23).
 - Rooms other than Green Garden stage 1 are untested with two players.
 - No rejoining a lost session; restart both games.
+- Joining needs a keyboard to type the host's address (a controller moves
+  through the Co-op menu, but there is no on-screen keyboard).
 - The other uses of the camera in stages (some enemies or objects may
   read it) were not checked; a desync there shows in the log.
 
 ## What to report
 
-Afterwards, keep **both** `coop.log` files (one from each PC). Note what you
+Each game keeps its log in `coop.log` in its folder, and the one of the run
+before in `coop.prev.log`. A Windows game that crashes writes the crash
+(its exception and where it happened) into its log first.
+
+**The logs travel by themselves:** when the two games connect, each sends
+the other its `coop.prev.log`, the log of its run before, and the other keeps
+it in `coop-logs/` in its folder. So after a crash, start the game again and
+join once more: the crashed run's log lands in the host's `coop-logs/`.
+Nothing else is sent, and only to the PC you connect to.
+
+Otherwise keep **both** `coop.log` files (one from each PC). Note what you
 did when something went wrong, and the time. In the logs, look for:
 
 - `coop: session desync frame=…`: the two games no longer agree (the most
   important line).
 - `coop: session lost …`: the connection ended, and why.
 - `coop: session refused …`: the join was refused, and why.
+- `coop: crash: …`: a crash on Windows, with its place in the program
+  (`BM64Recompiled.exe+0x…`), which the `.pdb` in the kit resolves.
 
 Screenshots and clips show the game's graphics: keep them to yourselves,
 never in a GitHub issue.

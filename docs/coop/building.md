@@ -187,9 +187,11 @@ together (`tools/windows-cross.cmake`):
 - The patches are built by the Linux clang as in the Linux build, so both
   builds have the same build identity and can play together.
 - Build-time tools built for Windows (`file_to_c`) run in Wine. The shaders
-  are compiled by RT64's Linux `dxc` (the same output on every platform): the
-  script points the generated `build.ninja` at it, because both CMake files
-  name `dxc.exe`, and Wine's `dxc.exe` cannot read the Unix include paths.
+  are compiled by RT64's Windows `dxc.exe` (1.7, what upstream's Windows
+  builds use) in Wine through `tools/dxc-wine.sh`, which turns the Unix paths
+  into Wine paths; the script points the generated `build.ninja` at it.
+  RT64's Linux `dxc` is 1.8 and its DXIL differs (a larger `PSV0` part),
+  which Wine's D3D12 takes but a real Windows' might not.
 - RT64's SDL 2.26.3 headers define `_m_prefetch`, a builtin in newer clang;
   the toolchain sets their guard `__PRFCHWINTRIN_H`.
 
@@ -235,8 +237,10 @@ earlier run's `saves/`, as the run's save folder), `--audio` (sound on the defau
 default SDL's dummy driver, which consumes audio at the real rate). Exit
 status: 0 overlay reached or log line seen (or ran until the timeout
 without either), 1 timeout before them, 2 the game exited or crashed, 3 the
-owner's config folder changed, 4 bad setup. The game opens its window on the desktop; there
-is no headless mode.
+owner's config folder changed, 4 bad setup. The game runs headless, inside
+`gamescope --backend headless` (640x480), so no window opens on the desktop
+(owner, 2026-10-18); `--window` opens one. Each run is its own process group,
+which the stop ends whole (gamescope and Wine start children of their own).
 
 Debug switches, all off unless set (`src/coop/debug.cpp`):
 
@@ -252,6 +256,8 @@ Debug switches, all off unless set (`src/coop/debug.cpp`):
   `func_8023A208`, which the main loop calls once per frame:
   `coop: frame <frames> <ms> <retraces> <audio frames> <audio queue µs> <audio skips>`.
 - `BM64_COOP_PAL60=1`: turn the Europe build's PAL pacing off.
+- `BM64_COOP_CRASH=1`: crash on purpose when the title loads (a test of the
+  crash log, #29).
 
 A run's own `general.json` turns background input off, so a controller in
 use elsewhere does not press the test game's buttons; a key or button
@@ -357,7 +363,8 @@ MAX [MIN]` (two slots' distance at one probe; a tile is 100 units),
 than slot B along the floor), `camera PROBE NAME OP VALUE` (the camera's
 `yaw`, `pitch` in degrees or its `distance` at PROBE), `field
 PROBE SLOT NAME OP VALUE`, `file PATH` and `no-file PATH` (a file the run
-left, a glob relative to its run folder: `saves/bm64_*.bin`). The output is
+left, a glob relative to its run folder: `saves/bm64_*.bin`), `contains PATH
+REGEX` (such a file has a matching line). The output is
 one line per check, `N/M checks passed`
 and a RESULT line; exit 0 only if all passed. A scenario takes 15–35 s.
 

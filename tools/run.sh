@@ -5,6 +5,7 @@
 #   tools/run.sh [--version us|eu] [--until-overlay ID] [--timeout SECONDS]
 #                [--exe PATH] [--rom PATH] [--env NAME=VALUE]... [--audio]
 #                [--input FILE] [--until-log TEXT] [--name NAME] [--saves DIR]
+#                [--prev-log FILE] [--window]
 #
 #   --version        us or eu (default: us if its build exists, else eu)
 #   --until-overlay  stop with success once the game loads overlay ID (e.g.
@@ -27,6 +28,10 @@
 #                    the same second, e.g. a session's host and client)
 #   --saves          start with a copy of DIR as the run's saves/ folder (e.g.
 #                    the saves/ of an earlier run)
+#   --prev-log       FILE as the run before's log (coop.prev.log, which a
+#                    session sends to the other side, #29)
+#   --window         open the game's window on the desktop (default: headless,
+#                    in gamescope's headless backend, 640x480)
 #
 # The run folder ~/dev-scratch/BM64Recomp-coop/runs/<stamp>-<version>[-<name>]/ holds
 # everything the run writes: portable.txt (so saves and config stay in it),
@@ -58,6 +63,8 @@ input=
 until_log=
 name=
 saves=
+prev_log=
+window=0
 envs=()
 while (( $# )); do
 	case "$1" in
@@ -72,7 +79,9 @@ while (( $# )); do
 		--until-log) until_log="${2:-}"; shift ;;
 		--name) name="${2:-}"; shift ;;
 		--saves) saves="${2:-}"; shift ;;
-		-h|--help) sed -n '2,41p' "$0"; exit 0 ;;
+		--prev-log) prev_log="${2:-}"; shift ;;
+		--window) window=1 ;;
+		-h|--help) sed -n '2,46p' "$0"; exit 0 ;;
 		*) echo "unknown option: $1" >&2; exit 4 ;;
 	esac
 	shift
@@ -105,6 +114,7 @@ ln -s "$root/recompcontrollerdb.txt" "$run/recompcontrollerdb.txt"
 cp "$rom" "$run/bm64_$version.z64"   # librecomp's stored ROM: <game_id>.z64
 [ -n "$input" ] && cp "$input" "$run/input.txt"
 [ -n "$saves" ] && cp -r "$saves" "$run/saves"
+[ -n "$prev_log" ] && cp "$prev_log" "$run/coop.prev.log"
 log="$run/game.log"
 marker="$run/.started"
 touch "$marker"
@@ -125,7 +135,10 @@ ms() { echo $(( $(date +%s%N) / 1000000 )); }
 start=$(ms)
 launch=("$exe")
 [[ "$exe" == *.exe ]] && launch=(wine "$exe")
-(cd "$run" && exec env "${game_env[@]}" "${launch[@]}") > "$log" 2>&1 &
+# headless: the game draws into gamescope's own display, nothing on the desktop
+(( window )) || launch=(gamescope --backend headless -w 640 -h 480 -W 640 -H 480 -- "${launch[@]}")
+# a process group of its own, so the stop reaches gamescope's and Wine's children
+(cd "$run" && exec setsid env "${game_env[@]}" "${launch[@]}") > "$log" 2>&1 &
 pid=$!
 
 elapsed() { local t=$(( $(ms) - start )); printf '%d.%d' $(( t / 1000 )) $(( t % 1000 / 100 )); }
@@ -151,13 +164,14 @@ while :; do
 	sleep 0.2
 done
 
-# stop the one process this script started
-if kill -0 "$pid" 2>/dev/null; then
-	kill -TERM "$pid" 2>/dev/null
-	for _ in $(seq 25); do kill -0 "$pid" 2>/dev/null || break; sleep 0.2; done
-	kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null
-	wait "$pid" 2>/dev/null
+# stop the process group this script started (the game, and gamescope's and
+# Wine's processes around it)
+if kill -0 -- "-$pid" 2>/dev/null; then
+	kill -TERM -- "-$pid" 2>/dev/null
+	for _ in $(seq 25); do kill -0 -- "-$pid" 2>/dev/null || break; sleep 0.2; done
+	kill -0 -- "-$pid" 2>/dev/null && kill -KILL -- "-$pid" 2>/dev/null
 fi
+wait "$pid" 2>/dev/null
 
 overlays="$(grep -o '^coop: overlay 0x[0-9A-F]*' "$log" | awk '{print $3}' | paste -sd' ')"
 touched=

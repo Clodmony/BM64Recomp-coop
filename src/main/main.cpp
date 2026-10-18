@@ -598,7 +598,7 @@ int main(int argc, char** argv) {
     std::filesystem::current_path("/var/data", ec);
 #endif
 
-    coop::log_to_file_without_console(); // coop: a playtest's log on Windows (#29)
+    coop::start_log(); // coop: a playtest's log, crashes on Windows (#29)
 
     // Initialize SDL audio and set the output frequency.
     SDL_InitSubSystem(SDL_INIT_AUDIO);

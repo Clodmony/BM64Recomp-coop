@@ -3,8 +3,13 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <csignal>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <string>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -26,13 +31,81 @@ bool env_flag(const char* name) {
 }
 }
 
-// A Windows build started from Explorer has no console: its stdout and stderr
-// go nowhere, and with them the co-op lines a playtest needs (#29). Without
-// them, both go to coop.log in the app folder (the portable folder with
-// portable.txt), overwritten each start. Elsewhere, and with a console or a
-// redirect, nothing changes.
-void coop::log_to_file_without_console() {
 #ifdef _WIN32
+namespace {
+// "module+0xoffset" for a code address, which the build's .pdb resolves
+// (llvm-symbolizer --obj=BM64Recompiled.exe 0x140000000+offset).
+void print_where(const char* what, DWORD64 address) {
+    HMODULE module = nullptr;
+    char path[MAX_PATH] = "?";
+    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           reinterpret_cast<LPCSTR>(address), &module) &&
+        GetModuleFileNameA(module, path, sizeof(path)) > 0) {
+        const char* name = std::strrchr(path, '\\');
+        std::fprintf(stderr, "coop: crash: %s %s+0x%llX\n", what, name != nullptr ? name + 1 : path,
+                     static_cast<unsigned long long>(address - reinterpret_cast<DWORD64>(module)));
+    } else {
+        std::fprintf(stderr, "coop: crash: %s 0x%llX\n", what, static_cast<unsigned long long>(address));
+    }
+}
+
+// The stack from a thread's registers, unwound with the functions' unwind
+// tables (x64).
+void print_stack(CONTEXT context) {
+    for (int i = 0; i < 48 && context.Rip != 0; i++) {
+        print_where("  at", context.Rip);
+        DWORD64 base = 0;
+        PRUNTIME_FUNCTION function = RtlLookupFunctionEntry(context.Rip, &base, nullptr);
+        if (function == nullptr) { // a leaf function: the return address is on top of the stack
+            context.Rip = *reinterpret_cast<DWORD64*>(context.Rsp);
+            context.Rsp += 8;
+            continue;
+        }
+        void* handler_data = nullptr;
+        DWORD64 frame = 0;
+        RtlVirtualUnwind(UNW_FLAG_NHANDLER, base, context.Rip, function, &context, &handler_data, &frame, nullptr);
+    }
+    std::fflush(stderr);
+}
+
+LONG WINAPI on_crash(EXCEPTION_POINTERS* info) {
+    std::fprintf(stderr, "coop: crash: exception 0x%08lX\n", info->ExceptionRecord->ExceptionCode);
+    print_where("in", reinterpret_cast<DWORD64>(info->ExceptionRecord->ExceptionAddress));
+    print_stack(*info->ContextRecord);
+    return EXCEPTION_CONTINUE_SEARCH; // Windows then ends the program as without this
+}
+
+void print_here(const char* why) {
+    std::fprintf(stderr, "coop: crash: %s\n", why);
+    CONTEXT context{};
+    RtlCaptureContext(&context);
+    print_stack(context);
+}
+
+void on_invalid_parameter(const wchar_t*, const wchar_t*, const wchar_t*, unsigned int, uintptr_t) {
+    print_here("invalid parameter to the C runtime");
+    TerminateProcess(GetCurrentProcess(), 0xC0000417); // what the C runtime does without a handler
+}
+
+void on_abort(int) {
+    print_here("abort");
+}
+} // namespace
+#endif
+
+// The log of a playtest (#29). A Windows build started from Explorer has no
+// console: its stdout and stderr go nowhere, and with them the co-op lines.
+// Without them, both go to coop.log in the app folder (the portable folder
+// with portable.txt); the log of the run before is kept as coop.prev.log,
+// which a session sends to the other side when it connects (session.cpp).
+// On Linux the kit's start.sh does the same. A crash on Windows writes its
+// exception, place and stack to the log first. Elsewhere, and with a console
+// or a redirect, the output is left as it is.
+void coop::start_log() {
+#ifdef _WIN32
+    SetUnhandledExceptionFilter(on_crash);
+    _set_invalid_parameter_handler(on_invalid_parameter);
+    std::signal(SIGABRT, on_abort);
     HANDLE err = GetStdHandle(STD_ERROR_HANDLE);
     if (err != nullptr && err != INVALID_HANDLE_VALUE) {
         return;
@@ -40,6 +113,7 @@ void coop::log_to_file_without_console() {
     std::error_code ec;
     std::filesystem::path folder = zelda64::get_app_folder_path();
     std::filesystem::create_directories(folder, ec);
+    std::filesystem::rename(folder / "coop.log", folder / "coop.prev.log", ec);
     std::string path = (folder / "coop.log").string();
     if (FILE* empty = std::fopen(path.c_str(), "w")) {
         std::fclose(empty);
@@ -54,6 +128,22 @@ void coop::log_to_file_without_console() {
 #endif
 }
 
+// The last limit bytes of the log of the run before (coop.prev.log in the app
+// folder), empty without one.
+std::string coop::previous_log(size_t limit) {
+    std::error_code ec;
+    std::filesystem::path path = zelda64::get_app_folder_path() / "coop.prev.log";
+    std::ifstream file(path, std::ios_base::binary);
+    if (!file) {
+        return {};
+    }
+    std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    if (text.size() > limit) {
+        text.erase(0, text.size() - limit);
+    }
+    return text;
+}
+
 // Called by a hook at the entry of the game's overlay loader, func_8022691C
 // (bm64.us.toml), with the overlay ID it is asked to load. With
 // BM64_COOP_LOG_OVERLAYS=1 each load is one line on stderr, e.g.
@@ -61,9 +151,14 @@ void coop::log_to_file_without_console() {
 // The test harness counts the loads (src/coop/harness.cpp).
 extern "C" void coop_log_overlay_load(uint32_t id) {
     static const bool enabled = env_flag("BM64_COOP_LOG_OVERLAYS");
+    static const bool crash = env_flag("BM64_COOP_CRASH");
     coop::note_overlay_load(id);
     if (enabled) {
         std::fprintf(stderr, "coop: overlay 0x%02X\n", id & 0xFFFF);
+    }
+    if (crash && (id & 0xFFFF) == 0x20) { // a test of the crash log (#29)
+        std::fprintf(stderr, "coop: crashing on purpose (BM64_COOP_CRASH)\n");
+        *static_cast<volatile int*>(nullptr) = 0;
     }
 }
 

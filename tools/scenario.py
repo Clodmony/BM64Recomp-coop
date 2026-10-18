@@ -41,6 +41,8 @@ lines the script itself ignores as comments:
     #check file PATH             the run left a file PATH (relative to its
                                  run folder, a glob: saves/bm64_*.bin)
     #check no-file PATH          ... did not
+    #check contains PATH REGEX   a file PATH (a glob) the run left has a line
+                                 matching REGEX
 
 A session scenario (#21) runs two instances of the game, a host and a client
 of an online session (src/coop/session.cpp) on a free local port, with these
@@ -62,6 +64,9 @@ header lines besides:
     #saves-host SCENARIO         the host starts with the saves/ folder that
                                  SCENARIO's run left (also #saves-client);
                                  SCENARIO runs first, alone, with its checks
+    #prev-log-host TEXT          a line of the host's last run's log
+                                 (coop.prev.log, which a session sends to the
+                                 other side; also #prev-log-client)
 
 Both logs are cut at their "coop: input end": once one game is stopped the
 other loses the session. Both scripts should end at the same frame.
@@ -193,13 +198,20 @@ def check(text, lines, probes, folder=None):
             return False, "no run folder"
         there = any(folder.glob(args[0]))
         return there == (kind == "file"), "there" if there else "not there"
+    if kind == "contains":
+        if folder is None:
+            return False, "no run folder"
+        files = list(folder.glob(args[0]))
+        hits = [f for f in files if any(re.search(args[1], line)
+                                        for line in f.read_text(errors="replace").splitlines())]
+        return bool(hits), f"{len(files)} files, {len(hits)} matching"
     raise ValueError(f"unknown check {kind}")
 
 
 EXES = {}  # the executable of "host" (any game but a session's client) and "client"
 
 
-def run_cmd(script, version, timeout, envs, name=None, saves=None):
+def run_cmd(script, version, timeout, envs, name=None, saves=None, prev_log=None):
     cmd = [str(ROOT / "tools/run.sh"), "--input", str(script), "--until-log", "coop: input end",
            "--timeout", str(timeout)]
     exe = EXES.get("client" if name == "client" else "host")
@@ -211,6 +223,8 @@ def run_cmd(script, version, timeout, envs, name=None, saves=None):
         cmd += ["--name", name]
     if saves:
         cmd += ["--saves", str(saves)]
+    if prev_log:
+        cmd += ["--prev-log", str(prev_log)]
     for env in envs:
         cmd += ["--env", env]
     return cmd
@@ -279,7 +293,7 @@ def run_scenario(path, version, timeout, extra_envs, folder=None):
     envs, checks = [], []
     session, host_envs, client_envs, client_steps, client_checks = False, [], [], [], []
     switch = "BM64_COOP_SESSION"
-    saves_from = {}
+    saves_from, prev_logs = {}, {"host": [], "client": []}
     for line in path.read_text().splitlines():
         if line.startswith("#env "):
             envs.append(line[5:].strip())
@@ -297,6 +311,9 @@ def run_scenario(path, version, timeout, extra_envs, folder=None):
             client_steps.append(line[8:].strip())
         elif line.startswith("#check-client "):
             client_checks.append(line[14:].strip())
+        elif line.startswith(("#prev-log-host ", "#prev-log-client ")):
+            side, _, text = line[10:].partition(" ")
+            prev_logs[side].append(text)
         elif line.startswith(("#saves-host ", "#saves-client ")):
             side, _, name = line[7:].partition(" ")
             saves_from[side] = name.strip()
@@ -326,16 +343,23 @@ def run_scenario(path, version, timeout, extra_envs, folder=None):
         runs.mkdir(parents=True, exist_ok=True)
         client_script = runs / f".{path.stem}-client-{port}.txt"
         client_script.write_text("\n".join(client_steps) + "\n")
+        prev_files = {}
+        for side, lines in prev_logs.items():
+            if lines:
+                prev_files[side] = runs / f".{path.stem}-{side}-prev-{port}.log"
+                prev_files[side].write_text("\n".join(lines) + "\n")
         procs = []
         for name, script, own_envs, session_env in (
                 ("host", path, host_envs, f"{switch}=host:{port}"),
                 ("client", client_script, client_envs, f"{switch}=join:127.0.0.1:{port}")):
             cmd = run_cmd(script, version, timeout, envs + own_envs + [session_env] + extra_envs, name,
-                          saves.get(name))
+                          saves.get(name), prev_files.get(name))
             procs.append(subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True))
         for proc in procs:
             proc.wait()
         client_script.unlink()
+        for prev in prev_files.values():
+            prev.unlink()
         host_dir, client_dir = [], []
         host = until_end(read_run(procs[0], f"{path.stem} host", results, host_dir))
         client = until_end(read_run(procs[1], f"{path.stem} client", results, client_dir))
