@@ -1,0 +1,9 @@
+# The same with the PAL pacing off (BM64_COOP_PAL60=1): the game runs at 60
+# frames a second, and the patches hand RT64 60 (#11). Europe build only.
+#env BM64_COOP_PAL60=1
+#
+#check log ^coop: refresh rate 60$
+#check no-log ^coop: refresh rate 50$
+overlay 0x20
+wait 30
+end

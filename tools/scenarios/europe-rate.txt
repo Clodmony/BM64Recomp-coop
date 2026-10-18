@@ -1,0 +1,10 @@
+# The game's frame rate the patches hand RT64 (#11, docs/coop/building.md,
+# *Europe speed*): Gfx_InitGfx sends gEXSetRefreshRate with the rate the game
+# runs at, 50 in a Europe build with its PAL pacing. Europe build only (a US
+# build logs 60).
+#
+#check log ^coop: refresh rate 50$
+#check no-log ^coop: refresh rate 60$
+overlay 0x20
+wait 30
+end

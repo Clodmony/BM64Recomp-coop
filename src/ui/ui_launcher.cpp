@@ -10,6 +10,17 @@
 
 static std::string version_string;
 
+// coop: name the ROM this build wants (src/coop/version.cmake). A Europe build
+// given the US ROM gets IncorrectRom, not IncorrectVersion: librecomp compares
+// the header name over "BOMBERMAN64E", which the US ROM's does not match.
+#ifdef BM64_VERSION_EU
+#define COOP_ROM_VERSION "Europe (PAL)"
+#define COOP_ROM_WRONG_GAME_NOTE "\nThis build runs the Europe (PAL) N64 version of the game only."
+#else
+#define COOP_ROM_VERSION "NTSC-U"
+#define COOP_ROM_WRONG_GAME_NOTE ""
+#endif
+
 Rml::DataModelHandle model_handle;
 bool mm_rom_valid = false;
 
@@ -32,14 +43,14 @@ void select_rom() {
                     recompui::message_box("This is not a valid ROM file.");
                     break;
                 case recomp::RomValidationError::IncorrectRom:
-                    recompui::message_box("This ROM is not the correct game.");
+                    recompui::message_box("This ROM is not the correct game." COOP_ROM_WRONG_GAME_NOTE);
                     break;
                 case recomp::RomValidationError::NotYet:
                     recompui::message_box("This game isn't supported yet.");
                     break;
                 case recomp::RomValidationError::IncorrectVersion:
                     recompui::message_box(
-                            "This ROM is the correct game, but the wrong version.\nThis project requires the NTSC-U N64 version of the game.");
+                            "This ROM is the correct game, but the wrong version.\nThis project requires the " COOP_ROM_VERSION " N64 version of the game.");
                     break;
                 case recomp::RomValidationError::OtherError:
                     recompui::message_box("An unknown error has occurred.");
