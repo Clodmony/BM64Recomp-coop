@@ -1,0 +1,69 @@
+# Each machine's camera follows its own player (#27, docs/coop/design.md,
+# *The camera*): the host's player 1, the client's player 2 (slot 4), while
+# both games still run the same frames. Green Garden stage 1, room 0x29, as
+# session-lockstep; player 2 walks three tiles away from player 1, then both
+# walk again, each by the stick, which the game turns by its camera's yaw.
+#session
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_LOG_HASH=1
+#
+#check log ^coop: session lockstep from frame 0$
+#check-client log ^coop: session lockstep from frame 0$
+#check no-log ^coop: session (desync|lost|refused)
+#check-client no-log ^coop: session (desync|lost|refused)
+#check same-hashes
+# the client's camera follows player 2 once it plays, the host's player 1
+#check-client log ^coop: camera follows slot=4$
+#check no-log ^coop: camera follows slot=4$
+#check-client nearer apart camera 4 0
+#check nearer apart camera 0 4
+#check-client nearer end camera 4 0
+#check nearer end camera 0 4
+# player 2 walked away (right is -z in this room's camera), in both games
+#check delta start apart 4 z < -200
+#check-client delta start apart 4 z < -200
+#check near apart 0 4 1000 250
+# then player 2 down (+x) and player 1 up (-x), in both games
+#check delta apart end 4 x > 50
+#check-client delta apart end 4 x > 50
+#check delta apart end 0 x < -50
+#check-client delta apart end 0 x < -50
+#
+# The client's script: the same frames, its pad 0 is player 2's.
+#client overlay 0x29
+#client wait 300
+#client probe walked
+#client wait 15
+#client wait 10
+#client probe start
+#client pad 0 - 1 0.05
+#client wait 45
+#client pad 0 -
+#client wait 60
+#client probe apart
+#client pad 0 - 0.05 -1
+#client wait 20
+#client pad 0 -
+#client wait 40
+#client probe end
+#client wait 30
+#client end
+overlay 0x29
+wait 300
+probe walked
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+wait 10
+probe start
+wait 45
+wait 60
+probe apart
+pad 0 - -0.05 1
+wait 20
+pad 0 -
+wait 40
+probe end
+wait 30
+end

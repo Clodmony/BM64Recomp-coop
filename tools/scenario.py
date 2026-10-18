@@ -24,6 +24,9 @@ lines the script itself ignores as comments:
     #check near PROBE A B MAX [MIN]  the players in slots A and B are MIN
                                  (default 0) to MAX world units apart at PROBE
                                  (a tile is 100 units)
+    #check nearer PROBE camera A B  the point the camera looks at is nearer
+                                 the player in slot A than the one in B, along
+                                 the floor (x and z), at PROBE
     #check field PROBE SLOT NAME OP VALUE
                                  a field of the player's probe line, OP one of
                                  = != < > <= >=, e.g. hearts < 2
@@ -76,25 +79,36 @@ OPS = {"=": operator.eq, "!=": operator.ne, "<": operator.lt, ">": operator.gt,
 
 
 def parse_probes(lines):
-    """{label: {slot: {field: int or (x, y, z)}}} from the probe lines."""
+    """{label: {slot or "camera": {field: int or (x, y, z)}}} from the probe
+    lines."""
     probes, current = {}, None
     for line in lines:
         m = re.match(r"coop: probe (\S+)$", line)
         if m:
             current = probes.setdefault(m.group(1), {})
             continue
-        m = re.match(r"coop: player slot=(\d+) (.*)", line)
+        m = re.match(r"coop: (?:player slot=(\d+)|(camera)) (.*)", line)
         if m and current is not None:
             fields = {}
-            for key, value in re.findall(r"(\w+)=(\S+)", m.group(2)):
-                if key == "pos":
+            for key, value in re.findall(r"(\w+)=(\S+)", m.group(3)):
+                if key in ("pos", "eye", "angles"):
                     fields[key] = tuple(int(v) / 10 for v in value.split(","))
                 elif re.fullmatch(r"-?\d+|0x[0-9A-Fa-f]+", value):
                     fields[key] = int(value, 0)
                 else:
                     fields[key] = value
-            current[int(m.group(1))] = fields
+            current[int(m.group(1)) if m.group(1) else "camera"] = fields
     return probes
+
+
+def camera_target(camera):
+    """The point the camera looks at: its distance from the eye, along its yaw
+    and pitch (read in room 0x29: yaw 90, pitch 45, distance 2000, the eye
+    +x and +y of its player)."""
+    (ex, ey, ez), (yaw, pitch, dist) = camera["eye"], camera["angles"]
+    yaw, pitch = math.radians(yaw), math.radians(pitch)
+    flat = dist * math.cos(pitch)
+    return (ex - flat * math.sin(yaw), ey - dist * math.sin(pitch), ez - flat * math.cos(yaw))
 
 
 def player(probes, label, slot):
@@ -138,6 +152,14 @@ def check(text, lines, probes, folder=None):
         least = float(args[4]) if len(args) > 4 else 0.0
         dist = math.dist(player(probes, label, a)["pos"], player(probes, label, b)["pos"])
         return least <= dist <= limit, f"{dist:.1f} units"
+    if kind == "nearer":
+        label, a, b = args[0], int(args[2]), int(args[3])
+        if label not in probes or "camera" not in probes[label]:
+            raise LookupError(f"no camera at probe {label}")
+        at = camera_target(probes[label]["camera"])
+        da, db = (math.dist((at[0], at[2]), (player(probes, label, s)["pos"][0], player(probes, label, s)["pos"][2]))
+                  for s in (a, b))
+        return da < db, f"{da:.1f} and {db:.1f} units"
     if kind == "delta":
         a, b, slot, axis, op, value = args[0], args[1], int(args[2]), args[3], args[4], float(args[5])
         i = "xyz".index(axis)

@@ -611,6 +611,10 @@ bool coop::session_connected() {
     return session.connected;
 }
 
+bool coop::session_live_client() {
+    return session.live && session.config.role == Role::Client;
+}
+
 std::optional<bool> coop::session_input(int pad, uint16_t* buttons, float* x, float* y, LocalInput local) {
     Session& s = session;
     if (!session_configured() || (s.started && !s.live)) {

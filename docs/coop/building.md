@@ -237,9 +237,11 @@ Everything is off unless a switch asks for it:
     `START`, `L`, `R`, `DU` `DD` `DL` `DR`, `CU` `CD` `CL` `CR`, joined with
     `+`, or `-` for none) and the stick at X, Y in −1..1;
   - `probe LABEL`: log `coop: probe LABEL`, a `coop: state` line (overlay,
-    S, flow flags, lives), the stick reading of pads 0 and 1, and one
-    `coop: player slot=…` line per player in play (controlType, hearts,
-    bombs, fire, flags, position in tenths of a world unit);
+    S, flow flags, lives), the stick reading of pads 0 and 1, a `coop:
+    camera` line (its eye, its yaw and pitch in tenths of a degree and its
+    distance from the point it looks at) and one `coop: player slot=…` line per player in play
+    (controlType, hearts, bombs, fire, flags, position in tenths of a world
+    unit);
   - `tile SLOT X Z`: put the player in that slot on tile X, Z of the room at
     the floor level it stands on (`func_802511EC`, as a room entry does), and
     log `coop: tile slot=… from=… to=…`;
@@ -268,6 +270,12 @@ Everything is off unless a switch asks for it:
   ([design.md](design.md), *Player 2 in a story room*). Its own lines
   (`coop: place …`, `trigger`, `down`, `respawn`) come from
   `patches/coop_player2.c` whenever it is on.
+- `BM64_COOP_CAMERA=SLOT`: the camera follows the player in that slot (0–4)
+  while it plays (an actor, controlType 1 or 2), and the game's choice (S)
+  otherwise; `-1` is always the game's choice. Without it, a live session's
+  client follows player 2 in slot 4, any other game the game's choice
+  ([design.md](design.md), *The camera*). Each change logs `coop: camera
+  follows slot=…` (`patches/coop_camera.c`).
 
 Patches print with `recomp_printf` (stdout), the host with stderr; with any
 of these switches stdout is line-buffered, so both stay in order in
@@ -294,7 +302,9 @@ REGEX2 after the first match of REGEX1), `not-after REGEX1 REGEX2` (none),
 `moved P1 P2 SLOT [MIN]` and
 `still P1 P2 SLOT [MAX]` (distance between two probes, in world units),
 `delta P1 P2 SLOT AXIS OP VALUE` (the move along one axis), `near PROBE A B
-MAX [MIN]` (two slots' distance at one probe; a tile is 100 units), `field
+MAX [MIN]` (two slots' distance at one probe; a tile is 100 units),
+`nearer PROBE camera A B` (the point the camera looks at is nearer slot A
+than slot B along the floor), `field
 PROBE SLOT NAME OP VALUE`, `file PATH` and `no-file PATH` (a file the run
 left, a glob relative to its run folder: `saves/bm64_*.bin`). The output is
 one line per check, `N/M checks passed`
@@ -324,6 +334,9 @@ never written. A scenario's `#saves-host NAME` (or `#saves-client`) runs
 scenario NAME first, alone and with its checks, and starts that side with
 the `saves/` folder NAME's run left (`run.sh --saves`): `session-save` gives
 the host the file `save-file` makes, and the client none.
+
+The client's camera follows player 2, the host's player 1
+(`BM64_COOP_CAMERA` above; `session-camera` checks both and the hashes).
 
 A scenario with a `#session` line runs both games at once (`tools/run.sh
 --name host` and `--name client`, so their run folders differ). The scenario

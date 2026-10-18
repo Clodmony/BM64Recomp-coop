@@ -281,7 +281,8 @@ single globals; cutscenes write it through `func_8024A824` and `func_80250E2C`.
 follow its own player. Patch the target choice in `func_80235D7C` (one
 function) to a "camera slot" that is a per-machine setting, not game state.
 Whether the camera feeds back into the simulation (enemy activation, the stick
-vector) must be ruled out on a build, or the two machines diverge.
+vector) must be ruled out on a build, or the two machines diverge. (Done in
+#27: *The camera*, under *The session core*.)
 
 *Local co-op (dropped for now):* a shared screen framing both players
 (target midpoint, distance from their separation, a leash) is the same one-function patch. **Split-screen** needs a
@@ -789,13 +790,49 @@ host code (`src/`), librecomp, and mods; a difference there still shows
 only as a desync. Two builds of one commit with different compilers may
 differ in the patches' binary and be refused (not tried; #29).
 
+### The camera (#27)
+
+Each machine's camera follows its own player: the host's player 1, the
+client's player 2 in slot 4. A hook in the camera process `func_80235D7C`
+(at 0x80235E28, where `func_80243DDC` has returned S and its actor is
+fetched) puts in the machine's own slot (`patches/coop_camera.c`) while that
+player is in play (an actor, controlType 1 or 2), and S otherwise, so a
+downed player 2 or one not yet placed leaves the camera on player 1. The
+choice is the machine's (`BM64_COOP_CAMERA`, default: a live session's
+client follows slot 4), not game state; the state hash does not cover it.
+
+What the camera is, read from probes in room 0x29: the eye `D_8008F3E8`
+sits at the point it looks at plus its distance (`D_8008F3F8[2]`, 2000)
+along its yaw and pitch (`D_8008F3F8[0]`, `[1]`: 90 and 45 here); the point
+is the followed actor's position + 100 in y. The eye trails a moving player
+by up to about 70 units. `D_80090020` is not the point it looks at (it
+stayed at 2400,0,1600).
+
+**Open question 4, does the camera feed back into the simulation?** In
+`session-camera` (Europe, 2026-10-18) the client's camera followed player 2
+while it walked about 380 units (almost four tiles) away from player 1, then
+both walked again by the stick; the two games logged the same state hash on
+all 589 frames and no desync, and both cameras kept the same yaw, pitch and
+distance (90, 45, 2000) at every probe while their eyes were up to about 495
+units apart. So in this room, with the camera's angles fixed, the followed
+player changes only the eye's position, and the stick (turned by the yaw,
+`func_80234858` in the update) moves player 2 the same way on both machines.
+Not yet tried: a room whose camera turns (the yaw follows the followed
+actor's facing after `D_80090004` idle frames in `func_80235D7C`; C-buttons),
+where the two yaws would differ and so would the stick's direction
+(inferred); and the 150 other readers of the camera's angles
+(`func_80234858`) and eye (`func_802346C8`, 202 calls, mostly overlays),
+which the hash would show only once they reach a player or the random
+generator. The C-buttons (`func_80235934`) read pad 0, which in a session is
+the host's: the host turns both cameras, the client none.
+
 ### Not done
 
 - (#29) Two machines, the internet (the host's port must be reachable: a forwarded
   port, no NAT traversal), Windows and macOS: not run. The Winsock branch of
   `session.cpp` was not compiled.
-- (#27) The camera follows player 1 on both machines, so the client sees player
-  1's view (section 5).
+- (#27, follow-ups) The camera in a room whose camera turns, and the client's
+  own C-buttons (*The camera*).
 - (#28) Starting a session takes environment switches; there is no menu for it.
 - A fixed delay: a slow or lost message stalls both games, with no rollback.
 
@@ -808,8 +845,9 @@ differ in the patches' binary and be refused (not tried; #29).
 3. What does the command record hold, and in which frame? (#13: the pad
    path's angle before the camera's yaw, an elevation and a length, read by
    the update in the same frame; see *Player 2 in a story room*.)
-4. Does the camera feed anything back into the simulation? (Not yet asked by
-   a run: in every session so far both cameras followed player 1.)
+4. Does the camera feed anything back into the simulation? (#27: not in room
+   0x29, where its angles stay fixed, in one session of 589 frames; rooms
+   whose camera turns not tried; see *The camera*.)
 5. Who sets the actor hit bits; do enemies and bosses hit slot 4 like slot 0?
    (Spike: bomb blasts, its own and player 1's, hit slot 4; enemies and
    bosses not tried.)

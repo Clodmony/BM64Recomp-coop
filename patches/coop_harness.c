@@ -40,8 +40,9 @@ void coop_harness_save(s32 file) {
                   *(u32*)coop_save_slot(file));
 }
 
-// From the per-frame hook: a probe asked for by the input script. One line
-// per slot that is in play; positions in tenths of a world unit.
+// From the per-frame hook: a probe asked for by the input script. The camera,
+// then one line per slot that is in play; positions in tenths of a world unit,
+// the camera's yaw and pitch in tenths of a degree.
 void coop_probe(void) {
     s32 slot;
 
@@ -55,6 +56,8 @@ void coop_probe(void) {
                       func_802395A8(slot, 0), coop_mm(move[0]), coop_mm(move[1]), coop_mm(move[2]),
                       func_80239FF8(slot) & 0xFFFF);
     }
+    recomp_printf("coop: camera eye=%d,%d,%d angles=%d,%d,%d\n", coop_mm(D_8008F3E8[0]), coop_mm(D_8008F3E8[1]),
+                  coop_mm(D_8008F3E8[2]), coop_mm(D_8008F3F8[0]), coop_mm(D_8008F3F8[1]), coop_mm(D_8008F3F8[2]));
     for (slot = 0; slot < 5; slot++) {
         CoopPlayer* p = &g_Players[slot];
         f32* pos;
