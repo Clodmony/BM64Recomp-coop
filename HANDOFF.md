@@ -6,8 +6,8 @@ repository so it survives any worktree path and any tool; per-checkout agent
 memory is not read by a session that starts in another worktree. State goes
 here; stable recipes go into `docs/coop/`; personal data and hardware never.
 
-Last updated 2026-10-19 (parallel session: #39, #11, #23, #31 in PRs #42–#45;
-#41 still open).
+Last updated 2026-10-19 (parallel session: #41–#45 merged; #11 open for the
+owner's eye check).
 
 ## Repository state
 
@@ -19,8 +19,8 @@ Last updated 2026-10-19 (parallel session: #39, #11, #23, #31 in PRs #42–#45;
   player 2 spike), #20 (group #19), #25 (session core), #30 (host's save,
   build check), #34 (camera), #35 (#32, the knocked-out heart), #37 (#36,
   heart items), #38 (#28, the launcher's Co-op menu), #40 (#33, cameras
-  that turn). Their branches are deleted. Open: #41 (#29, in part), #42
-  (#39), #43 (#11, in part), #44 (#23), #45 (#31).
+  that turn), and on 2026-10-19 #41 (#29 in part), #42 (#39), #43 (#11 in
+  part), #44 (#23), #45 (#31). Their branches are deleted. No open PRs.
 - Open issues: #14 and #16 (leftover checks, owner), #19 (their group),
   #11 (Europe follow-ups), #22–#24 (follow-ups of #19), #29 (session
   follow-ups), #31 (scripted pads on the title), #39 (`session-launcher`
@@ -28,70 +28,48 @@ Last updated 2026-10-19 (parallel session: #39, #11, #23, #31 in PRs #42–#45;
 - Local git config of the clone: Claude identity, `upstream` with push
   `DISABLED`, `core.hooksPath .githooks`, `pushguard.romDir` set.
 
-## Open pull requests
+## Merged 2026-10-19 (owner's word, scripted Europe runs only)
 
-All drafts into `bm64recomp-coop`, Europe build, scripted runs only (not
-played by hand, US build not run). None merged; each waits for the owner's
-word. Suggested order: #41 first (it holds the headless `run.sh` and the
-unique run folders every other branch's runs need), then #42 (without it
-`session-launcher` fails every time under headless runs), then #44, #45, #43.
-Docs overlap: #41, #43 and #45 all edit `docs/coop/building.md`, #42 and #44
-`docs/coop/design.md`; expect small merge conflicts there.
+Order #41 → #42 → #44 → #45 → #43 (one building.md conflict, resolved).
+Merged branch verified before the push: `tools/verify.sh --full --version eu
+--scenarios` 8/8 stages, 300/300 checks. Not played by hand; US build not run.
 
-- **#41** (part of #29), branch `coop/29-windows-lan`, worktree
-  `prepare-project-according-a3ceb80a`: Windows build cross-compiled on
-  Linux, Wine in the harness, playtest kit, headless runs
-  (`gamescope --backend headless`), and (2026-10-19) a mktemp suffix on run
-  folders: parallel runs started in the same second shared one folder and
-  game.log.
-- **#42** (closes #39), `coop/39-launcher-check`: `session-launcher` checks
-  the session's own `coop: session host: waiting on port` and
-  `coop: session client: connecting to` lines. Verify 267/267; 10 runs alone,
-  the only failures from `run.sh` being replaced mid-run.
-- **#43** (part of #11), `coop/11-europe-followups`: refresh-rate hint from
-  the host (`coop_game_frame_rate`: 50 Europe, 60 with `BM64_COOP_PAL60=1`,
-  60 US), scenarios `europe-rate*`; patched per-frame functions read against
-  the Europe originals (no differences beyond addresses); launcher text names
-  the wanted version (compiled only); 50 Hz presentation judged by reading
-  RT64 (with hint 50 it interpolates 6 frames per 5 at 60). Verify 269/271
-  (both session-launcher, #42).
-- **#44** (closes #23), `coop/23-p1-death-freeze`: hook in `func_8023A870`
-  at 0x8023A9AC → `coop_story_death`; player 2 frozen from player 1's story
-  death until the retry's room init. `p2-p1-death-freeze` 14/16 → 16/16.
-  Verify 282/284 (both session-launcher, #42).
-- **#45** (closes #31), `coop/31-title-pads`: no code change; the first
-  0x20 after boot is the logos, which always go on to the demo (0x1B); the
-  real title is the second 0x20. `title-menu` drives logos → demo → title →
-  Adventure → file select (0x1F) → new file (0x1A). Verify 272/272.
+- **#41** (part of #29): Windows build cross-compiled on Linux, Wine in the
+  harness, playtest kit, headless runs (`gamescope --backend headless`), run
+  folders with a mktemp suffix (parallel runs started in the same second
+  shared one folder and game.log).
+- **#42** (closed #39): `session-launcher` checks the session's own
+  `waiting on port` / `connecting to` lines.
+- **#43** (part of #11): refresh-rate hint from the host
+  (`coop_game_frame_rate`: 50 Europe, 60 with `BM64_COOP_PAL60=1`, 60 US),
+  scenarios `europe-rate*`; per-frame patched functions read against the
+  Europe originals (no differences beyond addresses); launcher text names the
+  wanted version (compiled only); 50 Hz presentation judged by reading RT64
+  (hint 50: 6 frames per 5 at 60).
+- **#44** (closed #23): hook in `func_8023A870` at 0x8023A9AC →
+  `coop_story_death`; player 2 frozen from player 1's story death until the
+  retry's room init (`p2-p1-death-freeze`).
+- **#45** (closed #31): no code change; the first 0x20 after boot is the
+  logos, which always go on to the demo (0x1B); the real title is the second
+  0x20. `title-menu` drives title → Adventure → file select (0x1F) → new
+  file (0x1A).
 
-## Worktrees and local state (2026-10-19)
+Worktrees: only this Superset workspace (now on `bm64recomp-coop`) and the
+main checkout. The issue worktrees and their build folders are removed.
 
-- Issue worktrees under scratch `wt/` (`39-launcher-check`,
-  `11-europe-followups`, `23-p1-death-freeze`, `31-title-pads`), each with
-  its build folder in scratch `build/<name>-eu`. Remove each when its PR is
-  merged.
-- In those worktrees `tools/run.sh` is a local copy of #41's (headless,
-  unique folders), marked `git update-index --skip-worktree` so it never gets
-  committed. Until #41 merges, a new worktree off `bm64recomp-coop` runs
-  games in windows and can share run folders: copy #41's `run.sh` the same
-  way first.
-- Each worktree has an untracked `assets/assets` left by the build; not
-  committed.
-- No background processes left.
+## Owner decisions, parallel session (2026-10-19)
 
-## Owner questions open from the parallel session
-
-- #43 item 4: watch a Europe build at the default refresh setting (Manual
-  60): is scrolling smooth, any artefacts from the generated frames? If
-  worse, fall back to 60 or recommend "Original".
-- #43 item 3: confirm the launcher messages by hand (give the Europe build
-  another ROM), or reading is enough.
-- #44: player 2's own death while player 1 is out is not frozen by the new
-  hook (the game freezes the dying slot itself); keep.
-- #45: room 0x28 needing repeated A taps: own issue or drop; a
-  `BM64_COOP_SKIP_INTRO` shortcut or keep the scripted taps (~20 s).
-- Follow-up candidate: `tools/scenario.py` crashes on one garbled game.log
-  line and skips the remaining scenarios (seen with the shared run folders).
+- Work several issues at once with one agent per worktree (owner's
+  request); test runs headless (owner).
+- Merge all five PRs (done). #11 stays open: the owner watches a Europe
+  build at Manual 60 (smooth scrolling? artefacts from generated frames?);
+  if worse, fall back to 60 or recommend "Original". Launcher text: reading
+  is enough.
+- #31's leftovers dropped: room 0x28's repeated A taps (likely the
+  dialogue's timing) and a skip-intro switch (the scripted taps suffice).
+- #46 filed: `scenario.py` crashes on one garbled game.log line.
+- #44: player 2's own death while player 1 is out stays as it is (the game
+  freezes the dying slot itself).
 
 ## Owner decisions (2026-10-18)
 
@@ -303,10 +281,11 @@ Docs overlap: #41, #43 and #45 all edit `docs/coop/building.md`, #42 and #44
    room, then a check that pad 1 does not move a frozen player 2.
 5. Follow-ups of #19: #22 (player 1 downed), #23 (freeze during player 1's
    death animation), #24 (slot-0 resets, US run).
-6. **#22** needs the owner's choice of approach first (S moves to player 2,
+6. **#46** (scenario.py and a garbled log line), small harness fix.
+7. **#22** needs the owner's choice of approach first (S moves to player 2,
    or the S code copes with a downed S); #24 overlaps #44's file and needs a
    US ROM for its US run.
-7. With #45: scenarios through the file select, Custom screen and pause
+8. With #45: scenarios through the file select, Custom screen and pause
    menu (the `title-menu` recipe in building.md).
 
 ## Scratch (not in the repository)
@@ -354,8 +333,8 @@ Under `~/dev-scratch/BM64Recomp-coop/`:
 
 ## Cleanup the owner may approve
 
-- The Superset workspace `prepare-project-according-a3ceb80a` (its branches
-  are merged and deleted; its build folder
+- The Superset workspace `prepare-project-according-a3ceb80a` (now on
+  `bm64recomp-coop`, nothing unmerged; its build folder
   `build/prepare-project-according-a3ceb80a-eu` in scratch): remove it in
   Superset.
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/` in scratch:
