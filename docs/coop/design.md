@@ -641,8 +641,27 @@ dialogue and room 0x29's entry walk freeze player 1 before player 2 has
 joined; with player 2 in the room, the exit (`p2-exit`) and player 1's death
 freeze it just before the room changes (`p2-p1-death`). No longer scene with
 player 2 in the room was found in rooms 0x28 and 0x29, so "pad 1 does not
-move a frozen player 2" is not checked. Player 1's death animation itself
-does not use the wrappers: player 2 plays on during it.
+move a frozen player 2" is not checked by a cutscene.
+
+### Player 1's death animation (#23)
+
+Player 1's death animation does not use the wrappers: before #23 player 2
+played on during it (walked, could take an exit or be hit; seen in a probe of
+`p2-p1-death`, where player 2 walked into room 0x29's floor exit). A hook in
+`func_8023A870` at 0x8023A9AC, on the story death's path just before flags
+0x92 (t0 the dying slot; the battle path and the early returns do not get
+there), calls `coop_story_death`: when player 1 dies it freezes player 2
+(`func_80245208`, control lock and damage guard; log `coop: freeze partner
+slot=4 on=1 death`). Until the next room init (the retry's reload, which
+spawns player 2 anew and places it) a release of player 1 does not release
+player 2, its trigger tests stay off, its placement waits and a downed
+player 2's respawn countdown stops. `p2-p1-death-freeze` holds pad 1's stick
+for 150 frames, from 180 frames after player 1's bomb (the death comes about
+155 frames after it) to before the teardown, and checks that player 2 stays
+where it is, takes no hit and no trigger, and plays again after the retry.
+Before the hook it walked 1275 units in that time (a trace with the stick
+held longer walked it into a pit, death of cause 3, while player 1's
+animation ran); with it, 0.
 
 ### Exits and triggers (#17)
 
@@ -704,6 +723,7 @@ getting it (not run).
 | `func_8024E088` entry (player update) | slot 0: respawn countdown, player 1's trail, player 2's placement; slot 4: its command record from pad 1 |
 | `func_802452E8` at 0x80245300, `func_80245280` at 0x80245294 | S = 0: freeze or release player 2 with player 1 |
 | `func_8023A870` entry (death) | player 2 while player 1 plays: downed, the function skipped |
+| `func_8023A870` at 0x8023A9AC (story death) | player 1: player 2 frozen until the next room init (#23) |
 | `func_802457D8`, `func_802456FC`, `func_802455A8` (`RECOMP_PATCH`) | rectangle tests for S or player 2 |
 | `g_SpawnPlayer` at 0x80245BC0 | slot 4: model asset 0x4B |
 | `func_80279CA8` at 0x80279CFC (item collision) | a heart passes through a full player while player 2 plays (#36) |

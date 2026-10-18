@@ -1,0 +1,58 @@
+# Player 1's death animation freezes player 2 (#23): from player 1's story
+# death (func_8023A870) to the room's teardown, pad 1 does not move player 2,
+# player 2 is not hit and takes no exit or trigger; the retry brings it back
+# and it plays again. Before #23 player 2 walked on during the animation (in
+# this script it walked into a pit and died of cause 3).
+# Player 1 starts room 0x29 with one heart, so its own bomb kills it (about
+# 155 frames after A, from a trace with the same steps).
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_P2=4
+#env BM64_COOP_LOG_PLAYERS=1
+#check after "^coop: hit slot=0" "^coop: death slot=0 cause="
+#check after "^coop: death slot=0" "^coop: freeze partner slot=4 on=1 death$"
+#check after "^coop: death slot=0" "^coop: probe dead$"
+#check after "^coop: probe dying$" "^coop: room teardown"
+#check still dead dying 4 1
+#check field dying 4 controlType = 2
+#check field dying 4 hearts = 2
+#check no-log ^coop: hit slot=4
+#check no-log ^coop: death slot=4
+#check no-log ^coop: down slot=
+#check not-after "^coop: death slot=0" "^coop: trigger slot=4"
+#check after "^coop: death slot=0" "^coop: overlay 0x29$"
+#check after "^coop: death slot=0" "^coop: place slot=4 tile="
+#check after "^coop: death slot=0" "^coop: state overlay=0x29 .* lives=1$"
+#check field retry 4 controlType = 2
+#check moved retry walk 4 100
+overlay 0x29
+wait 300
+probe start
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+pad 1 - 1 0.05
+wait 30
+pad 1 -
+wait 10
+probe apart
+pad 0 A
+wait 2
+pad 0 -
+wait 180
+probe dead
+pad 1 - -1 0.05
+wait 150
+probe dying
+pad 1 -
+overlay 0x29
+wait 300
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+wait 10
+probe retry
+pad 1 - -1 0.05
+wait 30
+pad 1 -
+probe walk
+end
