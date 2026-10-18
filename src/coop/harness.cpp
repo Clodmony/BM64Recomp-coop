@@ -30,8 +30,12 @@
 //                       DU DD DL DR CU CD CL CR joined with '+', or '-' for
 //                       none) and the stick at x, y (-1..1, default 0)
 //   probe <label>       log "coop: probe <label>", then one line per player
+//                       and, with BM64_COOP_LOG_PLAYERS=1, one for the item
+//                       a hit knocked out last while it lies in the room
 //   tile <slot> <x> <z> put the player in slot (0-4) on tile x, z of the room,
 //                       at its floor level (patches/coop_harness.c)
+//   hearts <slot> <n>   set the player's hearts to n (0-9), as a pickup would
+//                       (patches/coop_harness.c)
 //   save <file>         save the live progress block into file 0-2 and the
 //                       EEPROM, as the pause menu does (patches/coop_harness.c)
 //   log <text>          log "coop: input: <text>"
@@ -67,10 +71,10 @@ struct Pad {
 };
 
 struct Step {
-    enum class Kind { Overlay, Wait, Pad, Probe, Log, Tile, Save, End } kind;
+    enum class Kind { Overlay, Wait, Pad, Probe, Log, Tile, Hearts, Save, End } kind;
     int line;
     uint32_t value = 0; // overlay ID, frames, pad number, slot, file
-    int32_t tile[2] = {0, 0};
+    int32_t tile[2] = {0, 0}; // a tile step's x, z; a hearts step's count in [0]
     Pad pad;
     std::string text;
 };
@@ -160,6 +164,9 @@ bool parse_script(const char* path, std::vector<Step>& steps) {
         } else if (command == "tile") {
             step.kind = Step::Kind::Tile;
             ok = (words >> step.value >> step.tile[0] >> step.tile[1]) && step.value < 5;
+        } else if (command == "hearts") {
+            step.kind = Step::Kind::Hearts;
+            ok = (words >> step.value >> step.tile[0]) && step.value < 5 && step.tile[0] >= 0 && step.tile[0] <= 9;
         } else if (command == "save") {
             step.kind = Step::Kind::Save;
             ok = (words >> step.value) && step.value < 3;
@@ -173,7 +180,7 @@ bool parse_script(const char* path, std::vector<Step>& steps) {
         }
         std::string extra;
         if (ok && (step.kind == Step::Kind::Overlay || step.kind == Step::Kind::Wait || step.kind == Step::Kind::Tile ||
-                   step.kind == Step::Kind::Save || step.kind == Step::Kind::End)) {
+                   step.kind == Step::Kind::Hearts || step.kind == Step::Kind::Save || step.kind == Step::Kind::End)) {
             ok = !(words >> extra);
         }
         if (!ok) {
@@ -202,9 +209,9 @@ void load_script() {
 }
 
 // Runs the script's steps due this frame; returns true when one asks for a
-// probe. A tile step fills tile (slot, x, z), a save step *save (the file);
-// each ends the frame's steps.
-bool run_script(int32_t* tile, int32_t* save) {
+// probe. A tile step fills tile (slot, x, z), a hearts step hearts (slot, n),
+// a save step *save (the file); each ends the frame's steps.
+bool run_script(int32_t* tile, int32_t* hearts, int32_t* save) {
     bool probe = false;
     while (script.next < script.steps.size()) {
         const Step& step = script.steps[script.next];
@@ -242,6 +249,11 @@ bool run_script(int32_t* tile, int32_t* save) {
                 tile[0] = static_cast<int32_t>(step.value);
                 tile[1] = step.tile[0];
                 tile[2] = step.tile[1];
+                script.next++;
+                return probe;
+            case Step::Kind::Hearts:
+                hearts[0] = static_cast<int32_t>(step.value);
+                hearts[1] = step.tile[0];
                 script.next++;
                 return probe;
             case Step::Kind::Save:
@@ -328,7 +340,8 @@ void coop::note_overlay_load(uint32_t id) {
 // Called by the per-frame hook (func_8023A208, bm64.us.toml). Returns what the
 // hook should call in the patches this frame: bit 0 coop_warp(args[0],
 // args[1], args[5]), bit 1 coop_probe(), bit 2 coop_harness_tile(args[2],
-// args[3], args[4]), bit 3 coop_harness_save(args[6]).
+// args[3], args[4]), bit 3 coop_harness_save(args[6]), bit 4
+// coop_harness_hearts(args[7], args[8]).
 extern "C" uint32_t coop_harness_frame(int32_t* args) {
     static Warp warp = read_warp();
     std::lock_guard lock{mutex};
@@ -344,7 +357,8 @@ extern "C" uint32_t coop_harness_frame(int32_t* args) {
     }
     args[2] = -1;
     args[6] = -1;
-    if (run_script(&args[2], &args[6])) {
+    args[7] = -1;
+    if (run_script(&args[2], &args[7], &args[6])) {
         requests |= 2;
     }
     if (args[2] >= 0) {
@@ -352,6 +366,9 @@ extern "C" uint32_t coop_harness_frame(int32_t* args) {
     }
     if (args[6] >= 0) {
         requests |= 8;
+    }
+    if (args[7] >= 0) {
+        requests |= 16;
     }
     return requests;
 }
@@ -412,5 +429,45 @@ extern "C" void coop_log_player_event(const char* event, int32_t slot, const cha
         std::snprintf(extra, sizeof(extra), " %s=%d", a_name, a);
     }
     std::fprintf(stderr, "coop: %s slot=%d%s\n", event, slot, extra);
+}
+
+// The item a hit knocked out last (#36): its address, 0 for none, and the
+// slot that lost it. The drop hook (func_8027B39C) notes it, the pickup and
+// room teardown hooks forget it, and a probe logs where it is
+// (patches/coop_harness.c). Only with BM64_COOP_LOG_PLAYERS=1.
+static std::atomic<uint32_t> noted_item{0};
+static std::atomic<int32_t> noted_item_slot{-1};
+
+extern "C" void coop_note_item(int32_t slot, uint32_t item) {
+    static const bool enabled = env_flag("BM64_COOP_LOG_PLAYERS");
+    if (enabled) {
+        noted_item_slot = slot;
+        noted_item = item;
+    }
+}
+
+// item 0: the room's teardown, every item goes.
+extern "C" void coop_note_item_gone(uint32_t item) {
+    if (item == 0 || item == noted_item) {
+        noted_item = 0;
+    }
+}
+
+// A full player passing through a heart (#36; the hook in func_80279CA8):
+// "coop: pass slot=<slot> item=4", again only once the player or the item
+// changes (the callback runs every frame they touch).
+extern "C" void coop_log_item_pass(int32_t slot, uint32_t item) {
+    static int32_t last_slot = -1;
+    static uint32_t last_item = 0;
+    if (slot != last_slot || item != last_item) {
+        last_slot = slot;
+        last_item = item;
+        coop_log_player_event("pass", slot, "item", 4, nullptr, 0);
+    }
+}
+
+extern "C" uint32_t coop_noted_item(int32_t* slot) {
+    *slot = noted_item_slot;
+    return noted_item;
 }
 

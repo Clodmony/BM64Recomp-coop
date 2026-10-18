@@ -37,6 +37,7 @@ extern s32 g_LevelLoader;   // flow flags; 0x4 battle
 extern s32 D_802AC5D4;      // overlay ID being played
 extern s32 D_802AC894;      // S, the story player's slot
 extern s32 D_802AC624;      // lives (story session block +0x14)
+extern s32 D_802AC5C0;      // stage flags; 0x8: a heart adds one for slots 1-4 (func_802797BC)
 extern s32 D_802ACEC8[5][3]; // each slot's tile, as the rectangle tests last read it
 extern u8 D_80063000[0x1B8]; // the EEPROM mirror: a header block, then files 0-2 of 0x90 bytes
 // The camera (docs/coop/design.md, *The camera*): the eye, and its yaw and

@@ -1,0 +1,76 @@
+# Who catches a knocked-out heart (#36): the game gives it to whichever
+# player touches it (func_802797BC, type 4), so each player can catch the
+# other's. Seed 1 sends player 2's heart off along +x (p2-slot4); player 1
+# walks to tile 8, 15 first and catches it. Then player 1, at 2 hearts now,
+# bombs itself; its heart flies off along -x, +z, where player 2 has walked.
+# The "coop: item" probe line shows the heart in flight.
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_P2=4
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_SEED=1
+#
+#check field placed 0 hearts = 1
+#check after "^coop: bomb slot=4 placed=1" "^coop: hit slot=4 cause=1$"
+#check after "^coop: hit slot=4" "^coop: drop slot=4 item=4$"
+#check after "^coop: drop slot=4" "^coop: pickup slot=0 item=4$"
+#check field caught 0 hearts = 2
+#check field caught 4 hearts = 1
+#check after "^coop: bomb slot=0 placed=1" "^coop: hit slot=0 cause=1$"
+#check after "^coop: hit slot=0" "^coop: drop slot=0 item=4$"
+#check after "^coop: probe flying$" "^coop: item from=0 type=4 pos="
+#check after "^coop: drop slot=0" "^coop: pickup slot=4 item=4$"
+#check field caught2 0 hearts = 1
+#check field caught2 4 hearts = 2
+#check no-log ^coop: death slot=
+overlay 0x29
+wait 300
+probe walked
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+wait 10
+pad 1 - 1 0.05
+wait 15
+pad 1 -
+wait 10
+pad 1 - -1 0.05
+wait 30
+pad 1 -
+wait 10
+pad 0 - 1 0.05
+wait 15
+pad 0 -
+wait 10
+# player 1 to tile 8, 15, out of the blast's reach (a tile step would be a
+# room entry, which holds player 2 until player 1's next step)
+pad 0 - -1 0.05
+wait 29
+pad 0 -
+wait 5
+pad 0 - 0.05 -1
+wait 23
+pad 0 -
+wait 10
+probe placed
+pad 1 A
+wait 2
+pad 1 -
+wait 400
+probe caught
+# player 2 to about 610, 1715, out of player 1's blast
+pad 1 - -1 0.05
+wait 22
+pad 1 -
+wait 5
+pad 1 - 0.05 -1
+wait 13
+pad 1 -
+wait 10
+pad 0 A
+wait 2
+pad 0 -
+wait 170
+probe flying
+wait 230
+probe caught2
+end
