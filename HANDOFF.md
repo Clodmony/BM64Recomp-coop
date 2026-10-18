@@ -6,7 +6,7 @@ repository so it survives any worktree path and any tool; per-checkout agent
 memory is not read by a session that starts in another worktree. State goes
 here; stable recipes go into `docs/coop/`; personal data and hardware never.
 
-Last updated 2026-10-18 (#33 done, PR #40 merged).
+Last updated 2026-10-18 (#29 in part: Windows build and playtest kit, PR #41 open).
 
 ## Repository state
 
@@ -18,7 +18,7 @@ Last updated 2026-10-18 (#33 done, PR #40 merged).
   player 2 spike), #20 (group #19), #25 (session core), #30 (host's save,
   build check), #34 (camera), #35 (#32, the knocked-out heart), #37 (#36,
   heart items), #38 (#28, the launcher's Co-op menu), #40 (#33, cameras
-  that turn). Their branches are deleted. No open pull requests.
+  that turn). Their branches are deleted. Open: #41 (#29, in part).
 - Open issues: #14 and #16 (leftover checks, owner), #19 (their group),
   #11 (Europe follow-ups), #22–#24 (follow-ups of #19), #29 (session
   follow-ups), #31 (scripted pads on the title), #39 (`session-launcher`
@@ -28,7 +28,12 @@ Last updated 2026-10-18 (#33 done, PR #40 merged).
 
 ## Open pull requests
 
-- None. #40 (closes #33) merged on the owner's word, 2026-10-18, on the
+- **#41** (part of #29, draft), branch `coop/29-windows-lan` in the
+  worktree `prepare-project-according-a3ceb80a`: the Windows build
+  cross-compiled on Linux, Wine runs in the harness, Windows fixes, the
+  playtest kit and guide. Waits for the owner's review and merge word.
+  Verify 265/267 (both failures #39's race; passes alone).
+- #40 (closes #33) merged on the owner's word, 2026-10-18, on the
   scenario results (verify 266/267, the failure is #39); not played by
   hand. GitHub shows #40 as closed, not merged (its branch was deleted
   before the merge push went through); #33 was closed by hand. Delete a
@@ -87,6 +92,29 @@ Last updated 2026-10-18 (#33 done, PR #40 merged).
 - Test runs keep background input off (`run.sh`'s `general.json`).
 - A Cancel or refusal in the Co-op menu goes back to the menu (not: start
   alone).
+
+## Owner decisions, after #33 (2026-10-18)
+
+- "Make it ready for a playtest": Linux and Windows PCs on the same home
+  network; the Windows build cross-compiled here (xwin's CRT and SDK, the
+  owner accepted Microsoft's licence) and tested in Wine. Done in #41.
+
+## What #29 (in part) found and did (details: building.md, *The Windows build*)
+
+- `tools/build-windows.sh` (RelWithDebInfo, PDB) into `build/win-<version>/`;
+  xwin's SDK in scratch `win/sdk`, the Wine prefix `win/prefix`. Patches from
+  the Linux clang: one build identity for both builds.
+- Linux and Windows (Wine) builds against each other, both directions:
+  lockstep, camera-turn, camera, save, lost all pass with the same hashes on
+  every frame (81/81 each way).
+- Crash found: the harness's `setvbuf(_IOLBF, 0)` is an invalid parameter in
+  the MS CRT; now unbuffered on Windows. No console: `coop.log` in the app
+  folder (not run: Wine from a terminal has a console).
+- Kit: `tools/playtest-kit.sh` into scratch `playtest/<version>/` (linux/,
+  windows/, windows.zip; no ROM). Guide `docs/coop/playtest.md`.
+- Still open in #29: a real Windows PC, two machines, the internet, macOS;
+  whether a Windows build made by MSVC's clang (upstream CI, LLVM 19 for
+  the patches) would match the Linux build's identity (likely not).
 
 ## Owner decisions, end of #33 (2026-10-18)
 
@@ -206,21 +234,24 @@ Last updated 2026-10-18 (#33 done, PR #40 merged).
 
 ## Next candidates
 
-1. **A hand try of the Co-op menu** (owner): two games on one machine, Host
+1. **The playtest** (owner): the kit in scratch `playtest/eu/`, guide in
+   `PLAYTEST.md`; afterwards both `coop.log` files. What breaks becomes an
+   issue (a desync line first).
+2. **A hand try of the Co-op menu** (owner): two games on one machine, Host
    7777 in one, Join 127.0.0.1 7777 in the other, then turn each camera with
    the C-buttons (#33); what breaks becomes an issue.
-2. **Other session follow-ups**: #29 (two machines, Windows/macOS; also
+3. **Other session follow-ups**: #29 (the rest) (two machines, Windows/macOS; also
    whether two compilers give the same build identity; whether two games on
    one machine read the same gamepad); #39 (the flaky launcher check:
    check the session's own `connecting to` line instead; owner's choice).
-3. **Rest of #14 and #16** (kept open, owner): a story teleport
+4. **Rest of #14 and #16** (kept open, owner): a story teleport
    (`func_802512C0` from a room script; find one with `xref/callers.tsv`
    beyond Green Garden stage 1) and a scene with player 2 already in the
    room, then a check that pad 1 does not move a frozen player 2.
-4. Follow-ups of #19: #22 (player 1 downed), #23 (freeze during player 1's
+5. Follow-ups of #19: #22 (player 1 downed), #23 (freeze during player 1's
    death animation), #24 (slot-0 resets, US run).
-5. **#11**, Europe follow-ups.
-6. **#31**, scripted pads on the title (needed to test the file select,
+6. **#11**, Europe follow-ups.
+7. **#31**, scripted pads on the title (needed to test the file select,
    Custom screen and pause menu through their own menus).
 
 ## Scratch (not in the repository)
