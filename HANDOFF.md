@@ -6,47 +6,31 @@ repository so it survives any worktree path and any tool; per-checkout agent
 memory is not read by a session that starts in another worktree. State goes
 here; stable recipes go into `docs/coop/`; personal data and hardware never.
 
-Last updated 2026-10-18 (#27, each machine's camera on its own player, in
-draft PR #34, stacked on #30, #25, #20, #15 and #12).
+Last updated 2026-10-18 (#27 done; PRs #12, #15, #20, #25, #30 and #34
+merged into `bm64recomp-coop`; no open pull requests).
 
 ## Repository state
 
 - Fork of `RevoSucks/BM64Recomp`. `master` = upstream `master` (`726adc9`).
   Default branch `bm64recomp-coop`. Ruleset "Protected" blocks force-pushes
   and deletion on both.
-- Merged into `bm64recomp-coop`: #1 (workflow setup), #5 (closes #3, the
-  story-mode audit, `docs/coop/design.md`).
-- Open issues: #2 and #6–#10 (closed by PR #12 when merged), #4 (closed by
-  PR #15), #13, #17, #18 (closed by PR #20), #14 and #16 (partly done in
-  PR #20, kept open for leftover checks), #19 (the group), #21 (closed by
-  PR #25), #11 (Europe follow-ups), #22–#24 (follow-ups of #19), #26 (closed
-  by PR #30), #27 (closed by PR #34), #28, #29 (follow-ups of #21), #31
-  (scripted pads on the title), #32 (`p2-slot4` fails for some seeds), #33
-  (cameras that turn, the client's C-buttons).
+- Merged into `bm64recomp-coop`: #1 (workflow setup), #5 (story-mode
+  audit), and on 2026-10-18 the chain #12 (Europe build), #15 (harness,
+  player 2 spike), #20 (group #19), #25 (session core), #30 (host's save,
+  build check), #34 (camera). Their branches are deleted.
+- Open issues: #14 and #16 (leftover checks, owner), #19 (their group),
+  #11 (Europe follow-ups), #22–#24 (follow-ups of #19), #28, #29 (session
+  follow-ups), #31 (scripted pads on the title), #32 (`p2-slot4` fails for
+  some seeds), #33 (cameras that turn, the client's C-buttons).
 - Local git config of the clone: Claude identity, `upstream` with push
   `DISABLED`, `core.hooksPath .githooks`, `pushguard.romDir` set.
 
-## Open pull requests (merge in this order)
+## Open pull requests
 
-- **#12** `coop/2-europe-build` → `bm64recomp-coop`, draft: the Europe build.
-- **#15** `coop/4-player2-spike`, draft, stacked on #12: the test harness and
-  the player 2 spike.
-- **#20** `coop/19-player2-playable`, draft, stacked on #15: the group #19.
-- **#25** `coop/21-session-core`, draft, stacked on #20: the session core
-  (#21). Verify 2026-10-18: Europe `--full --scenarios`, all 8 stages,
-  145/145 checks (the 6 `p2-*` and 4 new `session-*` scenarios); US not run
-  (CI compiles it without a ROM).
-- **#30** `coop/26-host-save`, draft, stacked on #25: the client plays on
-  the host's save, the hello checks the build (#26). Verify 2026-10-18:
-  Europe `--full --scenarios`, all 8 stages, 167/167 checks (new:
-  `save-file`, `session-save`, `session-build`); US not run.
-- **#34** `coop/27-camera`, draft, stacked on #30: each machine's camera
-  follows its own player (#27). Verify 2026-10-18: Europe `--full
-  --scenarios`, 7/8 stages, 175/185 checks; the 10 failures are all
-  `p2-slot4` and follow the clock seed (seed 2 fails the same on the #26
-  build: #32). New `session-camera` 18/18. US not run.
-- Owner (2026-10-18): review first, merge later in that order, when the
-  owner says so. Each one merged shrinks the next one's diff.
+None. Verify of the merged tree (= the #34 branch), 2026-10-18: Europe
+`--full --scenarios`, 7/8 stages, 175/185 checks; the 10 failures are all
+`p2-slot4` with an unlucky clock seed (#32). US not run (CI compiles it
+without a ROM).
 
 ## Owner decisions (2026-10-18)
 
@@ -56,13 +40,15 @@ draft PR #34, stacked on #30, #25, #20, #15 and #12).
   (accepted; PR #25 closes #21). Filed: #26 the host's save and a build
   check, #27 each camera on its own player, #28 host or join from the
   launcher, #29 two machines and the Windows/macOS builds.
-- PRs: review first, merge later in order (12, 15, 20, 25, then 30).
 - #26 next (chosen at the start of its session). End of #26: PR #30 review
   first, merge later after #25; the client keeps playing on a copy of the
   host's save (not no-op saves); the build identity covering patches and
   hooks only (not host code, librecomp, mods) is enough for now, revisit
   with #29.
-- #27 next (chosen at the start of its session; no merges approved).
+- #27 next (chosen at the start of its session). End of #27: merge the
+  whole chain now (done, 2026-10-18); PR #34 closes #27, the turning
+  cameras and the client's C-buttons are #33; #32 gets its own session to
+  find the cause (not a pinned seed).
 
 ## What #27 found and did (details: design.md, *The camera*)
 
@@ -107,8 +93,9 @@ draft PR #34, stacked on #30, #25, #20, #15 and #12).
    (two machines, Windows/macOS; also whether two compilers give the same
    build identity).
 2. **#32**, `p2-slot4` fails for seed 2 (a hit of cause 1 takes no heart);
-   it makes every full verify fail for some clock seeds. First: compare
-   seeds 1 and 2 around the hit; or pin `#env BM64_COOP_SEED=1`.
+   a full verify fails with it for some clock seeds. Owner: find the cause.
+   First: `BM64_COOP_SEED=1` and `=2` with `BM64_COOP_LOG_PLAYERS=1`,
+   compare the frames around the hit.
 3. **Rest of #14 and #16** (kept open, owner): a story teleport
    (`func_802512C0` from a room script; find one with `xref/callers.tsv`
    beyond Green Garden stage 1) and a scene with player 2 already in the
@@ -162,6 +149,8 @@ Under `~/dev-scratch/BM64Recomp-coop/`:
 
 ## Cleanup the owner may approve
 
-- After #12, #15, #20, #25, #30 and #34 are merged: delete their branches.
+- The Superset workspace this session ran in (its branch is merged and
+  deleted; the checkout is on `bm64recomp-coop`) and its build folders
+  `build/prepare-project-according-a3ceb80a{,-eu}/` in scratch.
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/` in scratch:
   when the player 2 follow-ups are done.
