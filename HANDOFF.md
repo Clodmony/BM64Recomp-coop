@@ -27,7 +27,8 @@ Last updated 2026-10-18 (Europe group #2, #6–#10 done in draft PR #12).
   `tools/europe.py` (Europe configs and their check on the image),
   `BM64_VERSION=us|eu`, `tools/verify.sh --version`, `tools/run.sh`, PAL
   pacing. Verify 2026-10-18: Europe `--full` 7/7 (linked), US 5/5 compile
-  only (no US ROM). Needs the owner's review and merge.
+  only (no US ROM). The owner reviews it first (2026-10-18); merge only
+  when they say so.
 
 ## Owner decisions (2026-10-18)
 
@@ -37,11 +38,11 @@ Last updated 2026-10-18 (Europe group #2, #6–#10 done in draft PR #12).
 - **Issue groups are allowed**: a milestone of linked issues may be one
   session, one branch, one pull request (now in AGENTS.md, *Workflow*, via #12).
 
-## Decisions made in #12 (the owner may overrule)
+## Decisions made in #12
 
 - Europe configs and symbol files are **generated** (`tools/europe.py
-  configs`, gitignored `*.eu.toml`), not committed: the issue suggested a
-  committed `data_dump.eu.toml` plus a sync check.
+  configs`, gitignored `*.eu.toml`), not committed (owner confirmed,
+  2026-10-18).
 - Europe `GameEntry`: `game_id` `bm64_eu`, `mod_game_id` `bm64` (the mod menu
   hard-codes `bm64`).
 - PAL speed fixed host-side by dropping 1 of 6 VI messages in the game's
@@ -50,7 +51,7 @@ Last updated 2026-10-18 (Europe group #2, #6–#10 done in draft PR #12).
 
 ## Next candidates
 
-1. **#4, the spike**, now that a build runs: slot 1 in Green Garden room 0x28
+1. **Next: #4, the spike** (owner, 2026-10-18), now that a build runs: slot 1 in Green Garden room 0x28
    first, then slot 4 (model case, controlType 2, input via the command
    record). Steps in the issue and design.md. Use the Europe build
    (`tools/verify.sh --version eu`, `tools/run.sh --version eu`); design.md's
@@ -98,5 +99,5 @@ Under `~/dev-scratch/BM64Recomp-coop/`:
 ## Cleanup the owner may approve
 
 - After #12 is merged: delete the branch `coop/2-europe-build`.
-- `eu-disasm/`, `xref/`, `scripts/`, `venv/` in scratch: delete now (europe.py
-  covers #7's needs) or keep for #4's address work. After #4: `audit/`, `ref/`.
+- After #4: `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/` in
+  scratch (owner: keep them until #4 is done).
