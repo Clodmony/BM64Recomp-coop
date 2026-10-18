@@ -958,7 +958,13 @@ Every prompt is also a log line, `coop: session ui: <header>: <text>`, which
 the scenarios check: `session-launcher` (the menu's Host and Join, both in
 lockstep, the same hashes), `session-cancel` (Cancel after 2 s, back to the
 menu), and the prompts in `session-alone`, `session-build` and
-`session-lost`. The test switches `BM64_COOP_LAUNCHER` and
+`session-lost`. `session-launcher` checks the wait on the session's own
+lines (`coop: session host: waiting on port N`, `coop: session client:
+connecting to H port N`) rather than its prompt: when the other side is
+already there, the connection and the hellos can finish before the menu
+polls the state, and the menu then goes straight to *Connected* without
+showing or logging the wait (#39; a prompt that short is left as it is).
+The test switches `BM64_COOP_LAUNCHER` and
 `BM64_COOP_CANCEL_AFTER` press the menu's buttons and the prompt's Cancel
 through the same code as a click ([building.md](building.md)).
 
