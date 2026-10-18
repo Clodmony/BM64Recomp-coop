@@ -28,6 +28,24 @@ lines the script itself ignores as comments:
                                  a field of the player's probe line, OP one of
                                  = != < > <= >=, e.g. hearts < 2
 
+A session scenario (#21) runs two instances of the game, a host and a client
+of an online session (src/coop/session.cpp) on a free local port, with these
+header lines besides:
+
+    #session                     the scenario is a session's
+    #env-host NAME=VALUE         environment for the host only (also
+                                 #env-client)
+    #client STEP                 a step of the client's input script (the
+                                 host's script is the scenario itself); its
+                                 pad 0 is pad 1, player 2, in both games
+    #check-client CHECK          a check on the client's log (#check checks
+                                 the host's)
+    #check same-hashes           both logged the same state hash for every
+                                 frame both logged (needs BM64_COOP_LOG_HASH)
+
+Both logs are cut at their "coop: input end": once one game is stopped the
+other loses the session. Both scripts should end at the same frame.
+
 SCENARIO is a file or a name in tools/scenarios/ (without .txt). Each runs
 with tools/run.sh --input SCENARIO --until-log "coop: input end" in its own
 run folder under ~/dev-scratch/BM64Recomp-coop/runs/. The result is one line
@@ -41,6 +59,7 @@ import math
 import operator
 import re
 import shlex
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -127,39 +146,114 @@ def check(text, lines, probes):
     raise ValueError(f"unknown check {kind}")
 
 
+def run_cmd(script, version, timeout, envs, name=None):
+    cmd = [str(ROOT / "tools/run.sh"), "--input", str(script), "--until-log", "coop: input end",
+           "--timeout", str(timeout)]
+    if version:
+        cmd += ["--version", version]
+    if name:
+        cmd += ["--name", name]
+    for env in envs:
+        cmd += ["--env", env]
+    return cmd
+
+
+def read_run(proc, label, results):
+    """The run's game log, cut at the script's end in a session; a failed
+    run is a failed check."""
+    out = proc.stdout.read() if hasattr(proc.stdout, "read") else proc.stdout
+    summary = out.strip().splitlines()[-1] if out.strip() else ""
+    print(f"{label}: {summary}")
+    m = re.search(r"folder (\S+)$", summary)
+    if proc.returncode != 0 or not m:
+        results.append((False, "run", f"run.sh exit {proc.returncode}"))
+    lines = (Path(m.group(1)) / "game.log").read_text(errors="replace").splitlines() if m else []
+    errors = [line for line in lines if line.startswith("coop: input error")]
+    if errors:
+        results.append((False, "input script", errors[0]))
+    return lines
+
+
+def free_port():
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def same_hashes(host, client):
+    pattern = re.compile(r"coop: hash frame=(\d+) hash=(\S+)$")
+    a = dict(m.groups() for m in map(pattern.match, host) if m)
+    b = dict(m.groups() for m in map(pattern.match, client) if m)
+    both = sorted(set(a) & set(b), key=int)
+    if not both:
+        return False, "no frame hashed by both"
+    differ = [f for f in both if a[f] != b[f]]
+    if differ:
+        return False, f"{len(differ)}/{len(both)} frames differ, first {differ[0]}"
+    return True, f"{len(both)} frames"
+
+
+def run_checks(checks, lines, probes, results, other=None):
+    for text in checks:
+        try:
+            if text == "same-hashes":
+                ok, detail = same_hashes(lines, other)
+            else:
+                ok, detail = check(text, lines, probes)
+        except (LookupError, ValueError, IndexError, re.error) as err:
+            ok, detail = False, str(err)
+        results.append((ok, text, detail))
+
+
+def until_end(lines):
+    end = next((i for i, line in enumerate(lines) if line.startswith("coop: input end")), len(lines))
+    return lines[:end + 1]
+
+
 def run_scenario(path, version, timeout, extra_envs):
     envs, checks = [], []
+    session, host_envs, client_envs, client_steps, client_checks = False, [], [], [], []
     for line in path.read_text().splitlines():
         if line.startswith("#env "):
             envs.append(line[5:].strip())
         elif line.startswith("#check "):
             checks.append(line[7:].strip())
-    cmd = [str(ROOT / "tools/run.sh"), "--input", str(path), "--until-log", "coop: input end",
-           "--timeout", str(timeout)]
-    if version:
-        cmd += ["--version", version]
-    for env in envs + extra_envs:
-        cmd += ["--env", env]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    summary = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else proc.stderr.strip()
-    print(f"{path.stem}: {summary}")
+        elif line.strip() == "#session":
+            session = True
+        elif line.startswith("#env-host "):
+            host_envs.append(line[10:].strip())
+        elif line.startswith("#env-client "):
+            client_envs.append(line[12:].strip())
+        elif line.startswith("#client "):
+            client_steps.append(line[8:].strip())
+        elif line.startswith("#check-client "):
+            client_checks.append(line[14:].strip())
     results = []
-    m = re.search(r"folder (\S+)$", summary)
-    if proc.returncode != 0 or not m:
-        results.append((False, "run", f"run.sh exit {proc.returncode}"))
-        lines = (Path(m.group(1)) / "game.log").read_text(errors="replace").splitlines() if m else []
+    if not session:
+        proc = subprocess.run(run_cmd(path, version, timeout, envs + extra_envs), capture_output=True, text=True)
+        lines = read_run(proc, path.stem, results)
+        run_checks(checks, lines, parse_probes(lines), results)
     else:
-        lines = (Path(m.group(1)) / "game.log").read_text(errors="replace").splitlines()
-    errors = [line for line in lines if line.startswith("coop: input error")]
-    if errors:
-        results.append((False, "input script", errors[0]))
-    probes = parse_probes(lines)
-    for text in checks:
-        try:
-            ok, detail = check(text, lines, probes)
-        except (LookupError, ValueError, IndexError, re.error) as err:
-            ok, detail = False, str(err)
-        results.append((ok, text, detail))
+        port = free_port()
+        runs = Path.home() / "dev-scratch/BM64Recomp-coop/runs"
+        runs.mkdir(parents=True, exist_ok=True)
+        client_script = runs / f".{path.stem}-client-{port}.txt"
+        client_script.write_text("\n".join(client_steps) + "\n")
+        procs = []
+        for name, script, own_envs, session_env in (
+                ("host", path, host_envs, f"BM64_COOP_SESSION=host:{port}"),
+                ("client", client_script, client_envs, f"BM64_COOP_SESSION=join:127.0.0.1:{port}")):
+            cmd = run_cmd(script, version, timeout, envs + own_envs + [session_env] + extra_envs, name)
+            procs.append(subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True))
+        for proc in procs:
+            proc.wait()
+        client_script.unlink()
+        host = until_end(read_run(procs[0], f"{path.stem} host", results))
+        client = until_end(read_run(procs[1], f"{path.stem} client", results))
+        run_checks(checks, host, parse_probes(host), results, client)
+        client_results = []
+        run_checks(client_checks, client, parse_probes(client), client_results, host)
+        results += [(ok, f"client: {text}", detail) for ok, text, detail in client_results]
     for ok, text, detail in results:
         print(f"  {'ok    ' if ok else 'FAILED'} {text}{'  (' + detail + ')' if detail else ''}")
     return results

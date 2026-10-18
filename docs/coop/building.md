@@ -291,6 +291,37 @@ MAX [MIN]` (two slots' distance at one probe; a tile is 100 units), `field
 PROBE SLOT NAME OP VALUE`. The output is one line per check, `N/M checks passed`
 and a RESULT line; exit 0 only if all passed. A scenario takes 15–35 s.
 
+### Session scenarios: two games on one machine
+
+An online session ([design.md](design.md), *The session core*) is tested
+with two games on this machine, a host and a client on a free local port.
+The session's own switches (`src/coop/session.cpp`):
+
+- `BM64_COOP_SESSION=host:PORT` or `join:HOST:PORT`: be the session's host or
+  its client; the game waits for the other side at its first pad read
+  (`BM64_COOP_CONNECT_TIMEOUT`, default 60 s) and plays alone if none comes.
+- `BM64_COOP_DELAY=N`: the input delay in frames, 1–60 (the host's counts,
+  default 2).
+- `BM64_COOP_SEED=N`: seed the game's random generator with N; also without
+  a session, where two runs of the same script then hash the same frames.
+- `BM64_COOP_LOG_HASH=N`: log `coop: hash frame=… hash=…` every N frames
+  (the state hash of `patches/coop_session.c`).
+
+A scenario with a `#session` line runs both games at once (`tools/run.sh
+--name host` and `--name client`, so their run folders differ). The scenario
+is the host's script; `#client STEP` lines are the client's script (its pad
+0 is pad 1, player 2, in both games), `#env-host` and `#env-client` set one
+side's environment, `#check-client` checks the client's log, and `#check
+same-hashes` compares the two logs' `coop: hash` lines frame by frame. Both
+logs are cut at their `coop: input end`, since the session is lost as soon
+as one game is stopped; both scripts should end on the same frame. A tile
+step runs on one side only, outside the lockstep: `session-desync` uses one
+to part the two games on purpose.
+
+```bash
+tools/scenario.py --version eu session-lockstep   # both games, about 15 s
+```
+
 ## Europe speed
 
 The game runs one frame per VI retrace (its scheduler, `__scMain`, passes each

@@ -10,7 +10,8 @@
 //   BM64_COOP_P2=1|4             a second human player in that slot in story
 //                                rooms (patches/coop_player2.c): slot 1 reads
 //                                pad 1, slot 4 reads its command record, which
-//                                pad 1 fills
+//                                pad 1 fills (4 in an online session, whose
+//                                pad 1 is the client's: src/coop/session.cpp)
 //   BM64_COOP_LOG_PLAYERS=1      one line per room init, spawn (and its model
 //                                asset), placement, bomb, hit, death and room
 //                                teardown
@@ -43,6 +44,7 @@
 #include <vector>
 
 #include "harness.h"
+#include "session.h"
 
 namespace {
 
@@ -265,7 +267,8 @@ Warp read_warp() {
 // Patches print with recomp_printf (stdout), the host with stderr: line
 // buffering keeps the two in order in a run's game.log.
 [[maybe_unused]] const bool line_buffered = [] {
-    if (env_flag("BM64_COOP_INPUT") || env_flag("BM64_COOP_P2") || env_flag("BM64_COOP_LOG_PLAYERS")) {
+    if (env_flag("BM64_COOP_INPUT") || env_flag("BM64_COOP_P2") || env_flag("BM64_COOP_LOG_PLAYERS") ||
+        env_flag("BM64_COOP_SESSION")) {
         std::setvbuf(stdout, nullptr, _IOLBF, 0);
     }
     return true;
@@ -326,9 +329,12 @@ extern "C" uint32_t coop_harness_frame(int32_t* args) {
 }
 
 // BM64_COOP_P2: the co-op spike's slot for player 2, 1 or 4; 0 when off.
+// Without it, an online session that connected (src/coop/session.cpp) has
+// player 2 in slot 4, read from the client's pad; one that found no partner
+// has none.
 extern "C" int32_t coop_p2_slot(void) {
+    static const char* value = std::getenv("BM64_COOP_P2");
     static const int32_t slot = [] {
-        const char* value = std::getenv("BM64_COOP_P2");
         int32_t slot = value != nullptr ? static_cast<int32_t>(std::strtol(value, nullptr, 0)) : 0;
         if (slot != 0 && slot != 1 && slot != 4) {
             std::fprintf(stderr, "coop: BM64_COOP_P2 must be 1 or 4, not %s; off\n", value);
@@ -336,6 +342,9 @@ extern "C" int32_t coop_p2_slot(void) {
         }
         return slot;
     }();
+    if (value == nullptr) {
+        return coop::session_connected() ? 4 : 0;
+    }
     return slot;
 }
 

@@ -38,7 +38,7 @@ Read before working:
 - `src/game/`: host-side C++ (input, config, the recomp APIs patches call),
   `src/ui/`: the RmlUi menus and launcher, `src/main/`: startup,
   `src/coop/`: co-op host code (the build version, debug switches, the test
-  harness: scripted pads, warp, probes).
+  harness: scripted pads, warp, probes; the online session's lockstep).
 - `tools/`: `verify.sh` (the check of a branch), `run.sh` (unattended runs),
   `scenario.py` and `scenarios/` (scripted runs of the game with checks),
   `unpack_rom.py` (decompressed image from either ROM), `europe.py` (Europe

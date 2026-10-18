@@ -10,6 +10,7 @@
 #include "promptfont.h"
 #include "GamepadMotion.hpp"
 #include "../coop/harness.h" // coop: scripted pads for unattended runs
+#include "../coop/session.h" // coop: the pads of an online session
 
 constexpr float axis_threshold = 0.5f;
 
@@ -518,7 +519,13 @@ void recomp::set_rumble(int controller_num, bool on) {
 }
 
 ultramodern::input::connected_device_info_t recomp::get_connected_device_info(int controller_num) {
-    if (controller_num != 0 && controller_num < 4 && coop::scripted_input_active()) { // coop: a script drives pads 0-3
+    if (auto connected = coop::session_pad_connected(controller_num); connected && !*connected) { // coop: pads 0 and 1 in a session
+        return ultramodern::input::connected_device_info_t {
+            .connected_device = ultramodern::input::Device::None,
+            .connected_pak = ultramodern::input::Pak::None,
+        };
+    }
+    if (controller_num != 0 && controller_num < 4 && (coop::scripted_input_active() || coop::session_pad_connected(controller_num).value_or(false))) { // coop: a script drives pads 0-3, a session 0-1
         return ultramodern::input::connected_device_info_t {
             .connected_device = ultramodern::input::Device::Controller,
             .connected_pak = ultramodern::input::Pak::None,
