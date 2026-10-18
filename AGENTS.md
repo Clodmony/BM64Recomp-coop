@@ -32,9 +32,15 @@ Read before working:
   game function of the same name (strict patch mode checks the name against
   `BM64Syms/`). Game-side co-op logic goes here.
 - `bm64.us.toml`: the recompiler's configuration for the game, including
-  `[[patches.hook]]` entries that call into code at given addresses.
+  `[[patches.hook]]` entries that call into code at given addresses. The
+  Europe configs (`*.eu.toml`) are generated from the US ones by
+  `tools/europe.py`, which also holds the Europe address map.
 - `src/game/`: host-side C++ (input, config, the recomp APIs patches call),
-  `src/ui/`: the RmlUi menus and launcher, `src/main/`: startup.
+  `src/ui/`: the RmlUi menus and launcher, `src/main/`: startup,
+  `src/coop/`: co-op host code (the build version, debug switches).
+- `tools/`: `verify.sh` (the check of a branch), `run.sh` (unattended runs),
+  `unpack_rom.py` (decompressed image from either ROM), `europe.py` (Europe
+  configs and their check), `n64recomp.sh`.
 - `lib/N64ModernRuntime` (librecomp, ultramodern), `lib/rt64` (renderer),
   `lib/sf64` (libultra headers the patches build against), `BM64Syms/`
   (symbols): submodules, never edited here.
@@ -92,6 +98,10 @@ Read before working:
   (merges, proposed decisions, wording, cleanup) as choices with options, the
   recommended one first, record the answers, and stop: the owner starts a
   fresh session for the next issue.
+- **Issue groups** (owner, 2026-10-18): a milestone of linked issues may be
+  done as one: one session, one branch `coop/<parent N>-<topic>`, one draft
+  pull request that closes them all. The group is decided when the issues
+  are filed (the parent issue lists them in order).
 - **GitHub issues are the task list.** New work, bugs found on the way and
   follow-ups become issues; there is no task file in the repository. Always
   pass `-R Clodmony/BM64Recomp-coop` to `gh` (or run `.superset/setup.sh`,
@@ -129,7 +139,8 @@ Read before working:
 
 Build dependencies (Linux): `cmake`, `ninja`, `clang`, `lld`, `llvm`, SDL2,
 GTK 3 and FreeType development files, `python3` 3.11+. Linking and running
-need the decompressed 1.0 US ROM (see [docs/coop/building.md](docs/coop/building.md)).
+need the decompressed image of the US 1.0 or the Europe ROM, made by
+`tools/unpack_rom.py` (see [docs/coop/building.md](docs/coop/building.md)).
 
 ## Verification commands
 
@@ -139,8 +150,15 @@ need the decompressed 1.0 US ROM (see [docs/coop/building.md](docs/coop/building
 # the ROM a compile of every host object file. Logs and summary.txt in
 # ~/dev-scratch/BM64Recomp-coop/verify/<stamp>/, exit 0 only if no stage failed.
 tools/verify.sh
-tools/verify.sh --quick    # submodules, configs, patches only
+tools/verify.sh --quick    # submodules, configs, patches (and europe) only
 tools/verify.sh --full     # a missing ROM fails instead of skipping
+tools/verify.sh --version eu   # the Europe build (default: the image that exists)
 
+# An unattended run of a built executable in its own portable folder under
+# ~/dev-scratch/BM64Recomp-coop/runs/; 0 once overlay 0x20 (title) loads.
+tools/run.sh --version eu --until-overlay 0x20 --timeout 60
+
+python3 -I tools/unpack_rom.py <rom>     # decompressed image into scratch
+python3 -I tools/europe.py check <image> # the Europe map on the image
 tools/n64recomp.sh         # N64Recomp/RSPRecomp at upstream CI's pinned commit
 ```

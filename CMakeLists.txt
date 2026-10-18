@@ -5,6 +5,7 @@ if (APPLE)
 endif()
 
 project(BM64Recompiled LANGUAGES C CXX)
+include(${CMAKE_SOURCE_DIR}/src/coop/version.cmake) # coop: BM64_VERSION, us or eu
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -138,10 +139,13 @@ add_custom_command(OUTPUT
                        ${CMAKE_SOURCE_DIR}/RecompiledPatches/patches.c
                        ${CMAKE_SOURCE_DIR}/RecompiledPatches/recomp_overlays.inl
                        ${CMAKE_SOURCE_DIR}/RecompiledPatches/funcs.h
+                       ${BM64_PATCHES_STAMP} # coop: which version's patches these are
                    # TODO: Look into why modifying patches requires two builds to take
-                   COMMAND ./N64Recomp patches.toml
+                   COMMAND ${CMAKE_COMMAND} -E rm -f ${BM64_PATCHES_STAMPS} # coop
+                   COMMAND ./N64Recomp ${BM64_PATCHES_TOML} # coop: patches.eu.toml in a Europe build
+                   COMMAND ${CMAKE_COMMAND} -E touch ${BM64_PATCHES_STAMP} # coop
                    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-                   DEPENDS ${CMAKE_SOURCE_DIR}/patches/patches.elf
+                   DEPENDS ${CMAKE_SOURCE_DIR}/patches/patches.elf ${CMAKE_SOURCE_DIR}/${BM64_PATCHES_TOML} # coop: and its config
 )
 
 # Main executable
@@ -159,6 +163,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/config.cpp
     ${CMAKE_SOURCE_DIR}/src/game/scene_table.cpp
     ${CMAKE_SOURCE_DIR}/src/game/debug.cpp
+    ${CMAKE_SOURCE_DIR}/src/coop/debug.cpp # coop: debug output for unattended runs
     ${CMAKE_SOURCE_DIR}/src/game/quicksaving.cpp
     ${CMAKE_SOURCE_DIR}/src/game/recomp_api.cpp
     ${CMAKE_SOURCE_DIR}/src/game/recomp_actor_api.cpp

@@ -46,6 +46,7 @@
 #include "../../patches/sound.h"
 #include "../../patches/misc_funcs.h"
 #include "../../patches/cheats.h"
+#include "../coop/coop_debug.h" // coop: speed measurements
 
 // #include "mods/mm_recomp_dpad_builtin.h"
 
@@ -250,6 +251,7 @@ void queue_samples(int16_t* audio_data, size_t sample_count) {
     // Prevent audio latency from building up by skipping samples in incoming audio when too many samples are already queued.
     // Skip samples based on how many microseconds of samples are queued already.
     uint32_t skip_factor = cur_queued_microseconds / 100000;
+    coop::note_audio(sample_count / input_channels, cur_queued_microseconds, skip_factor != 0); // coop: speed measurements
     if (skip_factor != 0) {
         uint32_t skip_ratio = 1 << skip_factor;
         num_bytes_to_queue /= skip_ratio;
@@ -351,6 +353,18 @@ gpr get_entrypoint_address();
 
 // array of supported GameEntry objects
 std::vector<recomp::GameEntry> supported_games = {
+#ifdef BM64_VERSION_EU // coop: a Europe build runs the Europe ROM only (src/coop/version.cmake)
+    {
+        .rom_hash = 0x96c1418c31ee543aULL,
+        .internal_name = "BOMBERMAN64E",
+        .game_id = u8"bm64_eu",
+        .mod_game_id = "bm64", // the mod menu lists "bm64" mods (src/ui/ui_mod_menu.cpp)
+        .save_type = recomp::SaveType::AllowAll,
+        .is_enabled = true,
+        .entrypoint_address = get_entrypoint_address(),
+        .entrypoint = recomp_entrypoint,
+    },
+#else
     {
         .rom_hash = 0xc4c0b74bbb696426ULL,
         .internal_name = "BOMBERMAN64",
@@ -361,6 +375,7 @@ std::vector<recomp::GameEntry> supported_games = {
         .entrypoint_address = get_entrypoint_address(),
         .entrypoint = recomp_entrypoint,
     },
+#endif
 };
 
 // TODO: move somewhere else

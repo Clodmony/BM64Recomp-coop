@@ -7,6 +7,8 @@
 > is an unchanged copy of upstream. The co-op work is written entirely by an AI
 > coding agent (Claude) directed by the repository owner. The fork publishes no
 > builds. Please report issues with the co-op features here, not upstream.
+> Besides the US version, the fork builds from the Europe ROM, at the game's
+> PAL speed ([docs/coop/building.md](docs/coop/building.md)).
 [Bomberman 64: Recompiled](https://github.com/RevoSucks/BM64Recomp) is a project that uses [N64: Recompiled](https://github.com/Mr-Wiseguy/N64Recomp) to **statically recompile** Bomberman 64 into a native port with many new features, enhancements, and extensive mod support. This project uses [RT64](https://github.com/rt64/rt64) as the rendering engine to provide some of these enhancements.
 
 ### **This repository and its releases do not contain game assets. The original game is required to build or run this project.**

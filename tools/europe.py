@@ -1,0 +1,436 @@
+#!/usr/bin/env python3
+"""The Europe (PAL) build: its generated configs, and a check of them on the image.
+
+usage:
+  python3 -I tools/europe.py configs
+      Writes the Europe configs into the checkout root (all gitignored), each
+      derived from its US counterpart so upstream changes carry over:
+        bm64.eu.toml      bm64.us.toml reading bm64.decomp.eu.z64 and dump.eu.toml,
+                          plus PAL_HOOK
+        aspMain.eu.toml   aspMain.toml reading bm64.decomp.eu.z64
+        patches.eu.toml   patches.toml resolving symbols in the two files below
+        dump.eu.toml      BM64Syms/dump.toml with Europe function bounds (FUNC_FIXES)
+        data_dump.eu.toml BM64Syms/data_dump.toml with Europe addresses (SHIFTS)
+  python3 -I tools/europe.py check <bm64.decomp.eu.z64> [--elf patches/patches.elf]
+      Checks SHIFTS and the configs against the Europe image (read only):
+        functions every function ends in `jr $ra` but the stubs and NO_JR_RA
+        tables   every jump table the code uses sits at its symbol's Europe address
+        bss      the boot path clears main bss at the Europe addresses
+        patches  each patched function's data references are where its Europe
+                 original references them; one the original lacks, where
+                 Europe differs, must be made by another Europe function
+                 (needs the built patches.elf)
+        sites    every [[patches.instruction]] site holds the expected kind of
+                 word, and the PAL hook site the expected code
+      Prints one line per check and a RESULT line; exit 0 only if all pass.
+
+Why: the Europe code has the US layout (the same functions at the same
+addresses) but for two boot functions (FUNC_FIXES), and main .rodata is 0x10
+shorter in Europe, so everything after that point in main data and all of main
+bss sits lower than in US (docs/coop/design.md, *Addresses*). The patches are
+written against US symbol names; recompiled against the .eu.toml symbol files
+they reach the Europe addresses.
+Standard library only; no game data in this file.
+"""
+import bisect
+import collections
+import os
+import re
+import struct
+import sys
+import tomllib
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# US address ranges [start, end) that sit `delta` bytes lower in Europe, from
+# `check` on the Europe image (jump tables, the boot path's bss clear, the
+# patched functions' references):
+# - up to US 0x802A2F64 (.data and the start of .rodata): same address;
+# - Europe has two 4-byte .rodata constants fewer somewhere in
+#   US 0x802A2F64..0x802A2F78 (UNKNOWN: which two is not decidable without a
+#   US image, so those five symbols are left out and a patch using one fails
+#   to recompile instead of reading the wrong word);
+# - from US 0x802A2F78 (jtbl_802A2F78): 8 lower;
+# - from US 0x802A3020 (the next file's .rodata, 16-byte aligned): 0x10
+#   lower, through the rest of main .data and main bss to its end, D_802B36D0.
+SHIFTS = [
+    (0x802A2F78, 0x802A3020, 0x8),
+    (0x802A3020, 0x802B36D0 + 1, 0x10),
+]
+UNKNOWN = (0x802A2F64, 0x802A2F78)
+# Where the Europe layout differs from US at all: `check` requires every patch
+# reference in here to be confirmed on the image.
+DIFFERS = (0x802A2F64, 0x802B36D0 + 1)
+
+
+# Function bounds that differ in Europe. n64main is 4 bytes longer (it sets
+# osTvType to PAL before calling osInitialize), so the two helpers after it
+# start 4 later; 0x60 bytes of padding (nops) sit before osInitialize, where US
+# has a 0x60-byte gap after osSetThreadPri, so those two start 0x60 later.
+# Everything else is at its US address.
+FUNC_FIXES = {
+    "n64main": (0x800019A0, 0x68),              # US size 0x64
+    "Main_SetPanOverride": (0x80001A08, 0x10),  # US 0x80001A04
+    "Main_GetTvType": (0x80001A18, 0x10),       # US 0x80001A14
+    "osInitialize": (0x80003240, 0x28C),        # US 0x800031E0
+    "osSetThreadPri": (0x800034D0, 0xE0),       # US 0x80003470
+}
+# Functions that do not end in `jr $ra` (entry and exception code, tail jumps,
+# a fall-through), besides the 8-byte secure-call stubs.
+NO_JR_RA = {
+    "recomp_entrypoint", "osLeoDiskInit", "__osExceptionPreamble", "__osException",
+    "send_mesg", "handle_CpU", "__osEnqueueAndYield", "__osDispatchThread", "_bcopy",
+    "exec_zerojmp_func",
+}
+
+
+# PAL pacing (src/coop/debug.cpp, coop_pal_skip_retrace): in the scheduler
+# loop, after osRecvMesg and `lw $a0, 0x94($sp)` loaded the message and before
+# it is compared with VIDEO_MSG, a dropped retrace becomes message 0, which the
+# loop ignores. PAL_SITE holds the Europe words there, checked by `check`.
+PAL_HOOK = """
+# Added by tools/europe.py: PAL pacing, 50 of the runtime's 60 retraces a
+# second reach the game (src/coop/debug.cpp, coop_pal_skip_retrace).
+[[patches.hook]]
+func = "__scMain"
+before_vram = 0x80001078
+text = \"\"\"
+{
+    extern int coop_pal_skip_retrace(uint32_t msg);
+    if (coop_pal_skip_retrace((uint32_t)ctx->r4)) {
+        ctx->r4 = 0;
+    }
+}
+\"\"\"
+"""
+PAL_SITE = {0x80001074: 0x8FA40094, 0x80001078: 0x2401029A, 0x8000107C: 0x10810009}
+
+
+def to_eu(addr):
+    """Europe address of a US data address, None if it is not known."""
+    if UNKNOWN[0] <= addr < UNKNOWN[1]:
+        return None
+    for start, end, delta in SHIFTS:
+        if start <= addr < end:
+            return addr - delta
+    return addr
+
+
+def load_toml(path):
+    with open(path, "rb") as f:
+        return tomllib.load(f)
+
+
+# --- configs ---------------------------------------------------------------
+
+HEADER = "# Generated by tools/europe.py from {src}: do not edit, it is rewritten.\n"
+
+
+def replace_once(text, old, new, src):
+    if text.count(old) != 1:
+        sys.exit(f"europe.py: expected exactly one {old!r} in {src}")
+    return text.replace(old, new)
+
+
+def eu_data_dump(text):
+    out = []
+    vram = re.compile(r"\bvram = 0x([0-9A-Fa-f]+)")
+    for line in text.splitlines(keepends=True):
+        m = vram.search(line)
+        if m:
+            eu = to_eu(int(m.group(1), 16))
+            if eu is None:
+                continue  # an UNKNOWN symbol: left out on purpose
+            line = line[:m.start(1)] + f"{eu:08X}" + line[m.end(1):]
+        out.append(line)
+    return "".join(out)
+
+
+def eu_dump(text):
+    out, fixed = [], set()
+    for line in text.splitlines(keepends=True):
+        m = re.match(r'(\s*\{ name = "([^"]+)", vram = )0x[0-9A-Fa-f]+(, size = )0x[0-9A-Fa-f]+( \},?\s*)$', line)
+        if m and m.group(2) in FUNC_FIXES:
+            vram, size = FUNC_FIXES[m.group(2)]
+            line = f"{m.group(1)}0x{vram:08X}{m.group(3)}0x{size:X}{m.group(4)}"
+            fixed.add(m.group(2))
+        out.append(line)
+    if fixed != set(FUNC_FIXES):
+        sys.exit(f"europe.py: BM64Syms/dump.toml lacks {sorted(set(FUNC_FIXES) - fixed)}")
+    return "".join(out)
+
+
+def write_if_changed(path, text):
+    try:
+        with open(path) as f:
+            if f.read() == text:
+                return False
+    except FileNotFoundError:
+        pass
+    with open(path, "w") as f:
+        f.write(text)
+    return True
+
+
+def configs():
+    def read(rel):
+        with open(os.path.join(ROOT, rel)) as f:
+            return f.read()
+    us_rom, eu_rom = '"bm64.decomp.us.z64"', '"bm64.decomp.eu.z64"'
+    files = {
+        "bm64.eu.toml": HEADER.format(src="bm64.us.toml") + replace_once(
+            replace_once(read("bm64.us.toml"), us_rom, eu_rom, "bm64.us.toml"),
+            '"BM64Syms/dump.toml"', '"dump.eu.toml"', "bm64.us.toml") + PAL_HOOK,
+        "aspMain.eu.toml": HEADER.format(src="aspMain.toml")
+            + replace_once(read("aspMain.toml"), us_rom, eu_rom, "aspMain.toml"),
+        "patches.eu.toml": HEADER.format(src="patches.toml") + replace_once(
+            replace_once(read("patches.toml"), '"BM64Syms/data_dump.toml"', '"data_dump.eu.toml"', "patches.toml"),
+            '"BM64Syms/dump.toml"', '"dump.eu.toml"', "patches.toml"),
+        "dump.eu.toml": HEADER.format(src="BM64Syms/dump.toml")
+            + eu_dump(read("BM64Syms/dump.toml")),
+        "data_dump.eu.toml": HEADER.format(src="BM64Syms/data_dump.toml")
+            + eu_data_dump(read("BM64Syms/data_dump.toml")),
+    }
+    for name, text in files.items():
+        changed = write_if_changed(os.path.join(ROOT, name), text)
+        print(f"{name}: {'written' if changed else 'up to date'}")
+
+
+# --- check -----------------------------------------------------------------
+
+LOAD_STORE = {0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B,
+              0x2E, 0x31, 0x35, 0x37, 0x39, 0x3D, 0x3F}
+LOADS_TO_GPR = {0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x37}
+
+
+def s16(x):
+    return x - 0x10000 if x & 0x8000 else x
+
+
+def code_sections(dump):
+    """(name, image offset, vram, functions) of every section with code, with
+    the Europe function bounds."""
+    out = []
+    for s in load_toml(dump)["section"]:
+        if "rom" in s and s.get("functions"):
+            funcs = [dict(f, vram=FUNC_FIXES[f["name"]][0], size=FUNC_FIXES[f["name"]][1])
+                     if f["name"] in FUNC_FIXES else f for f in s["functions"]]
+            out.append((s["name"], s["rom"], s["vram"], funcs))
+    return out
+
+
+def scan_refs(img, func, rom, base):
+    """Addresses a function builds from %hi/%lo pairs (lui, then addiu or a
+    load/store on that register, also after an addu index)."""
+    hi, refs = {}, set()
+    start = rom + func["vram"] - base
+    for (w,) in struct.iter_unpack(">I", img[start:start + func["size"]]):
+        op, rs, rt, rd = w >> 26, (w >> 21) & 31, (w >> 16) & 31, (w >> 11) & 31
+        if op == 0x0F:  # lui
+            hi[rt] = w << 16 & 0xFFFF0000
+        elif (op in LOAD_STORE or op == 0x09) and rs in hi:
+            refs.add((hi[rs] + s16(w & 0xFFFF)) & 0xFFFFFFFF)
+            if op == 0x09 or op in LOADS_TO_GPR:
+                hi.pop(rt, None)
+        elif op == 0:
+            if (w & 0x3F) == 0x21 and ((rd == rs and rs in hi) or (rd == rt and rt in hi)):
+                hi[rd] = hi[rs if rd == rs else rt]
+            else:
+                hi.pop(rd, None)
+        elif 0x08 <= op <= 0x0E or op in LOADS_TO_GPR:
+            hi.pop(rt, None)
+        elif op == 3:
+            hi.pop(31, None)
+    return refs
+
+
+def elf_patch_refs(path):
+    """{patched function: {(symbol, addend)}} for the data symbols each
+    RECOMP_PATCH function references, read from the relocations of patches.elf."""
+    data = open(path, "rb").read()
+    shoff, = struct.unpack_from(">I", data, 0x20)
+    shentsize, shnum, shstrndx = struct.unpack_from(">HHH", data, 0x2E)
+    secs = [struct.unpack_from(">10I", data, shoff + i * shentsize) for i in range(shnum)]
+
+    def cstr(sec, off):
+        p = secs[sec][4] + off
+        return data[p:data.index(b"\0", p)].decode()
+    names = [cstr(shstrndx, s[0]) for s in secs]
+    patch = names.index(".recomp_patch")
+    symtab = next(i for i, s in enumerate(secs) if s[1] == 2)
+    syms = []
+    for i in range(secs[symtab][5] // 16):
+        st_name, value, size, info, _, shndx = struct.unpack_from(">IIIBBH", data, secs[symtab][4] + 16 * i)
+        syms.append((cstr(secs[symtab][6], st_name), value, size, info & 0xF, shndx))
+    funcs = sorted((v, v + sz, n) for n, v, sz, t, sh in syms if t == 2 and sh == patch)
+    starts = [f[0] for f in funcs]
+    out = collections.defaultdict(set)
+    for s in secs:
+        if s[1] != 9 or s[7] != patch:  # SHT_REL for .recomp_patch
+            continue
+        for off in range(s[4], s[4] + s[5], 8):
+            r_offset, r_info = struct.unpack_from(">II", data, off)
+            if r_info & 0xFF != 6:  # R_MIPS_LO16 carries the addend
+                continue
+            name, value, _, _, shndx = syms[r_info >> 8]
+            i = bisect.bisect_right(starts, r_offset) - 1
+            if i < 0 or r_offset >= funcs[i][1]:
+                continue
+            insn, = struct.unpack_from(">I", data, secs[patch][4] + r_offset - secs[patch][3])
+            # undefined symbols resolve to 0, so the instruction holds the addend
+            addend = s16((insn - (value if shndx else 0)) & 0xFFFF)
+            out[funcs[i][2]].add((name, addend))
+    return out
+
+
+def check(image, elf):
+    img = open(image, "rb").read()
+    dump = os.path.join(ROOT, "BM64Syms", "dump.toml")
+    sections = code_sections(dump)
+    us_data = load_toml(os.path.join(ROOT, "BM64Syms", "data_dump.toml"))["section"]
+    us_addr = {}
+    for s in us_data:
+        for y in s.get("symbols", []):
+            us_addr.setdefault(y["name"], y["vram"])
+    results = []
+
+    def report(name, ok, detail):
+        results.append(ok)
+        print(f"{name}: {'ok' if ok else 'FAILED'} ({detail})")
+
+    refs, func_of = {}, {}
+    for sec, rom, base, funcs in sections:
+        for f in funcs:
+            refs[(sec, f["name"])] = scan_refs(img, f, rom, base)
+            func_of.setdefault(f["name"], (sec, f))
+    word = lambda rom, base, va: struct.unpack_from(">I", img, rom + va - base)[0]
+
+    # functions: with the Europe bounds every function ends in `jr $ra` (and
+    # its delay slot), except the stubs and the known few.
+    n, odd = 0, set()
+    for sec, rom, base, funcs in sections:
+        for f in funcs:
+            if f["name"].endswith("__secure_call"):
+                continue
+            n += 1
+            if f["size"] < 8 or word(rom, base, f["vram"] + f["size"] - 8) != 0x03E00008:
+                odd.add(f["name"])
+    report("functions", odd == NO_JR_RA, f"{n} functions end in jr $ra, but the {len(NO_JR_RA)} known ones"
+           if odd == NO_JR_RA else f"unexpected: {sorted(odd - NO_JR_RA)[:5]}, missing: {sorted(NO_JR_RA - odd)[:5]}")
+
+    # tables: in each code section, the i-th jump table the code indexes is the
+    # i-th US jtbl_ symbol of that section, at its Europe address.
+    n_tables, bad = 0, []
+    for sec, rom, base, funcs in sections:
+        end = max(f["vram"] + f["size"] for f in funcs) + 0x10000  # code, then its data
+        us_jt = sorted(y["vram"] for s in us_data if s["name"] == sec
+                       for y in s.get("symbols", []) if y["name"].startswith("jtbl_")
+                       and not y["name"].endswith(".NON_MATCHING"))
+        eu_jt = set()
+        for f in funcs:
+            lo, hi = f["vram"], f["vram"] + f["size"]
+            for a in refs[(sec, f["name"])]:
+                if base <= a < end and rom + a - base + 8 <= len(img) \
+                        and lo <= word(rom, base, a) < hi and lo <= word(rom, base, a + 4) < hi:
+                    eu_jt.add(a)
+        eu_jt = sorted(eu_jt)
+        if not us_jt:
+            continue
+        if len(eu_jt) != len(us_jt):
+            bad.append(f"{sec}: {len(eu_jt)} tables in Europe, {len(us_jt)} US jtbl symbols")
+            continue
+        for us, eu in zip(us_jt, eu_jt):
+            n_tables += 1
+            if to_eu(us) != eu:
+                bad.append(f"{sec}: jtbl_{us:08X} at Europe {eu:#x}, SHIFTS say {to_eu(us) or 0:#x}")
+    report("tables", not bad, f"{n_tables} jump tables at their Europe address" if not bad else "; ".join(bad[:5]))
+
+    # bss: the boot path clears main bss from its first to past its last byte.
+    boot = refs[func_of["func_80225840"][0], "func_80225840"]
+    lo, hi = to_eu(us_addr["D_802A5300"]), to_eu(us_addr["D_802B36D0"])
+    report("bss", lo in boot and hi in boot and us_addr["D_802A5300"] not in boot,
+           f"func_80225840 clears {lo:#x}..{hi:#x}, US 0x802A5300..0x802B36D0")
+
+    # patches: every data address a patched function uses, at the Europe address
+    # its original uses; a US address in the original where SHIFTS move it fails.
+    if not os.path.exists(elf):
+        report("patches", False, f"no {elf}; build the patches first (make -C patches)")
+    else:
+        found = elsewhere = patch_only = 0
+        fails, named = [], {}
+        everywhere = set().union(*refs.values())
+        for func, used in sorted(elf_patch_refs(elf).items()):
+            if func not in func_of:
+                continue
+            orig = refs[func_of[func][0], func]
+            hits = 0
+            for name, addend in sorted(used):
+                if name not in us_addr or not 0x80000000 <= us_addr[name] < 0x80400000:
+                    continue
+                us = us_addr[name]
+                eu = to_eu(us)
+                if eu is None:
+                    fails.append(f"{func} uses {name}, which has no known Europe address")
+                elif eu + addend in orig:
+                    found += 1
+                    hits += 1
+                elif us != eu and us + addend in orig:
+                    fails.append(f"{func}: original uses US {us + addend:#x} ({name}+{addend:#x}), SHIFTS say {eu + addend:#x}")
+                elif DIFFERS[0] <= us < DIFFERS[1]:
+                    # where Europe differs, a reference the original lacks must
+                    # at least be one some other Europe function makes
+                    if eu + addend in everywhere:
+                        elsewhere += 1
+                    else:
+                        fails.append(f"{func}: {name}+{addend:#x} at {eu + addend:#x} is used by no Europe function")
+                else:
+                    patch_only += 1
+            named[func] = hits
+        key = ", ".join(f"{f} {named.get(f, 0)}" for f in ("func_80225840", "func_80242270", "func_80243A50"))
+        report("patches", not fails,
+               f"{found} references found in the Europe originals at the Europe address "
+               f"({key}), {elsewhere} in other Europe functions, {patch_only} unshifted ones only in "
+               f"the patches" if not fails else f"{len(fails)} failed: " + "; ".join(fails[:5]))
+
+    # sites: a zerojump stub replacement sits on `jr $zero`; any other
+    # replacement keeps the original's opcode and registers.
+    cfg = load_toml(os.path.join(ROOT, "bm64.us.toml"))
+    where = {f["name"]: (rom, base) for sec, rom, base, funcs in sections for f in funcs}
+    n, bad = 0, []
+    for p in cfg["patches"].get("instruction", []):
+        rom, base = where[p["func"]]
+        w, v = word(rom, base, p["vram"]), p["value"]
+        if v == 0x0C010800:
+            ok = w == 0x00000008
+        elif v >> 26:
+            ok = w >> 16 == v >> 16
+        else:
+            ok = w & 0xFFFF07C0 == v & 0xFFFF07C0
+        n += 1
+        if not ok:
+            bad.append(f"{p['func']} {p['vram']:#x}: {w:08x}")
+    rom, base = where["__scMain"]
+    for va, expected in PAL_SITE.items():
+        if word(rom, base, va) != expected:
+            bad.append(f"PAL hook site {va:#x}: {word(rom, base, va):08x}, expected {expected:08x}")
+    report("sites", not bad, f"{n} instruction patch sites and the PAL hook site" if not bad else "; ".join(bad[:5]))
+
+    passed = sum(results)
+    print(f"{passed}/{len(results)} checks passed")
+    print("RESULT: " + ("ALL PASSED" if passed == len(results) else "FAILURES"))
+    return passed == len(results)
+
+
+def main():
+    args = sys.argv[1:]
+    if args[:1] == ["configs"] and len(args) == 1:
+        configs()
+    elif args[:1] == ["check"] and len(args) in (2, 4) and (len(args) == 2 or args[2] == "--elf"):
+        elf = args[3] if len(args) == 4 else os.path.join(ROOT, "patches", "patches.elf")
+        sys.exit(0 if check(args[1], elf) else 1)
+    else:
+        print(__doc__.split("\n\n")[1])
+        sys.exit(2)
+
+
+main()

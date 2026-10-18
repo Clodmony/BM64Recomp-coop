@@ -38,14 +38,24 @@ below, marked, for when it comes back. The other proposals (player 2 in slot
 
 ### Addresses: the Europe bss is 0x10 lower
 
-Main-code `.bss` sits **0x10 lower in Europe than in US**; functions and main
-`.data` (0x802A0000–0x802A4xxx) are at the same addresses, and so is low bss
-(0x80063000–0x800BEA60: `g_Players`, `g_EnemySlots`, the save block). Proof:
-upstream's US patches of `func_80242270` (HUD), `func_80243A50` and
-`func_80225840` against the same Europe functions (US `D_802AC610`,
-`D_802AC770`, `D_802AC884`, `D_802AC5C0` appear as Europe 0x802AC600,
-0x802AC760, 0x802AC874, 0x802AC5B0), and the bss clear range (US
-0x802A5300–0x802B36D0, Europe 0x802A52F0–0x802B36C0).
+Main-code `.bss` sits **0x10 lower in Europe than in US**, and so does main
+`.data`/`.rodata` from US 0x802A3020 on. Europe's main `.rodata` has two
+4-byte constants fewer somewhere in US 0x802A2F64–0x802A2F78, so from US
+0x802A2F78 its symbols sit 8 lower, and after the next file's 16-byte
+alignment (US 0x802A3020) 0x10 lower through the end of main bss. Main
+`.data` and `.rodata` below US 0x802A2F64 are at the same addresses, and so
+is low bss (0x80063000–0x800BEA60: `g_Players`, `g_EnemySlots`, the save
+block). Functions are at the same addresses but for five boot functions
+(`n64main` is 4 bytes longer; `osInitialize` and `osSetThreadPri` start
+0x60 later). Proof: upstream's US patches of `func_80242270` (HUD),
+`func_80243A50` and `func_80225840` against the same Europe functions (US
+`D_802AC610`, `D_802AC770`, `D_802AC884`, `D_802AC5C0` appear as Europe
+0x802AC600, 0x802AC760, 0x802AC874, 0x802AC5B0), the bss clear range (US
+0x802A5300–0x802B36D0, Europe 0x802A52F0–0x802B36C0), and all 68 main jump
+tables. `tools/europe.py` holds this map, generates the Europe symbol files
+from it and checks it on the Europe image (`check`: 221 jump tables, the bss
+clear, the 147 data references of the patched functions; see
+[building.md](building.md), *The Europe build*).
 
 So a US symbol name printed on a main-bss operand of the Europe disassembly
 names a **different** variable. This page gives main-bss globals by their
