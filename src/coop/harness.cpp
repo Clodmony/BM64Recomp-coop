@@ -16,7 +16,8 @@
 //                                pad 1 is the client's: src/coop/session.cpp)
 //   BM64_COOP_CAMERA=<slot>      the camera follows the player in that slot
 //                                (0-4; -1 the game's choice) while it plays;
-//                                default: a session's client follows player 2
+//                                default: a session's client follows player 2;
+//                                following slot 4, its C-buttons are pad 1's
 //   BM64_COOP_LOG_PLAYERS=1      one line per room init, spawn (and its model
 //                                asset), placement, bomb, hit, the item a hit
 //                                knocks out, a pickup, death and room teardown
@@ -412,6 +413,13 @@ extern "C" int32_t coop_camera_slot(void) {
         return coop::session_live_client() ? 4 : -1;
     }
     return slot;
+}
+
+// The pad the camera's C-buttons are read from on this machine (#33, a hook in
+// func_80235934): player 2's, pad 1, when the camera follows player 2 in slot
+// 4 (the client of a live session, or BM64_COOP_CAMERA=4), else pad 0.
+extern "C" int32_t coop_camera_pad(void) {
+    return coop_camera_slot() == 4 ? 1 : 0;
 }
 
 // Hooks in bm64.us.toml report player events here (BM64_COOP_LOG_PLAYERS=1):

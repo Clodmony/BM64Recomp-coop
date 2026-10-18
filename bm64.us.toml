@@ -596,8 +596,9 @@ text = """
     void coop_harness_save(uint8_t* rdram, recomp_context* ctx);
     void coop_harness_hearts(uint8_t* rdram, recomp_context* ctx);
     extern uint32_t coop_session_hashing(void);
-    extern void coop_session_frame(uint32_t hash);
+    extern void coop_session_frame(uint32_t hash, uint32_t yaw, uint32_t pitch);
     void coop_state_hash(uint8_t* rdram, recomp_context* ctx);
+    void coop_camera_angles(uint8_t* rdram, recomp_context* ctx);
     int32_t args[9];
     uint32_t requests;
     coop_log_frame(rdram);
@@ -649,7 +650,9 @@ text = """
         c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
         c.r29 -= 0x40;
         coop_state_hash(rdram, &c);
-        coop_session_frame((uint32_t)c.r2);
+        uint32_t hash = (uint32_t)c.r2;
+        coop_camera_angles(rdram, &c);
+        coop_session_frame(hash, MEM_W(0, c.r2), MEM_W(4, c.r2));
     }
 }
 """
@@ -957,6 +960,40 @@ text = """
         coop_camera_target(rdram, &c);
         ctx->r2 = c.r2;
     }
+}
+"""
+
+# coop: the camera's yaw and pitch the player update turns the stick by
+# (#33; docs/coop/design.md, *The camera*): func_80234858 has just put them at
+# sp+0x9C and sp+0xA0, s0 is the slot. In a session each player's are its own
+# machine's camera's, sent with its pad (src/coop/session.cpp,
+# coop_session_view), so both machines move each player the same way.
+[[patches.hook]]
+func = "func_8024E088"
+before_vram = 0x8024E888
+text = """
+{
+    extern int32_t coop_session_view(int32_t slot, uint32_t* yaw, uint32_t* pitch);
+    uint32_t yaw, pitch;
+    if (coop_session_view((int32_t)ctx->r16, &yaw, &pitch)) {
+        MEM_W(0x9C, ctx->r29) = yaw;
+        MEM_W(0xA0, ctx->r29) = pitch;
+    }
+}
+"""
+
+# coop: the camera's C-buttons (#33; docs/coop/design.md, *The camera*). The
+# C-button control asks for pad 0's new presses (a0, set just before); a
+# machine whose camera follows player 2 asks for player 2's pad instead
+# (src/coop/harness.cpp, coop_camera_pad), so in a session the client turns
+# its own camera and the host's C-buttons turn only the host's.
+[[patches.hook]]
+func = "func_80235934"
+before_vram = 0x80235978
+text = """
+{
+    extern int32_t coop_camera_pad(void);
+    ctx->r4 = coop_camera_pad();
 }
 """
 

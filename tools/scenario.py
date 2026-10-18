@@ -27,6 +27,9 @@ lines the script itself ignores as comments:
     #check nearer PROBE camera A B  the point the camera looks at is nearer
                                  the player in slot A than the one in B, along
                                  the floor (x and z), at PROBE
+    #check camera PROBE NAME OP VALUE
+                                 the camera's yaw, pitch (degrees) or
+                                 distance at PROBE, e.g. yaw = 45
     #check field PROBE SLOT NAME OP VALUE
                                  a field of the player's probe line, OP one of
                                  = != < > <= >=, e.g. hearts < 2
@@ -163,6 +166,12 @@ def check(text, lines, probes, folder=None):
         da, db = (math.dist((at[0], at[2]), (player(probes, label, s)["pos"][0], player(probes, label, s)["pos"][2]))
                   for s in (a, b))
         return da < db, f"{da:.1f} and {db:.1f} units"
+    if kind == "camera":
+        label, name, op, value = args[0], args[1], args[2], float(args[3])
+        if label not in probes or "camera" not in probes[label]:
+            raise LookupError(f"no camera at probe {label}")
+        got = probes[label]["camera"]["angles"][("yaw", "pitch", "distance").index(name)]
+        return OPS[op](got, value), f"{name}={got:g}"
     if kind == "delta":
         a, b, slot, axis, op, value = args[0], args[1], int(args[2]), args[3], args[4], float(args[5])
         i = "xyz".index(axis)
