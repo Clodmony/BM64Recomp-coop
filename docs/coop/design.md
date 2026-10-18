@@ -547,9 +547,10 @@ without player 2; play is not affected.
 
 - Fill slot 4's command record in the format the update expects for
   controlType 2 (or run player 2 through a pad buffer, as slot 1 does), so
-  it moves like a pad player. Needed before the session core sends input.
-- Placement off the entry walk, then the cutscene, death and camera work of
-  the sections above.
+  it moves like a pad player (#13). Needed before the session core sends
+  input.
+- Placement off the entry walk (#14), then the cutscene, death and camera
+  work of the sections above.
 - A US build run of the same scenarios.
 
 ## Open questions for a running build
