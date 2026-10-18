@@ -353,3 +353,4 @@ extern "C" void coop_log_player_event(const char* event, int32_t slot, const cha
     }
     std::fprintf(stderr, "coop: %s slot=%d%s\n", event, slot, extra);
 }
+

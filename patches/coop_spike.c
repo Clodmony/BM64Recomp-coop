@@ -86,8 +86,9 @@ void coop_place_partner(s32 slot, s32 x, s32 y, s32 z) {
 
 // Hook at the entry of func_8024E088(slot), the player update: fills the
 // co-op slot 4's command record from pad 1 with the same accessors the update
-// uses for a controlType 1 slot. A finding of the spike: filled this way,
-// slot 4 moves along one world axis only (docs/coop/design.md).
+// uses for a controlType 1 slot: the stick as an angle (degrees, before the
+// camera's yaw), an elevation and a length, and the held and newly pressed
+// buttons. Slot 4 then moves like a pad player (#13).
 void coop_feed_command(s32 slot) {
     CoopCommand* cmd = &g_ComputerPlayerMovement[slot];
 

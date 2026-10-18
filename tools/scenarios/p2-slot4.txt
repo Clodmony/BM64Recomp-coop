@@ -22,17 +22,18 @@
 #check still p2-0 p2-1 0
 #check moved p1-0 p1-1 0
 #check still p1-0 p1-1 4
-# a finding: the command record does not move slot 4 the way the pad moves a
-# controlType 1 slot. Filled with the pad path's own vector (func_80239880),
-# stick right moves slot 4 along -x, where it moves slots 0 and 1 along -z
-# (p2-slot1). Turn this around when the record is filled right.
-#check delta right4-0 right4-1 4 x < -100
-#check delta right4-0 right4-1 4 z > -10
+# the command record moves slot 4 the way the pad moves a controlType 1 slot,
+# camera-relative (p2-slot1): down is +x, right is -z in this room's camera.
+# The down move leaves slot 4 off its lane's centre, so the right move also
+# slides it back onto the lane (a few units along -x).
+#check delta p2-0 p2-1 4 x > 50
+#check delta right4-0 right4-1 4 z < -80
+#check delta right4-0 right4-1 4 x > -40
 # player 2's bomb, its blast takes one of player 2's hearts
 #check log ^coop: bomb slot=4 placed=1$
 #check after "^coop: bomb slot=4 placed=1" "^coop: hit slot=4 cause="
 #check field hit1 4 hearts = 1
-#check field hit1 0 hearts = 1
+#check no-log ^coop: hit slot=0
 # the second hit is a death; today it fails the room for player 1 (retry:
 # the room reloads), which frees and respawns player 2
 #check after "^coop: hit slot=4" "^coop: death slot=4 cause="

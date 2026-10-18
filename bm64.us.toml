@@ -576,7 +576,10 @@ text = """
 # measurements (src/coop/debug.cpp; only with BM64_COOP_LOG_FRAMES=N).
 # The same hook runs the test harness (src/coop/harness.cpp): the input script,
 # and the warp and probes it asks for, which run in patches/coop_spike.c on a
-# copy of the registers with the stack pointer moved down.
+# copy of the registers with the stack pointer moved down. A copy must point
+# its odd float registers (f_odd) at itself, as librecomp's load_context does:
+# copied as is, they stay the original's, and double arithmetic in game
+# functions called on the copy goes wrong (#13).
 [[patches.hook]]
 func = "func_8023A208"
 before_vram = 0x8023A208
@@ -592,6 +595,7 @@ text = """
     requests = coop_harness_frame(args);
     if (requests & 1) {
         recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
         c.r29 -= 0x40;
         c.r4 = (int64_t)args[0];
         c.r5 = (int64_t)args[1];
@@ -599,6 +603,7 @@ text = """
     }
     if (requests & 2) {
         recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
         c.r29 -= 0x40;
         coop_probe(rdram, &c);
     }
@@ -620,6 +625,7 @@ text = """
     coop_log_player_event("room init", -1, NULL, 0, NULL, 0);
     if (coop_p2_slot() != 0) {
         recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
         c.r29 -= 0x40;
         c.r4 = coop_p2_slot();
         coop_stage_init(rdram, &c);
@@ -671,6 +677,7 @@ text = """
     coop_log_player_event("place", (int32_t)ctx->r4, "x", (int32_t)ctx->r5, "z", (int32_t)ctx->r7);
     if ((int32_t)ctx->r4 == 0 && coop_p2_slot() != 0) {
         recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
         c.r29 -= 0x40;
         c.r4 = coop_p2_slot();
         c.r5 = (int32_t)ctx->r5 + coop_p2_tile_offset(0);
@@ -690,6 +697,7 @@ text = """
     void coop_feed_command(uint8_t* rdram, recomp_context* ctx);
     if ((int32_t)ctx->r4 == 4 && coop_p2_slot() == 4) {
         recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
         c.r29 -= 0x40;
         coop_feed_command(rdram, &c);
     }
