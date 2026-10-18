@@ -820,6 +820,30 @@ text = """
 }
 """
 
+# coop: an item a hit knocks out of a slot (a0 item type, 4 a heart; a1 slot),
+# sent off in a random direction (#32).
+[[patches.hook]]
+func = "func_8027B39C"
+before_vram = 0x8027B39C
+text = """
+{
+    extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    coop_log_player_event("drop", (int16_t)ctx->r5, "item", (int32_t)ctx->r4, NULL, 0);
+}
+"""
+
+# coop: a slot picks up an item (s0 the slot, the item at sp+0x54, its type
+# the halfword at +0x20), before the switch on the type (#32).
+[[patches.hook]]
+func = "func_802797BC"
+before_vram = 0x80279888
+text = """
+{
+    extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    coop_log_player_event("pickup", (int32_t)ctx->r16, "item", MEM_H(0x20, MEM_W(0x54, ctx->r29)), NULL, 0);
+}
+"""
+
 # A death of player 2 while player 1 plays: player 2 is down and respawns
 # (patches/coop_player2.c, coop_partner_death), and the function is skipped,
 # returning 1 as for a death it ran.

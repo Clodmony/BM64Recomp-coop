@@ -6,8 +6,8 @@ repository so it survives any worktree path and any tool; per-checkout agent
 memory is not read by a session that starts in another worktree. State goes
 here; stable recipes go into `docs/coop/`; personal data and hardware never.
 
-Last updated 2026-10-18 (#27 done; PRs #12, #15, #20, #25, #30 and #34
-merged into `bm64recomp-coop`; no open pull requests).
+Last updated 2026-10-18 (#32 done: PR #35 merged into `bm64recomp-coop`;
+no open pull requests).
 
 ## Repository state
 
@@ -17,19 +17,19 @@ merged into `bm64recomp-coop`; no open pull requests).
 - Merged into `bm64recomp-coop`: #1 (workflow setup), #5 (story-mode
   audit), and on 2026-10-18 the chain #12 (Europe build), #15 (harness,
   player 2 spike), #20 (group #19), #25 (session core), #30 (host's save,
-  build check), #34 (camera). Their branches are deleted.
+  build check), #34 (camera), #35 (#32, the knocked-out heart). Their
+  branches are deleted.
 - Open issues: #14 and #16 (leftover checks, owner), #19 (their group),
   #11 (Europe follow-ups), #22–#24 (follow-ups of #19), #28, #29 (session
-  follow-ups), #31 (scripted pads on the title), #32 (`p2-slot4` fails for
-  some seeds), #33 (cameras that turn, the client's C-buttons).
+  follow-ups), #31 (scripted pads on the title), #33 (cameras that turn,
+  the client's C-buttons), #36 (who may catch a knocked-out heart).
 - Local git config of the clone: Claude identity, `upstream` with push
   `DISABLED`, `core.hooksPath .githooks`, `pushguard.romDir` set.
 
 ## Open pull requests
 
-None. Verify of the merged tree (= the #34 branch), 2026-10-18: Europe
-`--full --scenarios`, 7/8 stages, 175/185 checks; the 10 failures are all
-`p2-slot4` with an unlucky clock seed (#32). US not run (CI compiles it
+None. #35 (closes #32) merged 2026-10-18; its verify, Europe `--full
+--scenarios`: 8/8 stages, 194/194 checks. US not run (CI compiles it
 without a ROM).
 
 ## Owner decisions (2026-10-18)
@@ -49,6 +49,28 @@ without a ROM).
   whole chain now (done, 2026-10-18); PR #34 closes #27, the turning
   cameras and the client's C-buttons are #33; #32 gets its own session to
   find the cause (not a pinned seed).
+
+## Owner decisions, end of #32 (2026-10-18)
+
+- Merge #35 now (done). Who may catch the other player's knocked-out heart:
+  filed as #36 (run it first, then the owner decides: shared, or only the
+  player who lost it).
+
+## What #32 found and did (details: design.md, *What the runs showed*)
+
+- Not a co-op bug. A hit that leaves hearts knocks one out as an item
+  (`func_80248148` → `func_8027B39C(4, slot)`, 200 units up, direction
+  `g_getRandomNumber(7)`); whoever touches it gets the heart back
+  (`func_802797BC`, type 4). Seed 2's heart lands back on player 2 in
+  `p2-slot4`, about 30–40 frames after the hit.
+- Hooks log `coop: drop slot=S item=T` and `coop: pickup slot=S item=T`.
+  `p2-slot4` pins seed 1 and checks no heart is picked up; `p2-heart`
+  (seed 2) checks the recovery. A change that moves the random numbers
+  fails those checks by name.
+- Not run: player 1 catching player 2's heart (the code allows it; #36).
+- Adding `probe` steps shifts a script's timing (a trace with a probe every
+  5 frames reached the hit earlier in wait time than one probe did): time a
+  new scenario's probes with a trace copy of it.
 
 ## What #27 found and did (details: design.md, *The camera*)
 
@@ -86,16 +108,15 @@ without a ROM).
 
 ## Next candidates
 
-1. **Session follow-ups**: #33 (cameras that turn and the client's
+1. **#36**, who may catch a knocked-out heart. First: from `p2-heart`, put
+   player 1 where player 2's heart lands (or try seeds) and look for
+   `coop: pickup slot=0 item=4` after `coop: drop slot=4 item=4`.
+2. **Session follow-ups**: #33 (cameras that turn and the client's
    C-buttons; first: find a story room with a turning camera, run
    session-camera's moves there with same-hashes), #28 (host or join from the
    launcher; first: ui_launcher.cpp's Start path and coop::autostart), #29
    (two machines, Windows/macOS; also whether two compilers give the same
    build identity).
-2. **#32**, `p2-slot4` fails for seed 2 (a hit of cause 1 takes no heart);
-   a full verify fails with it for some clock seeds. Owner: find the cause.
-   First: `BM64_COOP_SEED=1` and `=2` with `BM64_COOP_LOG_PLAYERS=1`,
-   compare the frames around the hit.
 3. **Rest of #14 and #16** (kept open, owner): a story teleport
    (`func_802512C0` from a room script; find one with `xref/callers.tsv`
    beyond Green Garden stage 1) and a scene with player 2 already in the
@@ -149,7 +170,7 @@ Under `~/dev-scratch/BM64Recomp-coop/`:
 
 ## Cleanup the owner may approve
 
-- The Superset workspace this session ran in (its branch is merged and
+- The Superset workspace this session ran in (#35 merged, its branch
   deleted; the checkout is on `bm64recomp-coop`) and its build folders
   `build/prepare-project-according-a3ceb80a{,-eu}/` in scratch.
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/` in scratch:

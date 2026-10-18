@@ -18,8 +18,8 @@
 //                                (0-4; -1 the game's choice) while it plays;
 //                                default: a session's client follows player 2
 //   BM64_COOP_LOG_PLAYERS=1      one line per room init, spawn (and its model
-//                                asset), placement, bomb, hit, death and room
-//                                teardown
+//                                asset), placement, bomb, hit, the item a hit
+//                                knocks out, a pickup, death and room teardown
 //
 // Input script: one step per line, '#' starts a comment.
 //   overlay <ID>        wait for the next load of overlay ID (the n-th

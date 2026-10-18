@@ -527,6 +527,17 @@ Scenarios `p2-slot4`, `p2-slot1`, `p2-entry-walk` (`tools/scenarios/`), room
 - **Bombs and hits: confirmed.** Slot 4's and slot 1's bombs explode and
   their blasts take one of their hearts (2 → 1); player 1's bombs hit slot 4
   too (room 0x28).
+- **The knocked-out heart (#32).** A hit that leaves hearts knocks one out
+  as an item (`func_80248148` calls `func_8027B39C(4, slot)`): the item
+  appears 200 units above the player and flies off in a random direction
+  (`g_getRandomNumber(7)`). Whoever touches it picks it up
+  (`func_802797BC`, type 4) and gets one heart back. So whether a hit costs
+  a heart for good depends on the seed: in room 0x29, after player 2's
+  first bomb, seed 1's heart flies away and seed 2's lands back on player 2,
+  30–40 frames after the hit (`p2-slot4` pins seed 1, `p2-heart` seed 2).
+  The pickup looks up the slot whose actor touched the item, so by the code
+  player 1 can also catch player 2's heart and the other way round (not
+  run).
 - **Death: as predicted.** A second hit kills slot 4: `func_8023A870(4, 1)`,
   flow flags 0x92, slot 4's controlType becomes 3, and the room reloads as
   player 1's retry with one life fewer (2 → 1); the reload frees and
