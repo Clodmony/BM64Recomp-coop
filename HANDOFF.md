@@ -61,6 +61,9 @@ Last updated 2026-10-18 (#36 done: draft PR #37 open, not merged).
 - #36 next (chosen at the start of its session). Heart rule: shared, but a
   full player does not take it (not "only who lost it", not the game's
   rule as is).
+- End of #36: PR #37 review first, merge later when the owner says so; the
+  rule covers every heart item (the stage's too), kept; the one-actor
+  collision case stays a note, no issue; old run folders deleted.
 
 ## What #36 found and did (details: design.md, *The knocked-out heart*)
 
