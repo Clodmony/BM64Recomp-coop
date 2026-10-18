@@ -824,14 +824,14 @@ where the two yaws would differ and so would the stick's direction
 (`func_80234858`) and eye (`func_802346C8`, 202 calls, mostly overlays),
 which the hash would show only once they reach a player or the random
 generator. The C-buttons (`func_80235934`) read pad 0, which in a session is
-the host's: the host turns both cameras, the client none.
+the host's: the host turns both cameras, the client none (#33).
 
 ### Not done
 
 - (#29) Two machines, the internet (the host's port must be reachable: a forwarded
   port, no NAT traversal), Windows and macOS: not run. The Winsock branch of
   `session.cpp` was not compiled.
-- (#27, follow-ups) The camera in a room whose camera turns, and the client's
+- (#33) The camera in a room whose camera turns, and the client's
   own C-buttons (*The camera*).
 - (#28) Starting a session takes environment switches; there is no menu for it.
 - A fixed delay: a slow or lost message stalls both games, with no rollback.
