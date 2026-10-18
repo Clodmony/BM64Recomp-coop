@@ -6,8 +6,8 @@ repository so it survives any worktree path and any tool; per-checkout agent
 memory is not read by a session that starts in another worktree. State goes
 here; stable recipes go into `docs/coop/`; personal data and hardware never.
 
-Last updated 2026-10-18 (spike #4 done in draft PR #15, stacked on #12;
-next: group #19).
+Last updated 2026-10-18 (group #19 done in draft PR #20, stacked on #15
+and #12).
 
 ## Repository state
 
@@ -17,63 +17,63 @@ next: group #19).
 - Merged into `bm64recomp-coop`: #1 (workflow setup), #5 (closes #3, the
   story-mode audit, `docs/coop/design.md`).
 - Open issues: #2 and #6–#10 (closed by PR #12 when merged), #4 (closed by
-  PR #15), #11 (Europe follow-ups), the group #19 with its members #13
-  (slot 4's command record), #14 (placement off the entry walk), #16
-  (cutscene freeze), #17 (exits for any player), #18 (death and respawn).
+  PR #15), #13, #17, #18 (closed by PR #20), #14 and #16 (partly done in
+  PR #20, kept open for leftover checks), #19 (the group), #11 (Europe
+  follow-ups), #21–#24 (follow-ups of #19).
 - Local git config of the clone: Claude identity, `upstream` with push
   `DISABLED`, `core.hooksPath .githooks`, `pushguard.romDir` set.
 
-## Open pull requests
+## Open pull requests (merge in this order)
 
-- **#12** `coop/2-europe-build` → `bm64recomp-coop`, draft: the Europe
-  build. The owner reviews it first; merge only when they say so.
-- **#15** `coop/4-player2-spike` → `bm64recomp-coop`, draft, **stacked on
-  #12** (branched from it; its diff shows #12's commits until #12 is
-  merged). The test harness (scripted pads, warp into a room, probes,
-  scenarios with checks, `verify.sh --scenarios`) and the player 2 spike.
-  Verify 2026-10-18: Europe `--full --scenarios` 8/8 stages, 43/43 scenario
-  checks; US compile only 5/5. Merge #12 first; merged afterwards, #15
-  brings only its own commits.
-- **Owner (2026-10-18): review both, merge later**, #12 then #15, when the
-  owner says so in a later session.
+- **#12** `coop/2-europe-build` → `bm64recomp-coop`, draft: the Europe build.
+- **#15** `coop/4-player2-spike`, draft, stacked on #12: the test harness and
+  the player 2 spike.
+- **#20** `coop/19-player2-playable`, draft, stacked on #15: the group #19.
+  Verify 2026-10-18: Europe `--full --scenarios`, all stages and all 7
+  scenarios passed; US not run (compile-only check, see the PR).
+- Owner (2026-10-18): review #12, #15 and #20 first, merge later in that
+  order, when the owner says so. Each one merged shrinks the next one's diff
+  to its own commits.
 
-## Owner decisions (2026-10-18)
+## Owner decisions (2026-10-18, end of #19)
 
-- **Scope: online co-op only for now.** Local couch co-op is dropped for now.
-- Player 2 in **slot 4** via the command record and shared lives are
-  **proposals**. The spike confirmed slot 4 spawns, renders, bombs, takes
-  hits and dies like a player; its input through the record is not right
-  yet (#13).
-- **Issue groups are allowed** (AGENTS.md, *Workflow*).
-- #4 stacked on #12 instead of waiting for the merge (2026-10-18).
-- **Next: the group #19, "player 2 playable"** (owner, 2026-10-18): #13,
-  #14, #16, #17, #18 in that order, one session, branch
-  `coop/19-player2-playable`, one PR. Scratch analysis folders are kept for
-  it.
+- #14 and #16 stay open for their leftover checks (a story teleport; a scene
+  with player 2 already in the room); comments on both say what is left.
+- Player 2 joining only at player 1's first step is fine for now.
+- Filed: #21 session core (online), #22 player 1 downed, #23 player 2 frozen
+  during player 1's death animation, #24 player 2's slot-0 resets and a US
+  run of the scenarios.
 
-## What the spike found (details: design.md, *The follow-up spike*)
+## What #19 found and did (details: design.md, *Player 2 in a story room*)
 
-- Works: spawn/respawn of slot 1 or 4 from the room's own init, model 0x4B,
-  pad 1 drives player 2 independently of pad 0, bombs and hits, death runs
-  the story death path (room retry, one life gone), cutscenes lock player 1
-  only. Hooks in main functions are reached from overlay calls.
-- Slot 1 (pad 1) moves camera-relative like player 1; slot 4 through the
-  command record moves along one world axis (#13).
-- Player 2 on player 1's entry walk locks player 1 (#14); scenarios place
-  player 2 with `BM64_COOP_P2_TILE=4,3` in room 0x29.
+- #13 was a harness bug: hook register copies kept `f_odd` pointing at the
+  original context, so game double arithmetic on the copy went wrong. Every
+  copy sets `c.f_odd` now (building.md, *The test harness*). The command
+  record = the pad path's angle (before the camera's yaw), elevation, length,
+  buttons.
+- #14: player 2 is not spawned by the room; it joins on the tile player 1
+  leaves with its first own step (60 frames after a walk or freeze). Spawned
+  mid-room, an actor is reset to the origin on its first frames, so it is
+  placed again 3 frames later. Origin waiting and the tile behind room 0x29's
+  entry walk both killed player 2 (cause 3, flag 0x40000000).
+- #16: freeze wrappers apply to player 2; #17: rectangle tests (RECOMP_PATCH)
+  accept player 2; #18: player 2 is downed and respawns for a shared life.
+- Harness: `tile SLOT X Z` step, `near` and `not-after` checks; patches in
+  `patches/coop_player2.c`, `coop_harness.c`, `coop.h`.
 
 ## Next candidates
 
-1. **Next: group #19** (owner, 2026-10-18). Branch from `coop/4-player2-spike`
-   (stacked) unless #12 and #15 are merged by then. First step, #13: compare
-   how `func_8024E088` uses the move vector for controlType 1 and 2 (around
-   0x8024E3A0 and 0x8024E860; `scripts/fn.sh main_code func_8024E088` in
-   scratch), and what the rival AI `func_802553D4` writes into the record.
-   Scenario `p2-slot4` holds the checks to turn around.
-2. **#11**, Europe follow-ups.
-3. Still to file: the **session core** for online co-op (lockstep, host and
-   client, input transport; design.md proposes the command record, shared
-   seed, desync detection). Both players need the same version.
+1. **Rest of #14 and #16** (kept open, owner): a story teleport
+   (`func_802512C0` from a room script; find one with
+   `xref/callers.tsv` beyond Green Garden stage 1) and a scene with player 2
+   already in the room (room 0x28's later tutorial, or a boss intro), then a
+   check that pad 1 does not move a frozen player 2.
+2. **#21, the session core** for online co-op: lockstep, host and client,
+   input transport through the command record (#13 settled its format),
+   shared seed, desync detection. Both players need the same version.
+3. Follow-ups of #19: #22 (player 1 downed), #23 (freeze during player 1's
+   death animation), #24 (slot-0 resets, US run).
+4. **#11**, Europe follow-ups.
 
 ## Scratch (not in the repository)
 
@@ -81,13 +81,11 @@ Under `~/dev-scratch/BM64Recomp-coop/`:
 
 - `rom/`: decompressed and .z64 Europe ROM (never commit or upload). Kept.
 - `build/<checkout>/`, `build/<checkout>-eu/`, `n64recomp/`: kept.
-- `runs/`: run folders of `tools/run.sh` and the scenarios (each holds a ROM
-  copy); delete freely.
-- `verify/`: verify logs; delete freely.
+- `runs/`, `verify/`: run and verify logs; delete freely.
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/`: the
-  disassembly, cross-references and notes from #3, used again in #4; kept
-  for the group #19 (owner, 2026-10-18). `scripts/fn.sh <section>
-  <function>`, run from the scratch folder, prints one function.
+  disassembly, cross-references and notes; `scripts/fn.sh <section>
+  <function>`, run from the scratch folder, prints one function. Kept for the
+  follow-ups unless the owner says otherwise.
 
 ## Working notes (stable, keep short)
 
@@ -98,18 +96,20 @@ Under `~/dev-scratch/BM64Recomp-coop/`:
   both (docs/coop/building.md).
 - A shell without a session lacks `XDG_RUNTIME_DIR`; `tools/run.sh` fills it
   in, or the game cannot open its window.
-- The game window opens on the desktop during a run (no headless mode);
-  `tools/run.sh` mutes sound by default. Screenshots: capture the game's
-  window only, never the active window (it may be another one).
+- The game window opens on the desktop during a run (no headless mode); it is
+  a native Wayland window, so `xprop`/`import` cannot capture it alone.
 - In recompiled code `$ra` is 0 at a function's entry: a hook cannot tell
-  its caller from it.
-- Hook text runs inside the recompiled C function: no `stderr`/`printf`
-  there, call a host function (`src/coop/harness.cpp`); `return;` at an
-  entry hook skips the function.
+  its caller from it. Hook text runs inside the recompiled C function: no
+  `stderr`/`printf` there, call a host function; `return;` at an entry hook
+  skips the function. Hook text must not hold US data addresses (the Europe
+  config copies it): read them from registers or in the patches.
+- Room 0x28's opening dialogue needs repeated A taps (40 × 4 frames held,
+  16 apart, `p2-room28`); START there goes back to the title.
+- One full `tools/verify.sh --full --version eu` takes about 3 minutes when
+  only patches and hooks changed; a scenario 10–30 s.
 
 ## Cleanup the owner may approve
 
-- After #12 and #15 are merged: delete `coop/2-europe-build` and
-  `coop/4-player2-spike`.
+- After #12, #15 and #20 are merged: delete their branches.
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/` in scratch:
-  after the group #19.
+  when the player 2 follow-ups are done.

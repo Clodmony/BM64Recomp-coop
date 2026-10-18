@@ -239,6 +239,9 @@ Everything is off unless a switch asks for it:
     S, flow flags, lives), the stick reading of pads 0 and 1, and one
     `coop: player slot=…` line per player in play (controlType, hearts,
     bombs, fire, flags, position in tenths of a world unit);
+  - `tile SLOT X Z`: put the player in that slot on tile X, Z of the room at
+    the floor level it stands on (`func_802511EC`, as a room entry does), and
+    log `coop: tile slot=… from=… to=…`;
   - `log TEXT`, and `end`, which logs `coop: input end`.
 
   A bad line logs `coop: input error …` and the script does not run. The
@@ -252,16 +255,22 @@ Everything is off unless a switch asks for it:
   entry 0x13 (room 0x28's exit) starts with player 1's short entry walk and
   then plays.
 - `BM64_COOP_LOG_PLAYERS=1`: one line per room init, spawn (and the model
-  asset it gets), placement on a tile, bomb, hit, death and room teardown,
-  from hooks in `bm64.us.toml`.
-- `BM64_COOP_P2=1|4`, `BM64_COOP_P2_TILE=DX,DZ`: the co-op spike's second
-  player ([design.md](design.md), *The follow-up spike*).
+  asset it gets), placement on a tile, bomb, hit, death, cutscene freeze and
+  room teardown, from hooks in `bm64.us.toml`.
+- `BM64_COOP_P2=1|4`: player 2 in that slot in story rooms, driven by pad 1
+  ([design.md](design.md), *Player 2 in a story room*). Its own lines
+  (`coop: place …`, `trigger`, `down`, `respawn`) come from
+  `patches/coop_player2.c` whenever it is on.
 
 Patches print with `recomp_printf` (stdout), the host with stderr; with any
 of these switches stdout is line-buffered, so both stay in order in
-`game.log`. The warp and the probes run in `patches/coop_spike.c`, called
-from the frame hook on a copy of the registers with the stack pointer moved
-down.
+`game.log`. The warp, the probes and the tile steps run in
+`patches/coop_harness.c`, called from the frame hook on a copy of the
+registers with the stack pointer moved down. Such a copy must point its odd
+float registers at itself (`c.f_odd`, as every co-op hook in `bm64.us.toml`
+does): copied as is, they stay the original context's, and double
+arithmetic in a game function called on the copy reads the wrong halves
+(#13).
 
 A **scenario** (`tools/scenarios/*.txt`) is an input script with `#env`
 lines (switches for the game) and `#check` lines. `tools/scenario.py` runs
@@ -274,10 +283,12 @@ tools/scenario.py --version eu --env BM64_COOP_P2=0 p2-slot4  # override an #env
 ```
 
 Checks: `log REGEX`, `no-log REGEX`, `after REGEX1 REGEX2` (a match of
-REGEX2 after the first match of REGEX1), `moved P1 P2 SLOT [MIN]` and
+REGEX2 after the first match of REGEX1), `not-after REGEX1 REGEX2` (none),
+`moved P1 P2 SLOT [MIN]` and
 `still P1 P2 SLOT [MAX]` (distance between two probes, in world units),
-`delta P1 P2 SLOT AXIS OP VALUE` (the move along one axis), `field PROBE
-SLOT NAME OP VALUE`. The output is one line per check, `N/M checks passed`
+`delta P1 P2 SLOT AXIS OP VALUE` (the move along one axis), `near PROBE A B
+MAX [MIN]` (two slots' distance at one probe; a tile is 100 units), `field
+PROBE SLOT NAME OP VALUE`. The output is one line per check, `N/M checks passed`
 and a RESULT line; exit 0 only if all passed. A scenario takes 15–35 s.
 
 ## Europe speed

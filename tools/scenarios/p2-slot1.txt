@@ -5,35 +5,33 @@
 # this is a check of the mechanism, not the co-op slot.
 #env BM64_COOP_WARP=0x29:0x13
 #env BM64_COOP_P2=1
-#env BM64_COOP_P2_TILE=4,3
 #env BM64_COOP_LOG_PLAYERS=1
 #check log ^coop: stage init overlay=0x29 slot=1 controlType=1 hearts=2
 #check log ^coop: model slot=1 asset=75$
+#check log ^coop: place slot=1 tile=
 #check field start 0 flags = 0
 #check field start 1 controlType = 1
-# the same stick moves both players the same way (camera-relative): right is
-# -z, down is +x in this room's camera
-#check delta right-0 right-1 0 z < -100
-#check delta right-0 right-1 1 z < -100
+#check near start 0 1 150 50
+# the same stick moves both players the same way (camera-relative): down is
+# +x, right is -z in this room's camera
 #check delta down-0 down-1 0 x > 50
 #check delta down-0 down-1 1 x > 50
+#check delta right-0 right-1 0 z < -80
+#check delta right-0 right-1 1 z < -80
 # pad 1 alone moves player 2 only
 #check moved solo-0 solo-1 1
 #check still solo-0 solo-1 0
 #check log ^coop: bomb slot=1 placed=1$
 #check after "^coop: bomb slot=1 placed=1" "^coop: hit slot=1 cause="
 #check field hit1 1 hearts = 1
+#check no-log ^coop: hit slot=0
 overlay 0x29
 wait 300
-probe start
-probe right-0
-pad 0 - 1 0.05
-pad 1 - 1 0.05
+pad 0 - 0.05 -1
 wait 15
 pad 0 -
-pad 1 -
 wait 10
-probe right-1
+probe start
 probe down-0
 pad 0 - 0.05 -1
 pad 1 - 0.05 -1
@@ -42,8 +40,20 @@ pad 0 -
 pad 1 -
 wait 10
 probe down-1
-probe solo-0
+probe right-0
+pad 0 - 1 0.05
 pad 1 - 1 0.05
+wait 15
+pad 0 -
+pad 1 -
+wait 10
+probe right-1
+pad 0 - 0.05 -1
+wait 30
+pad 0 -
+wait 10
+probe solo-0
+pad 1 - -1 0.05
 wait 15
 pad 1 -
 wait 10

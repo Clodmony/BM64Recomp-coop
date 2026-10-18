@@ -1,0 +1,202 @@
+# Room 0x28, the stage's first room (entry 0x10, as the world map starts the
+# stage), which opens with the tutorial's dialogue (#14, #16). The dialogue
+# freezes player 1 (flags 0x2010000) through the freeze wrappers; player 2 has
+# not joined yet, so pad 1 moves nothing and nobody is hit. After the dialogue
+# (A, page by page) player 1's first step brings player 2 in next to it, and
+# both play.
+#env BM64_COOP_WARP=0x28
+#env BM64_COOP_P2=4
+#env BM64_COOP_LOG_PLAYERS=1
+#check log ^coop: place pending slot=4 p1 tile=3,2,15$
+#check field dialog-0 0 flags = 0x2010000
+#check still dialog-0 dialog-1 0
+#check not-after "^coop: spawn slot=4$" "^coop: probe dialog-1$"
+#check field free 0 flags = 0x120
+#check after "^coop: probe free$" "^coop: spawn slot=4$"
+#check log "^coop: place slot=4 tile=3,2,15 p1 tile=2,2,15$"
+#check field joined 4 flags = 0
+#check near joined 0 4 150 50
+#check moved joined walk1 0 100
+#check moved joined walk1 4 100
+#check no-log ^coop: hit slot=
+overlay 0x28
+wait 200
+probe dialog-0
+pad 1 - 1 0.05
+wait 20
+pad 1 -
+probe dialog-1
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+pad 0 A
+wait 4
+pad 0 -
+wait 16
+probe free
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+wait 10
+probe joined
+pad 0 - 1 0.05
+pad 1 - 1 0.05
+wait 30
+pad 0 -
+pad 1 -
+wait 10
+probe walk1
+end
