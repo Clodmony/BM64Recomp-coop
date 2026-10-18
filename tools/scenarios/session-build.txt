@@ -8,6 +8,9 @@
 #check-client log ^coop: session build 0x12345678 \(BM64_COOP_BUILD_ID\)$
 #check log ^coop: session refused: another build \(the other's 0x12345678\); playing alone$
 #check-client log ^coop: session refused: another build \(the other's 0x[0-9A-F]{8}\); playing alone$
+# both report it on screen (#28)
+#check log "^coop: session ui: No co-op session: another build \(the other's 0x12345678\)$"
+#check-client log "^coop: session ui: No co-op session: another build \(the other's 0x[0-9A-F]{8}\)$"
 #check no-log ^coop: session lockstep
 #check-client no-log ^coop: session lockstep
 #

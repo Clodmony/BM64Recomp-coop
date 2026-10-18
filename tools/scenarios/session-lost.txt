@@ -8,6 +8,8 @@
 #check log ^coop: session lockstep from frame 0$
 #check log "^coop: session lost frame=\d+: (the other side closed|send failed); playing alone$"
 #check after "^coop: session lost" "^coop: input: alone$"
+# the host reports it on screen (#28)
+#check after "^coop: session lost" "^coop: session ui: Co-op session lost: (the other side closed|send failed)$"
 # after the session the host's pad still moves player 1 (its step down, +x)
 #check delta alone moved 0 x > 50
 #check no-log ^coop: session desync

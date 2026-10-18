@@ -9,6 +9,7 @@
 #include "recomp_ui.h"
 #include "coop_debug.h"
 #include "harness.h"
+#include "session_ui.h"
 
 extern std::vector<recomp::GameEntry> supported_games;
 
@@ -105,6 +106,9 @@ void coop::autostart() {
         std::fprintf(stderr, "coop: autostart: no valid stored ROM %s.z64 in the app folder\n",
             reinterpret_cast<const char*>(game_id.c_str()));
         return;
+    }
+    if (coop::launcher_autostart()) {
+        return; // BM64_COOP_LAUNCHER: the Co-op menu's Host or Join instead of Start
     }
     std::fprintf(stderr, "coop: autostart %s\n", reinterpret_cast<const char*>(game_id.c_str()));
     recomp::start_game(game_id);

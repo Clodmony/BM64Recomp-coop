@@ -1,0 +1,30 @@
+# Host and join from the launcher's Co-op menu (#28, docs/coop/design.md,
+# *Hosting and joining*): BM64_COOP_LAUNCHER fills the menu's fields and
+# presses Host (or Join) instead of Start, so the session's config comes from
+# the menu, not from BM64_COOP_SESSION. The waiting and the connected state
+# show as prompts; both games then play in lockstep.
+#session
+#launcher
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_LOG_HASH=1
+#
+#check log "^coop: launcher: host port \d+$"
+#check-client log "^coop: launcher: join 127.0.0.1 port \d+$"
+#check no-log ^coop: autostart
+#check-client no-log ^coop: autostart
+#check log "^coop: session ui: Co-op session: Waiting for player 2 on port \d+$"
+#check-client log "^coop: session ui: Co-op session: Connecting to 127.0.0.1 port \d+$"
+#check log "^coop: session ui: Co-op session: Player 2 joined$"
+#check-client log "^coop: session ui: Co-op session: Connected to the host$"
+#check log ^coop: session lockstep from frame 0$
+#check-client log ^coop: session lockstep from frame 0$
+#check no-log ^coop: session (desync|lost|refused)
+#check-client no-log ^coop: session (desync|lost|refused)
+#check same-hashes
+#
+#client overlay 0x29
+#client wait 120
+#client end
+overlay 0x29
+wait 120
+end

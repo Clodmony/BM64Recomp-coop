@@ -5,6 +5,7 @@
 #include "ultramodern/ultramodern.hpp"
 #include "RmlUi/Core.h"
 #include "nfd.h"
+#include "../coop/session_ui.h" // coop: the Co-op menu
 #include <filesystem>
 
 static std::string version_string;
@@ -81,6 +82,11 @@ public:
             [](const std::string& param, Rml::Event& event) {
                 recomp::start_game(supported_games[0].game_id);
                 recompui::hide_all_contexts();
+            }
+        );
+        recompui::register_event(listener, "open_coop", // coop: host or join an online session (#28)
+            [](const std::string& param, Rml::Event& event) {
+                coop::open_session_menu();
             }
         );
         recompui::register_event(listener, "open_controls",
