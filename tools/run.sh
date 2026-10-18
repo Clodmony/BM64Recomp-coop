@@ -4,7 +4,7 @@
 #
 #   tools/run.sh [--version us|eu] [--until-overlay ID] [--timeout SECONDS]
 #                [--exe PATH] [--rom PATH] [--env NAME=VALUE]... [--audio]
-#                [--input FILE] [--until-log TEXT] [--name NAME]
+#                [--input FILE] [--until-log TEXT] [--name NAME] [--saves DIR]
 #
 #   --version        us or eu (default: us if its build exists, else eu)
 #   --until-overlay  stop with success once the game loads overlay ID (e.g.
@@ -23,6 +23,8 @@
 #                    with TEXT (e.g. "coop: input end", the script's end)
 #   --name           appended to the run folder's name (two runs started in
 #                    the same second, e.g. a session's host and client)
+#   --saves          start with a copy of DIR as the run's saves/ folder (e.g.
+#                    the saves/ of an earlier run)
 #
 # The run folder ~/dev-scratch/BM64Recomp-coop/runs/<stamp>-<version>[-<name>]/ holds
 # everything the run writes: portable.txt (so saves and config stay in it), the
@@ -51,6 +53,7 @@ audio=0
 input=
 until_log=
 name=
+saves=
 envs=()
 while (( $# )); do
 	case "$1" in
@@ -64,7 +67,8 @@ while (( $# )); do
 		--input) input="${2:-}"; shift ;;
 		--until-log) until_log="${2:-}"; shift ;;
 		--name) name="${2:-}"; shift ;;
-		-h|--help) sed -n '2,39p' "$0"; exit 0 ;;
+		--saves) saves="${2:-}"; shift ;;
+		-h|--help) sed -n '2,41p' "$0"; exit 0 ;;
 		*) echo "unknown option: $1" >&2; exit 4 ;;
 	esac
 	shift
@@ -81,6 +85,7 @@ rom="${rom:-$scratch/rom/bm64.$version.z64}"
 [ -x "$exe" ] || { echo "no executable at $exe (tools/verify.sh --version $version)" >&2; exit 4; }
 [ -f "$rom" ] || { echo "no ROM at $rom (tools/unpack_rom.py)" >&2; exit 4; }
 [ -z "$input" ] || [ -f "$input" ] || { echo "no input script at $input" >&2; exit 4; }
+[ -z "$saves" ] || [ -d "$saves" ] || { echo "no saves folder at $saves" >&2; exit 4; }
 if [ -n "$overlay" ]; then
 	overlay="$(printf '0x%02X' "$((overlay))")" || { echo "bad overlay ID" >&2; exit 4; }
 fi
@@ -92,6 +97,7 @@ ln -s "$root/assets" "$run/assets"
 ln -s "$root/recompcontrollerdb.txt" "$run/recompcontrollerdb.txt"
 cp "$rom" "$run/bm64_$version.z64"   # librecomp's stored ROM: <game_id>.z64
 [ -n "$input" ] && cp "$input" "$run/input.txt"
+[ -n "$saves" ] && cp -r "$saves" "$run/saves"
 log="$run/game.log"
 marker="$run/.started"
 touch "$marker"

@@ -7,6 +7,11 @@
 // g_initRandom's state: the index words, the 55-entry table and what follows
 // it, 0xF0 bytes from D_802ACFD0 (read from the disassembly).
 extern u32 D_802ACFD0[0x3C];
+// The save (docs/coop/design.md, section 11): besides the EEPROM mirror
+// (coop.h), the live progress block with the stage-local flags
+// (0x8008E570..0x8008E647) and the current file's index.
+extern u32 D_8008E570[0xD8 / 4];
+extern s32 D_802A1DB4;
 
 static u32 coop_hash_word(u32 hash, u32 word) {
     s32 i;
@@ -28,9 +33,9 @@ static u32 coop_hash_words(u32 hash, const u32* words, s32 count) {
 }
 
 // From the per-frame hook: a hash of the state after this frame. The players'
-// records and actor positions, the random generator, the scene and the story
-// session's lives: a different input or a different random number shows in
-// it within a frame or two.
+// records and actor positions, the random generator, the scene, the story
+// session's lives and the save data: a different input, a different random
+// number or another save shows in it within a frame or two.
 u32 coop_state_hash(void) {
     u32 hash = 2166136261u;
     s32 slot;
@@ -40,6 +45,9 @@ u32 coop_state_hash(void) {
     hash = coop_hash_word(hash, D_802AC624);
     hash = coop_hash_word(hash, D_802AC894);
     hash = coop_hash_words(hash, D_802ACFD0, 0x3C);
+    hash = coop_hash_words(hash, (const u32*)D_80063000, 0x1B8 / 4);
+    hash = coop_hash_words(hash, D_8008E570, 0xD8 / 4);
+    hash = coop_hash_word(hash, D_802A1DB4);
     hash = coop_hash_words(hash, (const u32*)g_Players, sizeof(g_Players) / 4);
     hash = coop_hash_words(hash, (const u32*)g_ComputerPlayerMovement, sizeof(g_ComputerPlayerMovement) / 4);
     for (slot = 0; slot < 5; slot++) {

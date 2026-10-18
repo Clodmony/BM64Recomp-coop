@@ -1,0 +1,19 @@
+# The hello refuses another build (#26, docs/coop/design.md, *The session
+# core*): the client claims another build identity (BM64_COOP_BUILD_ID, a
+# test switch), so both sides refuse the session and play alone.
+#session
+#env-client BM64_COOP_BUILD_ID=0x12345678
+#
+#check log ^coop: session build 0x[0-9A-F]{8}$
+#check-client log ^coop: session build 0x12345678 \(BM64_COOP_BUILD_ID\)$
+#check log ^coop: session refused: another build \(the other's 0x12345678\); playing alone$
+#check-client log ^coop: session refused: another build \(the other's 0x[0-9A-F]{8}\); playing alone$
+#check no-log ^coop: session lockstep
+#check-client no-log ^coop: session lockstep
+#
+#client overlay 0x20
+#client wait 30
+#client end
+overlay 0x20
+wait 30
+end

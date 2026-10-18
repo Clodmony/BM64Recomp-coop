@@ -427,9 +427,11 @@ Stage-local flags (`D_8008E640`, 0x400–0x43F; 331 test, 188 set and 105 clear
 calls from overlays) are switched during play: doors, switches, collected
 things. They are the same block, but a sync concern, not a save concern.
 
-*Approach:* **one campaign, one file**: the **host's** file. The guest does
-not write its EEPROM (its `func_802947AC` becomes a no-op), and gets the
-host's progress block at session start. Player 2's look: battle already
+*Approach:* **one campaign, one file**: the **host's** file. The guest gets
+the host's whole save at session start and plays on a copy of it, never on
+its own file (built in #26: *The session core*, *The save and the build*;
+the guest's `func_802947AC` runs as on the host, so both games stay the
+same, and writes to the copy). Player 2's look: battle already
 applies custom parts per slot (`func_8023EB28` → `g_LoadCustomParts`), so the
 guest sends its own parts. Cheap. (Local co-op, dropped for now, would use the
 file chosen at the file select and give player 2 another file's parts.)
@@ -704,7 +706,7 @@ frames below it hold no buttons.
 The transport is TCP with Nagle off: the host listens (IPv6 and IPv4), the
 client connects, retrying until `BM64_COOP_CONNECT_TIMEOUT`. A hello carries
 the protocol version, the role, the game version (US and Europe are refused
-together), the host's seed and delay. The connection is made at the game's
+together), the host's seed and delay, and the build identity (#26, below). The connection is made at the game's
 first pad read (`func_8023A22C`, before the loop), so both games start
 their frames together. The message formats are in `session.cpp`.
 
@@ -728,7 +730,9 @@ pacing of the Europe build) reached the hashed state in these runs.
 
 The **state hash** (FNV-1a, `coop_state_hash`) covers the scene (overlay,
 flow flags, lives, S), the random generator's state, the five player records
-and command records, and the players' actor positions. Enemies, bombs and
+and command records, the players' actor positions and the save data (#26:
+the EEPROM mirror `D_80063000`, the live progress block `D_8008E570` with the
+stage-local flags, the current file `D_802A1DB4`). Enemies, bombs and
 the room's tiles are not in it: a divergence there shows once it reaches a
 player or the random generator (inferred). Each machine sends its hash with
 its pad; a different hash for the same frame logs `coop: session desync`
@@ -745,16 +749,51 @@ finds no host, or a host no client, within the timeout plays alone without
 player 2 (`session-alone`). Something on the port that never sends a hello
 gives up after the same timeout (tried once by hand).
 
+### The save and the build (#26)
+
+Lockstep needs both games to start from the same save data. The game reads
+the EEPROM once, at boot, right after the first pad read
+(`func_80225840`: `func_8023A22C`, then `func_80294E54`, which reads all 0x37
+blocks into `D_80063000`). The session connects at that first pad read, so
+the save can be swapped before the game reads it:
+
+- After the hellos the host sends its save file, the whole buffer librecomp
+  keeps for the save type (0x20000 bytes for this game's `AllowAll`; zeros
+  where there is no file). Read from the file, since the game has read and
+  written nothing yet.
+- The client writes it to `saves/coop-session/<game id>.bin` and switches
+  librecomp to that file (`ultramodern::change_save_file`, what mods use).
+  The client's game then runs the same code as the host's, saves included,
+  but every write goes to the copy; its own file is not written. Each
+  session overwrites the copy. A session lost later leaves the client
+  playing on the copy.
+
+Run (`session-save`, Europe, 2026-10-18): the host starts with a save whose
+file 0 is used (`save-file`), the client with none; both load file 0 as the
+file select does. Before the fix the client's file 0 was empty
+(`used=0`), both logged `coop: session desync frame=0` and all 265 hashed
+frames differed. After it both load the used file 0, hash the same 265
+frames, the client's copy equals the host's file and the client left no
+save of its own.
+
+The **build identity** in the hello is FNV-1a over the patches' binary
+(`mm_patches_bin`, what librecomp runs) and a SHA-256 prefix of the game's
+recompiler config `bm64.<version>.toml`, which holds the hooks, taken when
+CMake configures (`src/coop/version.cmake`). Either side refuses another
+identity: `coop: session refused: another build (the other's 0x…)`, and
+both play alone (`session-build`, with `BM64_COOP_BUILD_ID` faking the
+client's). The protocol is now 2; the first 8 bytes of the hello (magic,
+protocol, role, game) stay the same in every version, so an older peer is
+refused for its protocol rather than misread. Not covered by the identity:
+host code (`src/`), librecomp, and mods; a difference there still shows
+only as a desync. Two builds of one commit with different compilers may
+differ in the patches' binary and be refused (not tried; #29).
+
 ### Not done
 
 - (#29) Two machines, the internet (the host's port must be reachable: a forwarded
   port, no NAT traversal), Windows and macOS: not run. The Winsock branch of
   `session.cpp` was not compiled.
-- (#26) The same build on both sides is not checked: the hello compares the
-  protocol and the game version only; another build shows as a desync.
-- (#26) The save: both games must start from the same save data. In the scenarios
-  both have none (fresh run folders); the client should take the host's
-  save at the hello and not write its own (section 11).
 - (#27) The camera follows player 1 on both machines, so the client sees player
   1's view (section 5).
 - (#28) Starting a session takes environment switches; there is no menu for it.

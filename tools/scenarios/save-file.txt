@@ -1,0 +1,14 @@
+# A save, made the way the game makes one (#26): a story session in Green
+# Garden room 0x29 (a new file), then the live progress block saved into file
+# 0 and the EEPROM, as the pause menu's save does. The run's saves/ folder
+# then holds it; session-save starts its host with that folder.
+#env BM64_COOP_WARP=0x29:0x13
+#
+#check log ^coop: warp overlay=0x29 entry=0x13$
+#check log ^coop: save file=0 used=1 time=\d+$
+#check file saves/bm64_*.bin
+overlay 0x29
+wait 150
+save 0
+wait 30
+end

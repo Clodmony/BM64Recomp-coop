@@ -1,0 +1,29 @@
+# An online session on the host's save (#26, docs/coop/design.md, *The
+# session core*): only the host has a save (file 0, from save-file), the
+# client has none. At the hello the client takes the host's save and plays
+# on a copy of it, so both games load the same file 0 (as the file select
+# does) and hash the same state, the save data included; the client's own
+# save is never written.
+#session
+#saves-host save-file
+#env BM64_COOP_WARP=0x29:0x13:0
+#env BM64_COOP_LOG_HASH=1
+#
+#check log ^coop: session host: sent the save, \d+ bytes$
+#check-client log ^coop: session client: playing on the host's save, \d+ bytes$
+#check log ^coop: warp overlay=0x29 entry=0x13 file=0 used=1 time=\d+$
+#check-client log ^coop: warp overlay=0x29 entry=0x13 file=0 used=1 time=\d+$
+#check no-log ^coop: session (desync|lost|refused)
+#check-client no-log ^coop: session (desync|lost|refused)
+#check same-hashes
+# the host plays on its own save, the client on a copy and not on its own
+#check file saves/bm64_*.bin
+#check-client file saves/coop-session/bm64_*.bin
+#check-client no-file saves/bm64_*.bin
+#
+#client overlay 0x29
+#client wait 200
+#client end
+overlay 0x29
+wait 200
+end

@@ -3,10 +3,12 @@
 // switches for player 2 (#4, #19). All of it is off unless asked for:
 //
 //   BM64_COOP_INPUT=<file>       pads 0-3 follow the script (format below)
-//   BM64_COOP_WARP=<ID>[:<entry>] once the title (overlay 0x20) has run 30
-//                                frames, start a new story session and go to
-//                                overlay ID (entry default 0x10, as the world
-//                                map starts a stage)
+//   BM64_COOP_WARP=<ID>[:<entry>[:<file>]]
+//                                once the title (overlay 0x20) has run 30
+//                                frames, start a story session (a new file, or
+//                                file 0-2 loaded as the file select does) and
+//                                go to overlay ID (entry default 0x10, as the
+//                                world map starts a stage)
 //   BM64_COOP_P2=1|4             a second human player in that slot in story
 //                                rooms (patches/coop_player2.c): slot 1 reads
 //                                pad 1, slot 4 reads its command record, which
@@ -27,6 +29,8 @@
 //   probe <label>       log "coop: probe <label>", then one line per player
 //   tile <slot> <x> <z> put the player in slot (0-4) on tile x, z of the room,
 //                       at its floor level (patches/coop_harness.c)
+//   save <file>         save the live progress block into file 0-2 and the
+//                       EEPROM, as the pause menu does (patches/coop_harness.c)
 //   log <text>          log "coop: input: <text>"
 //   end                 log "coop: input end"; the pads stay as they are
 #include <array>
@@ -60,9 +64,9 @@ struct Pad {
 };
 
 struct Step {
-    enum class Kind { Overlay, Wait, Pad, Probe, Log, Tile, End } kind;
+    enum class Kind { Overlay, Wait, Pad, Probe, Log, Tile, Save, End } kind;
     int line;
-    uint32_t value = 0; // overlay ID, frames, pad number, slot
+    uint32_t value = 0; // overlay ID, frames, pad number, slot, file
     int32_t tile[2] = {0, 0};
     Pad pad;
     std::string text;
@@ -153,6 +157,9 @@ bool parse_script(const char* path, std::vector<Step>& steps) {
         } else if (command == "tile") {
             step.kind = Step::Kind::Tile;
             ok = (words >> step.value >> step.tile[0] >> step.tile[1]) && step.value < 5;
+        } else if (command == "save") {
+            step.kind = Step::Kind::Save;
+            ok = (words >> step.value) && step.value < 3;
         } else if (command == "probe" || command == "log") {
             step.kind = command == "probe" ? Step::Kind::Probe : Step::Kind::Log;
             std::getline(words >> std::ws, step.text);
@@ -163,7 +170,7 @@ bool parse_script(const char* path, std::vector<Step>& steps) {
         }
         std::string extra;
         if (ok && (step.kind == Step::Kind::Overlay || step.kind == Step::Kind::Wait || step.kind == Step::Kind::Tile ||
-                   step.kind == Step::Kind::End)) {
+                   step.kind == Step::Kind::Save || step.kind == Step::Kind::End)) {
             ok = !(words >> extra);
         }
         if (!ok) {
@@ -192,8 +199,9 @@ void load_script() {
 }
 
 // Runs the script's steps due this frame; returns true when one asks for a
-// probe. A tile step fills tile (slot, x, z) and ends the frame's steps.
-bool run_script(int32_t* tile) {
+// probe. A tile step fills tile (slot, x, z), a save step *save (the file);
+// each ends the frame's steps.
+bool run_script(int32_t* tile, int32_t* save) {
     bool probe = false;
     while (script.next < script.steps.size()) {
         const Step& step = script.steps[script.next];
@@ -233,6 +241,10 @@ bool run_script(int32_t* tile) {
                 tile[2] = step.tile[1];
                 script.next++;
                 return probe;
+            case Step::Kind::Save:
+                *save = static_cast<int32_t>(step.value);
+                script.next++;
+                return probe;
             case Step::Kind::End:
                 std::fprintf(stderr, "coop: input end\n");
                 break;
@@ -247,6 +259,7 @@ struct Warp {
     bool done = false;
     int32_t overlay = 0;
     int32_t entry = 0x10;
+    int32_t file = -1; // a new file
 };
 
 Warp read_warp() {
@@ -258,7 +271,14 @@ Warp read_warp() {
     char* rest = nullptr;
     warp.overlay = static_cast<int32_t>(std::strtol(value, &rest, 0));
     if (rest != nullptr && *rest == ':') {
-        warp.entry = static_cast<int32_t>(std::strtol(rest + 1, nullptr, 0));
+        warp.entry = static_cast<int32_t>(std::strtol(rest + 1, &rest, 0));
+    }
+    if (rest != nullptr && *rest == ':') {
+        warp.file = static_cast<int32_t>(std::strtol(rest + 1, nullptr, 0));
+        if (warp.file < 0 || warp.file > 2) {
+            std::fprintf(stderr, "coop: BM64_COOP_WARP's file must be 0-2, not %d; a new file\n", warp.file);
+            warp.file = -1;
+        }
     }
     warp.wanted = true;
     return warp;
@@ -304,8 +324,8 @@ void coop::note_overlay_load(uint32_t id) {
 
 // Called by the per-frame hook (func_8023A208, bm64.us.toml). Returns what the
 // hook should call in the patches this frame: bit 0 coop_warp(args[0],
-// args[1]), bit 1 coop_probe(), bit 2 coop_harness_tile(args[2], args[3],
-// args[4]).
+// args[1], args[5]), bit 1 coop_probe(), bit 2 coop_harness_tile(args[2],
+// args[3], args[4]), bit 3 coop_harness_save(args[6]).
 extern "C" uint32_t coop_harness_frame(int32_t* args) {
     static Warp warp = read_warp();
     std::lock_guard lock{mutex};
@@ -316,14 +336,19 @@ extern "C" uint32_t coop_harness_frame(int32_t* args) {
         warp.done = true;
         args[0] = warp.overlay;
         args[1] = warp.entry;
+        args[5] = warp.file;
         requests |= 1;
     }
     args[2] = -1;
-    if (run_script(&args[2])) {
+    args[6] = -1;
+    if (run_script(&args[2], &args[6])) {
         requests |= 2;
     }
     if (args[2] >= 0) {
         requests |= 4;
+    }
+    if (args[6] >= 0) {
+        requests |= 8;
     }
     return requests;
 }
