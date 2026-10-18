@@ -50,7 +50,11 @@ PR #30, stacked on #25, #20, #15 and #12).
   check, #27 each camera on its own player, #28 host or join from the
   launcher, #29 two machines and the Windows/macOS builds.
 - PRs: review first, merge later in order (12, 15, 20, 25, then 30).
-- #26 next (chosen at the start of its session).
+- #26 next (chosen at the start of its session). End of #26: PR #30 review
+  first, merge later after #25; the client keeps playing on a copy of the
+  host's save (not no-op saves); the build identity covering patches and
+  hooks only (not host code, librecomp, mods) is enough for now, revisit
+  with #29.
 
 ## What #26 found and did (details: design.md, *The save and the build*)
 
