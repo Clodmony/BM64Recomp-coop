@@ -301,11 +301,17 @@ Warp read_warp() {
 }
 
 // Patches print with recomp_printf (stdout), the host with stderr: line
-// buffering keeps the two in order in a run's game.log.
+// buffering keeps the two in order in a run's game.log. Windows has no line
+// buffering (_IOLBF is full buffering there, and a size of 0 is an invalid
+// parameter that ends the program, #29), so stdout is unbuffered there.
 [[maybe_unused]] const bool line_buffered = [] {
     if (env_flag("BM64_COOP_INPUT") || env_flag("BM64_COOP_P2") || env_flag("BM64_COOP_LOG_PLAYERS") ||
         env_flag("BM64_COOP_SESSION")) {
+#ifdef _WIN32
+        std::setvbuf(stdout, nullptr, _IONBF, 0);
+#else
         std::setvbuf(stdout, nullptr, _IOLBF, 0);
+#endif
     }
     return true;
 }();

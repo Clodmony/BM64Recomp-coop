@@ -33,6 +33,10 @@
 //          the host's seed and delay, and either side refuses another
 //          protocol, game or build (the first 8 bytes stay the same in every
 //          protocol version, so an older peer is refused, not misread)
+//   logs   right after the hellos, the host's first: "LOGS", u32 size, then
+//          the last run's log of the sender (coop.prev.log, its last 256
+//          KiB; size 0 without one), kept by the other in coop-logs/ (#29:
+//          a crash reaches the other side at the next connect)
 //   save   from the host after the hellos: u32 size, then its save file as
 //          the game will read it (zeros without one). The client plays on a
 //          copy of it (saves/coop-session/<game id>.bin), so both games read
@@ -60,6 +64,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <deque>
 #include <filesystem>
 #include <fstream>
@@ -95,7 +100,9 @@ static void close_socket(socket_t s) { close(s); }
 #include "librecomp/game.hpp"
 #include "ultramodern/ultramodern.hpp"
 
+#include "coop_debug.h"
 #include "session.h"
+#include "zelda_config.h"
 
 // The patches' binary, as librecomp loads it (RecompiledPatches/patches_bin.c).
 extern "C" const char mm_patches_bin[];
@@ -103,7 +110,7 @@ extern "C" const size_t mm_patches_bin_size;
 
 namespace {
 
-constexpr uint16_t protocol = 3;
+constexpr uint16_t protocol = 4;
 constexpr uint32_t no_frame = 0xFFFFFFFF;
 constexpr size_t hello_head = 8; // "COOP", protocol, role, game: the same in every protocol
 constexpr size_t hello_size = 20;
@@ -474,6 +481,53 @@ bool use_host_save(const std::vector<uint8_t>& save) {
     return ultramodern::get_save_file_path() == path;
 }
 
+// The logs, first after the hellos (#29): each side sends its last run's log
+// and keeps the other's in coop-logs/<time>-<host|client>.log in the app
+// folder. The host sends first, the client answers, so neither waits on a
+// full socket buffer.
+bool exchange_logs(Session& s) {
+    constexpr size_t limit = 256 * 1024;
+    bool host = s.config.role == Role::Host;
+    const std::string mine = coop::previous_log(limit);
+    auto send_mine = [&] {
+        uint8_t head[8] = {'L', 'O', 'G', 'S'};
+        put32(head + 4, static_cast<uint32_t>(mine.size()));
+        return send_all(s.sock, head, sizeof(head)) &&
+               (mine.empty() || send_all(s.sock, reinterpret_cast<const uint8_t*>(mine.data()), mine.size()));
+    };
+    std::string theirs;
+    auto receive_theirs = [&] {
+        uint8_t head[8];
+        if (!recv_all(s.sock, head, sizeof(head)) || std::memcmp(head, "LOGS", 4) != 0 || get32(head + 4) > limit) {
+            return false;
+        }
+        theirs.resize(get32(head + 4));
+        return theirs.empty() || recv_all(s.sock, reinterpret_cast<uint8_t*>(theirs.data()), theirs.size());
+    };
+    set_recv_timeout(s.sock, s.config.connect_timeout);
+    bool ok = host ? send_mine() && receive_theirs() : receive_theirs() && send_mine();
+    set_recv_timeout(s.sock, 0);
+    if (!ok) {
+        return false;
+    }
+    if (theirs.empty()) {
+        std::fprintf(stderr, "coop: session: the other side has no last log\n");
+        return true;
+    }
+    char stamp[32];
+    std::time_t now = std::time(nullptr);
+    std::strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", std::localtime(&now));
+    std::filesystem::path path =
+        zelda64::get_app_folder_path() / "coop-logs" / (std::string(stamp) + (host ? "-client.log" : "-host.log"));
+    std::error_code error;
+    std::filesystem::create_directories(path.parent_path(), error);
+    std::ofstream file(path, std::ios_base::binary);
+    file.write(theirs.data(), static_cast<std::streamsize>(theirs.size()));
+    std::fprintf(stderr, "coop: session: the other side's last log, %zu bytes, %s %s\n", theirs.size(),
+                 file.good() ? "kept in" : "could not be written to", path.string().c_str());
+    return true;
+}
+
 // Connects and exchanges the hellos: from the launcher (connect_session,
 // before the game starts) or at the game's first pad read. True when both
 // sides agree; the status is then Connected.
@@ -539,6 +593,12 @@ bool connect_hello(Session& s) {
     if (refused[0] != '\0') {
         std::fprintf(stderr, "coop: session refused: %s%s\n", refused, alone);
         set_status(coop::SessionState::Refused, host, refused);
+        close_socket(s.sock);
+        return false;
+    }
+    if (!exchange_logs(s)) {
+        std::fprintf(stderr, "coop: session: the connection broke while sending the logs%s\n", alone);
+        set_status(coop::SessionState::Refused, host, "the connection broke");
         close_socket(s.sock);
         return false;
     }

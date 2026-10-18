@@ -5,13 +5,16 @@
 #   tools/run.sh [--version us|eu] [--until-overlay ID] [--timeout SECONDS]
 #                [--exe PATH] [--rom PATH] [--env NAME=VALUE]... [--audio]
 #                [--input FILE] [--until-log TEXT] [--name NAME] [--saves DIR]
+#                [--prev-log FILE] [--window]
 #
 #   --version        us or eu (default: us if its build exists, else eu)
 #   --until-overlay  stop with success once the game loads overlay ID (e.g.
 #                    0x20, the title screen; docs/coop/design.md, *Overlay map*)
 #   --timeout        seconds before the run is stopped (default 60)
 #   --exe            the executable (default: the tools/verify.sh build,
-#                    ~/dev-scratch/BM64Recomp-coop/build/<checkout>[-eu]/BM64Recompiled)
+#                    ~/dev-scratch/BM64Recomp-coop/build/<checkout>[-eu]/BM64Recompiled);
+#                    a Windows build (.exe, tools/build-windows.sh) runs in
+#                    Wine with the prefix ~/dev-scratch/BM64Recomp-coop/win/prefix
 #   --rom            the ROM in .z64 order (default
 #                    ~/dev-scratch/BM64Recomp-coop/rom/bm64.<version>.z64, from
 #                    tools/unpack_rom.py)
@@ -25,9 +28,13 @@
 #                    the same second, e.g. a session's host and client)
 #   --saves          start with a copy of DIR as the run's saves/ folder (e.g.
 #                    the saves/ of an earlier run)
+#   --prev-log       FILE as the run before's log (coop.prev.log, which a
+#                    session sends to the other side, #29)
+#   --window         open the game's window on the desktop (default: headless,
+#                    in gamescope's headless backend, 640x480)
 #
-# The run folder ~/dev-scratch/BM64Recomp-coop/runs/<stamp>-<version>[-<name>]/ holds
-# everything the run writes: portable.txt (so saves and config stay in it),
+# The run folder ~/dev-scratch/BM64Recomp-coop/runs/<stamp>-<version>[-<name>]-<suffix>/
+# holds everything the run writes: portable.txt (so saves and config stay in it),
 # general.json with background input off (controllers in use elsewhere do not
 # reach the game), the
 # stored ROM <game_id>.z64 the launcher would have written, assets/ and the
@@ -56,6 +63,8 @@ input=
 until_log=
 name=
 saves=
+prev_log=
+window=0
 envs=()
 while (( $# )); do
 	case "$1" in
@@ -70,7 +79,9 @@ while (( $# )); do
 		--until-log) until_log="${2:-}"; shift ;;
 		--name) name="${2:-}"; shift ;;
 		--saves) saves="${2:-}"; shift ;;
-		-h|--help) sed -n '2,41p' "$0"; exit 0 ;;
+		--prev-log) prev_log="${2:-}"; shift ;;
+		--window) window=1 ;;
+		-h|--help) sed -n '2,46p' "$0"; exit 0 ;;
 		*) echo "unknown option: $1" >&2; exit 4 ;;
 	esac
 	shift
@@ -84,7 +95,7 @@ fi
 case "$version" in us|eu) ;; *) echo "--version must be us or eu" >&2; exit 4 ;; esac
 exe="${exe:-$(build_of "$version")}"
 rom="${rom:-$scratch/rom/bm64.$version.z64}"
-[ -x "$exe" ] || { echo "no executable at $exe (tools/verify.sh --version $version)" >&2; exit 4; }
+[ -x "$exe" ] || [[ "$exe" == *.exe && -f "$exe" ]] || { echo "no executable at $exe (tools/verify.sh --version $version)" >&2; exit 4; }
 [ -f "$rom" ] || { echo "no ROM at $rom (tools/unpack_rom.py)" >&2; exit 4; }
 [ -z "$input" ] || [ -f "$input" ] || { echo "no input script at $input" >&2; exit 4; }
 [ -z "$saves" ] || [ -d "$saves" ] || { echo "no saves folder at $saves" >&2; exit 4; }
@@ -92,8 +103,9 @@ if [ -n "$overlay" ]; then
 	overlay="$(printf '0x%02X' "$((overlay))")" || { echo "bad overlay ID" >&2; exit 4; }
 fi
 
-run="$scratch/runs/$(date +%Y%m%d-%H%M%S)-$version${name:+-$name}"
-mkdir -p "$run"
+mkdir -p "$scratch/runs"
+# mktemp's suffix keeps runs that start in the same second apart (parallel runs)
+run="$(mktemp -d "$scratch/runs/$(date +%Y%m%d-%H%M%S)-$version${name:+-$name}-XXXX")"
 touch "$run/portable.txt"
 # no background input: a controller in use elsewhere must not press the test
 # game's buttons (its prompts' too)
@@ -103,6 +115,7 @@ ln -s "$root/recompcontrollerdb.txt" "$run/recompcontrollerdb.txt"
 cp "$rom" "$run/bm64_$version.z64"   # librecomp's stored ROM: <game_id>.z64
 [ -n "$input" ] && cp "$input" "$run/input.txt"
 [ -n "$saves" ] && cp -r "$saves" "$run/saves"
+[ -n "$prev_log" ] && cp "$prev_log" "$run/coop.prev.log"
 log="$run/game.log"
 marker="$run/.started"
 touch "$marker"
@@ -114,17 +127,26 @@ game_env=(BM64_COOP_AUTOSTART=1 BM64_COOP_LOG_OVERLAYS=1)
 [ -z "${XDG_RUNTIME_DIR:-}" ] && [ -d "/run/user/$(id -u)" ] && game_env+=("XDG_RUNTIME_DIR=/run/user/$(id -u)")
 (( audio )) || game_env+=(SDL_AUDIODRIVER=dummy)
 [ -n "$input" ] && game_env+=("BM64_COOP_INPUT=$run/input.txt")
+case "$exe" in
+*.exe) game_env+=("WINEPREFIX=$scratch/win/prefix" "WINEDEBUG=-all") ;; # never the owner's prefix
+esac
 game_env+=("${envs[@]}")
 
 ms() { echo $(( $(date +%s%N) / 1000000 )); }
 start=$(ms)
-(cd "$run" && exec env "${game_env[@]}" "$exe") > "$log" 2>&1 &
+launch=("$exe")
+[[ "$exe" == *.exe ]] && launch=(wine "$exe")
+# headless: the game draws into gamescope's own display, nothing on the desktop
+(( window )) || launch=(gamescope --backend headless -w 640 -h 480 -W 640 -H 480 -- "${launch[@]}")
+# a process group of its own, so the stop reaches gamescope's and Wine's children
+(cd "$run" && exec setsid env "${game_env[@]}" "${launch[@]}") > "$log" 2>&1 &
 pid=$!
 
 elapsed() { local t=$(( $(ms) - start )); printf '%d.%d' $(( t / 1000 )) $(( t % 1000 / 100 )); }
 result= status=
 while :; do
-	if [ -n "$overlay" ] && grep -q "^coop: overlay $overlay\$" "$log"; then
+	# a Windows build's lines end in CR LF
+	if [ -n "$overlay" ] && grep -qE "^coop: overlay $overlay"$'\r'"?\$" "$log"; then
 		result="overlay $overlay loaded after $(elapsed) s"; status=0; break
 	fi
 	if [ -n "$until_log" ] && grep -qF -- "$until_log" <(cut -c1-${#until_log} "$log"); then
@@ -143,13 +165,14 @@ while :; do
 	sleep 0.2
 done
 
-# stop the one process this script started
-if kill -0 "$pid" 2>/dev/null; then
-	kill -TERM "$pid" 2>/dev/null
-	for _ in $(seq 25); do kill -0 "$pid" 2>/dev/null || break; sleep 0.2; done
-	kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null
-	wait "$pid" 2>/dev/null
+# stop the process group this script started (the game, and gamescope's and
+# Wine's processes around it)
+if kill -0 -- "-$pid" 2>/dev/null; then
+	kill -TERM -- "-$pid" 2>/dev/null
+	for _ in $(seq 25); do kill -0 -- "-$pid" 2>/dev/null || break; sleep 0.2; done
+	kill -0 -- "-$pid" 2>/dev/null && kill -KILL -- "-$pid" 2>/dev/null
 fi
+wait "$pid" 2>/dev/null
 
 overlays="$(grep -o '^coop: overlay 0x[0-9A-F]*' "$log" | awk '{print $3}' | paste -sd' ')"
 touched=

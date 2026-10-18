@@ -20,6 +20,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "librecomp/game.hpp"
@@ -184,6 +185,35 @@ void create_menu() {
         recompui::hide_context(menu.context);
         recompui::show_context(recompui::get_launcher_context_id(), "");
     });
+
+    // A controller moves by the D-pad: a text field keeps left and right for
+    // its cursor, so automatic navigation from the buttons, which end their
+    // rows, got stuck in a field (the owner, 2026-10-18). Up and down go
+    // between the buttons, left from a button into its row's fields, up and
+    // down from a field back to its row's button.
+    host_button->set_id("coop_host");
+    join_button->set_id("coop_join");
+    back->set_id("coop_back");
+    menu.host_port->set_id("coop_host_port");
+    menu.join_address->set_id("coop_join_address");
+    menu.join_port->set_id("coop_join_port");
+    host_button->set_nav_none(NavDirection::Up);
+    host_button->set_nav(NavDirection::Down, join_button);
+    host_button->set_nav(NavDirection::Left, menu.host_port);
+    host_button->set_nav_none(NavDirection::Right);
+    join_button->set_nav(NavDirection::Up, host_button);
+    join_button->set_nav(NavDirection::Down, back);
+    join_button->set_nav(NavDirection::Left, menu.join_address);
+    join_button->set_nav_none(NavDirection::Right);
+    back->set_nav(NavDirection::Up, join_button);
+    back->set_nav_none(NavDirection::Down);
+    back->set_nav_none(NavDirection::Left);
+    back->set_nav_none(NavDirection::Right);
+    for (auto [field, button] : {std::pair{menu.host_port, host_button}, std::pair{menu.join_address, join_button},
+                                 std::pair{menu.join_port, join_button}}) {
+        field->set_nav(NavDirection::Up, button);
+        field->set_nav(NavDirection::Down, button);
+    }
 
     context.set_autofocus_element(host_button);
     context.close();
