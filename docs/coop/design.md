@@ -747,17 +747,17 @@ gives up after the same timeout (tried once by hand).
 
 ### Not done
 
-- Two machines, the internet (the host's port must be reachable: a forwarded
+- (#29) Two machines, the internet (the host's port must be reachable: a forwarded
   port, no NAT traversal), Windows and macOS: not run. The Winsock branch of
   `session.cpp` was not compiled.
-- The same build on both sides is not checked: the hello compares the
+- (#26) The same build on both sides is not checked: the hello compares the
   protocol and the game version only; another build shows as a desync.
-- The save: both games must start from the same save data. In the scenarios
+- (#26) The save: both games must start from the same save data. In the scenarios
   both have none (fresh run folders); the client should take the host's
   save at the hello and not write its own (section 11).
-- The camera follows player 1 on both machines, so the client sees player
+- (#27) The camera follows player 1 on both machines, so the client sees player
   1's view (section 5).
-- Starting a session takes environment switches; there is no menu for it.
+- (#28) Starting a session takes environment switches; there is no menu for it.
 - A fixed delay: a slow or lost message stalls both games, with no rollback.
 
 ## Open questions for a running build
