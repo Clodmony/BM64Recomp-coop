@@ -719,7 +719,7 @@ machine, a host and a client (`tools/scenarios/session-*.txt`; how they run:
 
 Both games run every frame on the same pads. Each machine sends its own pad
 0 once per frame: the buttons and the stick as the float values the game
-will read. In both games the host's pad is pad 0 (player 1) and the client's
+will read, and since #33 its camera's yaw and pitch (*Cameras that turn*). In both games the host's pad is pad 0 (player 1) and the client's
 is pad 1, so player 2 in slot 4 gets its command record from pad 1 through
 the same code on both sides (`coop_feed_command`, #13). Pads 2 and 3 are not
 connected in a session.
@@ -824,7 +824,7 @@ recompiler config `bm64.<version>.toml`, which holds the hooks, taken when
 CMake configures (`src/coop/version.cmake`). Either side refuses another
 identity: `coop: session refused: another build (the other's 0x…)`, and
 both play alone (`session-build`, with `BM64_COOP_BUILD_ID` faking the
-client's). The protocol is now 2; the first 8 bytes of the hello (magic,
+client's). The protocol was 2 then (3 since #33's frame message); the first 8 bytes of the hello (magic,
 protocol, role, game) stay the same in every version, so an older peer is
 refused for its protocol rather than misread. Not covered by the identity:
 host code (`src/`), librecomp, and mods; a difference there still shows
@@ -858,14 +858,68 @@ distance (90, 45, 2000) at every probe while their eyes were up to about 495
 units apart. So in this room, with the camera's angles fixed, the followed
 player changes only the eye's position, and the stick (turned by the yaw,
 `func_80234858` in the update) moves player 2 the same way on both machines.
-Not yet tried: a room whose camera turns (the yaw follows the followed
-actor's facing after `D_80090004` idle frames in `func_80235D7C`; C-buttons),
-where the two yaws would differ and so would the stick's direction
-(inferred); and the 150 other readers of the camera's angles
-(`func_80234858`) and eye (`func_802346C8`, 202 calls, mostly overlays),
-which the hash would show only once they reach a player or the random
-generator. The C-buttons (`func_80235934`) read pad 0, which in a session is
-the host's: the host turns both cameras, the client none (#33).
+With the angles fixed nothing else was tried there; cameras that turn are
+#33, below.
+
+### Cameras that turn (#33)
+
+The camera turns by the C-buttons in room 0x29 too: C-left turns the yaw
+from 90 to 45, C-right from 90 to 135, C-down and C-up set the distance
+(2400, 2000; run alone, 2026-10-18). The C-button control `func_80235934`
+asks `func_802399AC(0)` for pad 0's new presses and, for the buttons the
+camera's mode bits (`D_8008F428` & 0xF) allow, starts a turn or zoom
+process. In a session pad 0 is the host's, so before #33 the host's C-right
+turned both cameras and the client's C-left none (`session-camera-turn`,
+red: `client: camera turned yaw = 45 (yaw=90)`, `client: camera hostturn
+yaw = 45 (yaw=135)`).
+
+Two changes, each needed:
+
+- **The C-buttons are the machine's own.** A hook in `func_80235934` (at
+  0x80235978, after a0 is set) asks for pad 1, player 2's, when this
+  machine's camera follows slot 4 (`coop_camera_pad`, `src/coop/harness.cpp`):
+  the client of a live session, or `BM64_COOP_CAMERA=4`. Pad 1 in a session
+  is the client's pad as agreed in the lockstep, so the client's camera
+  turns 2 frames after the press, like its player moves. With this alone the
+  two yaws differed and the games desynced as soon as player 2 walked
+  (`coop: session desync frame=458`, 214 of 672 frames differ): the player
+  update turns the stick by the camera's yaw (`func_8024E088` calls
+  `func_80234858` at 0x8024E880 for the yaw and pitch at sp+0x9C and
+  sp+0xA0; the pitch flips the stick between 180 and 360), so each machine
+  moved player 2 by its own camera.
+- **Each player's stick is turned by its own machine's camera, on both
+  machines.** Each frame message carries the sender's camera yaw and pitch
+  (their float bits, protocol 3) with the pad they go with, sampled at the
+  same end of frame. A hook in the player update after that call
+  (0x8024E888, s0 is the slot) puts in, in a live session, the angles sent
+  with the pad that drives the slot (`coop_session_view`,
+  `src/coop/session.cpp`): the host's for player 1 in slot 0, the client's
+  for player 2 in slot 4. Both machines then move both players the same way,
+  each by the camera its own player sees.
+
+Run (`session-camera-turn`, Europe, 2026-10-18): the client's C-left turns
+only its camera (45; the host's stays 90), player 2 then walks by the
+client's stick right, +180 x and −180 z (at 90 it is −z only) in both games;
+the host's C-right turns only its camera (135; the client's stays 45),
+player 1 walks −180 x and −180 z in both; all 672 hashed frames are the
+same, no desync. `session-camera` and `session-lockstep` pass unchanged.
+
+Not covered:
+
+- The other readers of the camera's angles (`func_80234858`, about 150
+  calls, mostly in overlays) and of its eye (`func_802346C8`, 202 calls)
+  were not traced; on each machine they now read that machine's camera. The
+  state hash shows a difference there only once it reaches a player or the
+  random generator.
+- The camera process also copies the followed actor's facing into
+  `D_8008FFF8[0]` after `D_80090004` frames (`func_80235D7C`); read, that is
+  an offset of the point it looks at (`func_8022FEAC`), not the yaw. In
+  room 0x29 the yaw stayed 90 while the players walked in four directions
+  (`session-camera`). Rooms whose camera turns by itself were not looked
+  for; the stick there would follow each machine's camera like the C-button
+  turns do.
+- The camera's distance (C-up, C-down) goes nowhere near the update; it is
+  not sent.
 
 ### Hosting and joining (#28)
 
@@ -921,8 +975,8 @@ lockstep's 10 s wait; not seen in the runs).
 - (#29) Two machines, the internet (the host's port must be reachable: a forwarded
   port, no NAT traversal), Windows and macOS: not run. The Winsock branch of
   `session.cpp` was not compiled.
-- (#33) The camera in a room whose camera turns, and the client's
-  own C-buttons (*The camera*).
+- (#33) The other readers of the camera's angles and eye (*Cameras that
+  turn*).
 - A fixed delay: a slow or lost message stalls both games, with no rollback.
 
 ## Open questions for a running build
@@ -935,8 +989,10 @@ lockstep's 10 s wait; not seen in the runs).
    path's angle before the camera's yaw, an elevation and a length, read by
    the update in the same frame; see *Player 2 in a story room*.)
 4. Does the camera feed anything back into the simulation? (#27: not in room
-   0x29, where its angles stay fixed, in one session of 589 frames; rooms
-   whose camera turns not tried; see *The camera*.)
+   0x29 with its angles fixed, 589 frames; #33: its yaw and pitch turn the
+   stick in the player update, now each player's own machine's on both
+   machines, 672 frames the same with the cameras turned apart; the other
+   readers not traced; see *The camera*.)
 5. Who sets the actor hit bits; do enemies and bosses hit slot 4 like slot 0?
    (Spike: bomb blasts, its own and player 1's, hit slot 4; enemies and
    bosses not tried.)

@@ -4,7 +4,9 @@
 // once per frame; on both, the game reads the host's as pad 0 (player 1) and
 // the client's as pad 1 (player 2 in slot 4, patches/coop_player2.c). Both
 // seed the game's random generator with the host's seed, and both compare a
-// hash of their state every frame (patches/coop_session.c).
+// hash of their state every frame (patches/coop_session.c). With its pad each
+// sends its camera's yaw and pitch, which turn that player's stick on both
+// machines (#33, coop_session_view).
 //
 //   BM64_COOP_SESSION=host:<port>         wait for the client on TCP <port>
 //   BM64_COOP_SESSION=join:<host>:<port>  connect to the host
@@ -36,9 +38,10 @@
 //          copy of it (saves/coop-session/<game id>.bin), so both games read
 //          and write the same save data and the client's own file is never
 //          written (docs/coop/design.md, section 11)
-//   frame  u32 frame, u16 buttons, u16 0, f32 x, f32 y (the bits the game
-//          will read), u32 hash frame, u32 hash (of the state after that
-//          frame)
+//   frame  u32 frame, u16 buttons, u16 flags (1: the camera's angles are
+//          set), f32 x, f32 y (the bits the game will read), u32 hash frame,
+//          u32 hash (of the state after that frame), f32 yaw, f32 pitch (the
+//          sender's camera, in degrees, when it sent the pad)
 //
 // Game frames are numbered from 0, the one of the game's first pad read. The
 // per-frame hook at the end of frame f (bm64.us.toml) is the lockstep's step:
@@ -100,11 +103,11 @@ extern "C" const size_t mm_patches_bin_size;
 
 namespace {
 
-constexpr uint16_t protocol = 2;
+constexpr uint16_t protocol = 3;
 constexpr uint32_t no_frame = 0xFFFFFFFF;
 constexpr size_t hello_head = 8; // "COOP", protocol, role, game: the same in every protocol
 constexpr size_t hello_size = 20;
-constexpr size_t frame_size = 24;
+constexpr size_t frame_size = 32;
 constexpr auto peer_timeout = std::chrono::seconds(10);
 
 #ifdef BM64_VERSION_EU
@@ -123,6 +126,9 @@ struct Pad {
     uint16_t buttons = 0;
     float x = 0.0f;
     float y = 0.0f;
+    bool view = false; // the sender's camera angles are set (none below the delay)
+    uint32_t yaw = 0;  // their bits, as the game will read them
+    uint32_t pitch = 0;
 };
 
 struct Config {
@@ -385,7 +391,8 @@ socket_t connect_host(const Config& config) {
 void receive_frames(socket_t sock) {
     uint8_t msg[frame_size];
     while (recv_all(sock, msg, sizeof(msg))) {
-        Pad pad{get16(msg + 4), bits_float(get32(msg + 8)), bits_float(get32(msg + 12))};
+        Pad pad{get16(msg + 4), bits_float(get32(msg + 8)), bits_float(get32(msg + 12)), (get16(msg + 6) & 1) != 0,
+                get32(msg + 24), get32(msg + 28)};
         std::lock_guard lock{session.mutex};
         session.peer[get32(msg)] = pad;
         if (get32(msg + 16) != no_frame) {
@@ -626,9 +633,10 @@ void compare_hashes(Session& s) {
 }
 
 // One frame of the lockstep, from the per-frame hook at the end of frame
-// s.frame: this machine's hash of it, its pad for frame s.frame + delay, and
-// both pads of the next frame (the other's waited for).
-void step(Session& s, uint32_t hash) {
+// s.frame: this machine's hash of it, its pad and its camera's yaw and pitch
+// for frame s.frame + delay, and both pads of the next frame (the other's
+// waited for).
+void step(Session& s, uint32_t hash, uint32_t yaw, uint32_t pitch) {
     s.hash_frame = s.frame;
     s.hash = hash;
     s.hashes[s.frame] = hash;
@@ -636,15 +644,21 @@ void step(Session& s, uint32_t hash) {
     if (!s.local(0, &mine.buttons, &mine.x, &mine.y)) {
         mine = Pad{};
     }
+    mine.view = true;
+    mine.yaw = yaw;
+    mine.pitch = pitch;
     uint32_t target = s.frame + s.config.delay;
     s.own[target] = mine;
     uint8_t msg[frame_size] = {};
     put32(msg, target);
     put16(msg + 4, mine.buttons);
+    put16(msg + 6, 1);
     put32(msg + 8, float_bits(mine.x));
     put32(msg + 12, float_bits(mine.y));
     put32(msg + 16, s.hash_frame);
     put32(msg + 20, s.hash);
+    put32(msg + 24, mine.yaw);
+    put32(msg + 28, mine.pitch);
     if (!send_all(s.sock, msg, sizeof(msg))) {
         lose(s, "send failed");
         return;
@@ -800,18 +814,38 @@ extern "C" uint32_t coop_session_hashing(void) {
     return coop::session_configured() || config().log_hash > 0;
 }
 
+// Hook in the player update func_8024E088 (bm64.us.toml), where it has read
+// the camera's yaw and pitch to turn the stick by (#33): in a live session,
+// the angles of the camera of the machine whose pad drives the player in
+// `slot` (the host's for slot 0, the client's for player 2 in slot 4), as
+// sent with the pad for this frame. False otherwise: the game's own camera.
+extern "C" int32_t coop_session_view(int32_t slot, uint32_t* yaw, uint32_t* pitch) {
+    const Session& s = session;
+    if (!s.live || (slot != 0 && slot != 4)) {
+        return 0;
+    }
+    const Pad& pad = s.pads[slot == 0 ? 0 : 1];
+    if (!pad.view) {
+        return 0;
+    }
+    *yaw = pad.yaw;
+    *pitch = pad.pitch;
+    return 1;
+}
+
 // From the per-frame hook, at the end of each game frame: the hash of the
-// state after it (patches/coop_session.c) and, in a session, the lockstep's
-// step to the next frame. Frames count from the one of the game's first pad
-// read. (Upstream's main loop reads the pads twice a frame, once for its
-// cheats, so the step is here rather than at a pad read.)
-extern "C" void coop_session_frame(uint32_t hash) {
+// state after it (patches/coop_session.c), the camera's yaw and pitch (their
+// bits) and, in a session, the lockstep's step to the next frame. Frames
+// count from the one of the game's first pad read. (Upstream's main loop
+// reads the pads twice a frame, once for its cheats, so the step is here
+// rather than at a pad read.)
+extern "C" void coop_session_frame(uint32_t hash, uint32_t yaw, uint32_t pitch) {
     Session& s = session;
     uint32_t frame = hashed_frames++;
     if (config().log_hash > 0 && frame % config().log_hash == 0) {
         std::fprintf(stderr, "coop: hash frame=%u hash=%08X\n", frame, hash);
     }
     if (s.live) {
-        step(s, hash);
+        step(s, hash, yaw, pitch);
     }
 }

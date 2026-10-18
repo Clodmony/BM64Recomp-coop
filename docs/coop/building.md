@@ -288,7 +288,8 @@ Everything is off unless a switch asks for it:
   otherwise; `-1` is always the game's choice. Without it, a live session's
   client follows player 2 in slot 4, any other game the game's choice
   ([design.md](design.md), *The camera*). Each change logs `coop: camera
-  follows slot=…` (`patches/coop_camera.c`).
+  follows slot=…` (`patches/coop_camera.c`). A camera that follows slot 4
+  takes its C-buttons from pad 1, player 2's (#33).
 
 Patches print with `recomp_printf` (stdout), the host with stderr; with any
 of these switches stdout is line-buffered, so both stay in order in
@@ -317,7 +318,8 @@ REGEX2 after the first match of REGEX1), `not-after REGEX1 REGEX2` (none),
 `delta P1 P2 SLOT AXIS OP VALUE` (the move along one axis), `near PROBE A B
 MAX [MIN]` (two slots' distance at one probe; a tile is 100 units),
 `nearer PROBE camera A B` (the point the camera looks at is nearer slot A
-than slot B along the floor), `field
+than slot B along the floor), `camera PROBE NAME OP VALUE` (the camera's
+`yaw`, `pitch` in degrees or its `distance` at PROBE), `field
 PROBE SLOT NAME OP VALUE`, `file PATH` and `no-file PATH` (a file the run
 left, a glob relative to its run folder: `saves/bm64_*.bin`). The output is
 one line per check, `N/M checks passed`

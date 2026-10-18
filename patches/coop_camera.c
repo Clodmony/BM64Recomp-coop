@@ -23,3 +23,10 @@ s32 coop_camera_target(s32 s, s32 wanted) {
     }
     return slot;
 }
+
+// From the per-frame hook: where the camera's yaw and pitch are (D_8008F3F8,
+// degrees), which a session sends with this machine's pad (#33; the player
+// update turns each player's stick by its own machine's).
+f32* coop_camera_angles(void) {
+    return D_8008F3F8;
+}
