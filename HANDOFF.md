@@ -6,7 +6,7 @@ repository so it survives any worktree path and any tool; per-checkout agent
 memory is not read by a session that starts in another worktree. State goes
 here; stable recipes go into `docs/coop/`; personal data and hardware never.
 
-Last updated 2026-10-18 (#36 done: draft PR #37 open, not merged).
+Last updated 2026-10-18 (state review; #37 merged; #28 next).
 
 ## Repository state
 
@@ -16,21 +16,18 @@ Last updated 2026-10-18 (#36 done: draft PR #37 open, not merged).
 - Merged into `bm64recomp-coop`: #1 (workflow setup), #5 (story-mode
   audit), and on 2026-10-18 the chain #12 (Europe build), #15 (harness,
   player 2 spike), #20 (group #19), #25 (session core), #30 (host's save,
-  build check), #34 (camera), #35 (#32, the knocked-out heart). Their
-  branches are deleted. Open: `coop/36-heart-catch` (PR #37).
+  build check), #34 (camera), #35 (#32, the knocked-out heart), #37 (#36,
+  heart items). Their branches are deleted. No open pull requests.
 - Open issues: #14 and #16 (leftover checks, owner), #19 (their group),
   #11 (Europe follow-ups), #22–#24 (follow-ups of #19), #28, #29 (session
   follow-ups), #31 (scripted pads on the title), #33 (cameras that turn,
-  the client's C-buttons), #36 (who may catch a knocked-out heart; PR #37
-  closes it).
+  the client's C-buttons).
 - Local git config of the clone: Claude identity, `upstream` with push
   `DISABLED`, `core.hooksPath .githooks`, `pushguard.romDir` set.
 
 ## Open pull requests
 
-- **#37** (draft, closes #36): `coop/36-heart-catch` → `bm64recomp-coop`.
-  Verify, Europe `--full --scenarios`: 8/8 stages, 218/218 checks. US not
-  run (CI compiles it without a ROM). Needs the owner's review and merge.
+- None. #37 (closes #36) was merged on GitHub by the owner on 2026-10-18.
 
 ## Owner decisions (2026-10-18)
 
@@ -64,6 +61,19 @@ Last updated 2026-10-18 (#36 done: draft PR #37 open, not merged).
 - End of #36: PR #37 review first, merge later when the owner says so; the
   rule covers every heart item (the stage's too), kept; the one-actor
   collision case stays a note, no issue; old run folders deleted.
+
+## Owner decisions, state review (2026-10-18)
+
+- Asked whether a first session with a player 2 can be played. Answer given:
+  only as a test setup (environment switches, one machine, scripted pads,
+  Green Garden stage 1, Europe; never played by hand, never on two
+  machines). Known gaps: no menu (#28), two machines untested (#29), the
+  client's C-buttons (#33), player 2 appears at player 1's first step,
+  player 1 downed (#22), no player 2 heart display, no local second
+  controller (pad 1 is not mapped to a physical controller).
+- **#28 next** (host or join from the launcher), chosen over a separate
+  playtest issue, #29 and #33.
+- `coop/36-heart-catch` deleted, and this workspace's build folders.
 
 ## What #36 found and did (details: design.md, *The knocked-out heart*)
 
@@ -136,13 +146,16 @@ Last updated 2026-10-18 (#36 done: draft PR #37 open, not merged).
 
 ## Next candidates
 
-1. **Merge #37** when the owner says so.
-2. **Session follow-ups**: #33 (cameras that turn and the client's
+1. **#28** (owner's choice, next): host or join from the launcher. First:
+   `src/ui/ui_launcher.cpp`'s Start path and `coop::autostart`
+   (`BM64_COOP_AUTOSTART`), and how `src/coop/session.cpp` reads
+   `BM64_COOP_SESSION` today (the menu must set the same before the first
+   pad read). Then a hand-played run is possible without switches.
+2. **Other session follow-ups**: #33 (cameras that turn and the client's
    C-buttons; first: find a story room with a turning camera, run
-   session-camera's moves there with same-hashes), #28 (host or join from the
-   launcher; first: ui_launcher.cpp's Start path and coop::autostart), #29
+   session-camera's moves there with same-hashes), #29
    (two machines, Windows/macOS; also whether two compilers give the same
-   build identity).
+   build identity; whether two games on one machine read the same gamepad).
 3. **Rest of #14 and #16** (kept open, owner): a story teleport
    (`func_802512C0` from a room script; find one with `xref/callers.tsv`
    beyond Green Garden stage 1) and a scene with player 2 already in the
@@ -196,8 +209,7 @@ Under `~/dev-scratch/BM64Recomp-coop/`:
 
 ## Cleanup the owner may approve
 
-- The Superset workspace this session ran in (on `coop/36-heart-catch`
-  until #37 is merged) and its build folders
-  `build/prepare-project-according-a3ceb80a{,-eu}/` in scratch.
+- The Superset workspace `prepare-project-according-a3ceb80a` (its branch
+  and build folders are gone; remove it in Superset).
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/` in scratch:
   when the player 2 follow-ups are done.
