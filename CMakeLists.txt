@@ -165,6 +165,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/debug.cpp
     ${CMAKE_SOURCE_DIR}/src/coop/debug.cpp # coop: debug output for unattended runs
     ${CMAKE_SOURCE_DIR}/src/coop/harness.cpp # coop: test harness (scripted pads, warp, probes)
+    ${CMAKE_SOURCE_DIR}/src/coop/session.cpp # coop: the session core of online co-op
     ${CMAKE_SOURCE_DIR}/src/game/quicksaving.cpp
     ${CMAKE_SOURCE_DIR}/src/game/recomp_api.cpp
     ${CMAKE_SOURCE_DIR}/src/game/recomp_actor_api.cpp
@@ -301,7 +302,7 @@ if (WIN32)
     )
 
     target_sources(BM64Recompiled PRIVATE ${CMAKE_SOURCE_DIR}/icons/app.rc)
-    target_link_libraries(BM64Recompiled PRIVATE SDL2 Winmm.lib)
+    target_link_libraries(BM64Recompiled PRIVATE SDL2 Winmm.lib ws2_32.lib) # coop: ws2_32 for the session core
 endif()
 
 if (APPLE)

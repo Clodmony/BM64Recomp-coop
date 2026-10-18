@@ -4,7 +4,7 @@
 #
 #   tools/run.sh [--version us|eu] [--until-overlay ID] [--timeout SECONDS]
 #                [--exe PATH] [--rom PATH] [--env NAME=VALUE]... [--audio]
-#                [--input FILE] [--until-log TEXT]
+#                [--input FILE] [--until-log TEXT] [--name NAME]
 #
 #   --version        us or eu (default: us if its build exists, else eu)
 #   --until-overlay  stop with success once the game loads overlay ID (e.g.
@@ -21,8 +21,10 @@
 #                    the run folder; format in src/coop/harness.cpp)
 #   --until-log      stop with success once a line of the game's log starts
 #                    with TEXT (e.g. "coop: input end", the script's end)
+#   --name           appended to the run folder's name (two runs started in
+#                    the same second, e.g. a session's host and client)
 #
-# The run folder ~/dev-scratch/BM64Recomp-coop/runs/<stamp>-<version>/ holds
+# The run folder ~/dev-scratch/BM64Recomp-coop/runs/<stamp>-<version>[-<name>]/ holds
 # everything the run writes: portable.txt (so saves and config stay in it), the
 # stored ROM <game_id>.z64 the launcher would have written, assets/ and the
 # controller database (links into the checkout), game.log (the game's stdout
@@ -48,6 +50,7 @@ rom=
 audio=0
 input=
 until_log=
+name=
 envs=()
 while (( $# )); do
 	case "$1" in
@@ -60,6 +63,7 @@ while (( $# )); do
 		--audio) audio=1 ;;
 		--input) input="${2:-}"; shift ;;
 		--until-log) until_log="${2:-}"; shift ;;
+		--name) name="${2:-}"; shift ;;
 		-h|--help) sed -n '2,39p' "$0"; exit 0 ;;
 		*) echo "unknown option: $1" >&2; exit 4 ;;
 	esac
@@ -81,7 +85,7 @@ if [ -n "$overlay" ]; then
 	overlay="$(printf '0x%02X' "$((overlay))")" || { echo "bad overlay ID" >&2; exit 4; }
 fi
 
-run="$scratch/runs/$(date +%Y%m%d-%H%M%S)-$version"
+run="$scratch/runs/$(date +%Y%m%d-%H%M%S)-$version${name:+-$name}"
 mkdir -p "$run"
 touch "$run/portable.txt"
 ln -s "$root/assets" "$run/assets"

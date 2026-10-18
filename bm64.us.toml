@@ -577,7 +577,9 @@ text = """
 # The same hook runs the test harness (src/coop/harness.cpp): the input script,
 # and the warp, probes and tile steps it asks for, which run in
 # patches/coop_harness.c on a copy of the registers with the stack pointer
-# moved down. A copy must point its odd float registers (f_odd) at itself, as
+# moved down. Last, in an online session (or with BM64_COOP_LOG_HASH), the
+# hash of the frame's state (patches/coop_session.c) and the session's
+# lockstep step to the next frame (src/coop/session.cpp). A copy must point its odd float registers (f_odd) at itself, as
 # librecomp's load_context does: copied as is, they stay the original's, and
 # double arithmetic in game functions called on the copy goes wrong (#13).
 [[patches.hook]]
@@ -590,6 +592,9 @@ text = """
     void coop_warp(uint8_t* rdram, recomp_context* ctx);
     void coop_probe(uint8_t* rdram, recomp_context* ctx);
     void coop_harness_tile(uint8_t* rdram, recomp_context* ctx);
+    extern uint32_t coop_session_hashing(void);
+    extern void coop_session_frame(uint32_t hash);
+    void coop_state_hash(uint8_t* rdram, recomp_context* ctx);
     int32_t args[5];
     uint32_t requests;
     coop_log_frame(rdram);
@@ -617,6 +622,26 @@ text = """
         c.r6 = (int64_t)args[4];
         coop_harness_tile(rdram, &c);
     }
+    if (coop_session_hashing()) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        coop_state_hash(rdram, &c);
+        coop_session_frame((uint32_t)c.r2);
+    }
+}
+"""
+
+# coop: the seed of the game's random generator (a0, the clock at boot) is the
+# online session's, so that both machines draw the same numbers, or
+# BM64_COOP_SEED's (src/coop/session.cpp, #21).
+[[patches.hook]]
+func = "g_initRandom"
+before_vram = 0x8025E6A4
+text = """
+{
+    extern uint32_t coop_session_seed(uint32_t seed);
+    ctx->r4 = (int64_t)(int32_t)coop_session_seed((uint32_t)ctx->r4);
 }
 """
 

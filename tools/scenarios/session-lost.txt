@@ -1,0 +1,27 @@
+# The end of an online session (#21, docs/coop/design.md, *The session
+# core*): the client's game stops early (its script ends and the run stops
+# it, within 5 s). The host notices the closed connection, logs it and plays
+# on alone with its own pad as before.
+#session
+#env BM64_COOP_WARP=0x29:0x13
+#
+#check log ^coop: session lockstep from frame 0$
+#check log "^coop: session lost frame=\d+: (the other side closed|send failed); playing alone$"
+#check after "^coop: session lost" "^coop: input: alone$"
+# after the session the host's pad still moves player 1 (its step down, +x)
+#check delta alone moved 0 x > 50
+#check no-log ^coop: session desync
+#
+#client overlay 0x29
+#client wait 200
+#client end
+overlay 0x29
+wait 800
+log alone
+probe alone
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+wait 10
+probe moved
+end

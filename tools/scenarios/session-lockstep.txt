@@ -1,0 +1,61 @@
+# An online session on one machine (#21, docs/coop/design.md, *The session
+# core*): a host and a client in lockstep. The host's pad moves player 1, the
+# client's pad moves player 2 (slot 4) in both games, and both games hash the
+# same state on every frame. Green Garden stage 1, room 0x29, as p2-slot4.
+#session
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_LOG_HASH=1
+#
+# connected, one seed (the host's) for both, lockstep from the first pad read
+#check log ^coop: session host: connected, seed=0x[0-9A-F]{8} delay=2$
+#check-client log ^coop: session client: connected, seed=0x[0-9A-F]{8} delay=2$
+#check log ^coop: seed 0x
+#check-client log ^coop: seed 0x
+#check log ^coop: session lockstep from frame 0$
+#check-client log ^coop: session lockstep from frame 0$
+#check no-log ^coop: session (desync|lost|refused)
+#check-client no-log ^coop: session (desync|lost|refused)
+#check same-hashes
+# player 2 in slot 4 without BM64_COOP_P2, joined at player 1's first step
+#check log ^coop: stage init overlay=0x29 slot=4 controlType=2
+#check field start 4 controlType = 2
+#check-client field start 4 controlType = 2
+# the host's pad moves player 1 (its step down, +x), in both games
+#check delta walked start 0 x > 50
+#check-client delta walked start 0 x > 50
+# the client's pad moves player 2 and not player 1, in both games
+#check moved start p2-1 4
+#check still start p2-1 0
+#check-client moved start p2-1 4
+#check-client still start p2-1 0
+#check delta start p2-1 4 z < -80
+#check-client delta start p2-1 4 z < -80
+#
+# The client's script: the same frames, its pad 0 is player 2's.
+#client overlay 0x29
+#client wait 300
+#client probe walked
+#client wait 15
+#client wait 10
+#client probe start
+#client pad 0 - 1 0.05
+#client wait 15
+#client pad 0 -
+#client wait 10
+#client probe p2-1
+#client wait 30
+#client end
+overlay 0x29
+wait 300
+probe walked
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+wait 10
+probe start
+wait 15
+wait 10
+probe p2-1
+wait 30
+end

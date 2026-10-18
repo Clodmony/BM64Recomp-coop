@@ -1,0 +1,23 @@
+# A client that finds no host (#21, docs/coop/design.md, *The session core*):
+# it tries for BM64_COOP_CONNECT_TIMEOUT seconds (nothing listens on the
+# discard port 9), then plays alone with its own pad, without player 2.
+#env BM64_COOP_SESSION=join:127.0.0.1:9
+#env BM64_COOP_CONNECT_TIMEOUT=2
+#env BM64_COOP_WARP=0x29:0x13
+#
+#check log "^coop: session client: connecting to 127.0.0.1 port 9$"
+#check log "^coop: session: no host within 2 s; playing alone$"
+#check no-log ^coop: session lockstep
+#check no-log ^coop: seed
+#check log ^coop: overlay 0x29$
+# its own pad moves player 1 (its step down, +x)
+#check delta walked moved 0 x > 50
+overlay 0x29
+wait 300
+probe walked
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+wait 10
+probe moved
+end

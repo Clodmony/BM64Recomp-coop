@@ -4,6 +4,7 @@
 #include "recomp_input.h"
 #include "ultramodern/ultramodern.hpp"
 #include "../coop/harness.h" // coop: scripted pads for unattended runs
+#include "../coop/session.h" // coop: the pads of an online session
 
 // Arrays that hold the mappings for every input for keyboard and controller respectively.
 using input_mapping = std::array<recomp::InputField, recomp::bindings_per_input>;
@@ -76,7 +77,20 @@ void recomp::set_input_binding(recomp::GameInput input, size_t binding_index, re
     }
 }
 
+namespace recomp {
+    static bool get_local_n64_input(int controller_num, uint16_t* buttons_out, float* x_out, float* y_out);
+}
+
 bool recomp::get_n64_input(int controller_num, uint16_t* buttons_out, float* x_out, float* y_out) {
+    // coop: in an online session both machines read the same pads (src/coop/session.cpp)
+    if (auto connected = coop::session_input(controller_num, buttons_out, x_out, y_out, get_local_n64_input)) {
+        return *connected;
+    }
+    return get_local_n64_input(controller_num, buttons_out, x_out, y_out);
+}
+
+// coop: this machine's pads, the body of get_n64_input before the session
+bool recomp::get_local_n64_input(int controller_num, uint16_t* buttons_out, float* x_out, float* y_out) {
     uint16_t cur_buttons = 0;
     float cur_x = 0.0f;
     float cur_y = 0.0f;

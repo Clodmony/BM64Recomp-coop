@@ -239,11 +239,10 @@ things are missing for slot 4 (read):
   2 as controlType 2 and filling record 4 from pad 1 each frame (one hook
   before `func_8024E088`) gives slot 4 input with no change to the update.
 
-The command record is also the natural input point for **online** co-op:
-each side sends the record of its human slot, so both machines feed the same
-values to the same update (inferred; the session-core issue decides it).
-Whether the stick vector is camera-relative (then the record must be filled
-after the camera of the player who owns it) is open.
+The command record looked like the natural input point for **online** co-op
+(each side sends the record of its human slot). The session core (#21) sends
+the pads instead, one step earlier, and both machines fill the record from
+pad 1 with the same code (*The session core*, below).
 
 *Approach:* player 2 in slot 4 as controlType 2, input through the command
 record, model case added. Cheap to moderate. Battle-only arrays sized 4 (the
@@ -669,6 +668,98 @@ where it fell; not looked at on screen).
 | `func_802457D8`, `func_802456FC`, `func_802455A8` (`RECOMP_PATCH`) | rectangle tests for S or player 2 |
 | `g_SpawnPlayer` at 0x80245BC0 | slot 4: model asset 0x4B |
 
+## The session core
+
+Issue #21, run on the **Europe** build (2026-10-18) with two games on one
+machine, a host and a client (`tools/scenarios/session-*.txt`; how they run:
+[building.md](building.md), *Session scenarios*). The code is
+`src/coop/session.cpp`, the state hash `patches/coop_session.c`.
+
+### Lockstep on the pads
+
+Both games run every frame on the same pads. Each machine sends its own pad
+0 once per frame: the buttons and the stick as the float values the game
+will read. In both games the host's pad is pad 0 (player 1) and the client's
+is pad 1, so player 2 in slot 4 gets its command record from pad 1 through
+the same code on both sides (`coop_feed_command`, #13). Pads 2 and 3 are not
+connected in a session.
+
+Pads, not the command record (the issue's proposal): the pads are the
+game's only input from a player, they are read once per frame, and they also
+drive the title, menus, dialogues and the pause, where there is no record.
+Player 2's record is computed from them on each machine, so sending the
+record as well would add nothing. Only pad 0, the host's, drives menus.
+
+The step sits in the **per-frame hook** at `func_8023A208` (the end of the
+main loop), not at a pad read: upstream's patched loop
+(`patches/required_patches.c`) reads the pads twice a frame, once for its
+cheats (`Recomp_ProcessCheats`) and once in `func_8023A104`; a lockstep at
+the read counted two steps a frame (seen in a run: 1100 reads in 550
+frames). Reads return the frame's agreed pads. At the end of frame f a
+machine sends its hash of frame f and its pad for frame f + delay, then
+waits for the other's pad for frame f + 1. The delay (default 2 frames, the
+host's choice) lets each wait be for a message sent a frame or more before;
+frames below it hold no buttons.
+
+The transport is TCP with Nagle off: the host listens (IPv6 and IPv4), the
+client connects, retrying until `BM64_COOP_CONNECT_TIMEOUT`. A hello carries
+the protocol version, the role, the game version (US and Europe are refused
+together), the host's seed and delay. The connection is made at the game's
+first pad read (`func_8023A22C`, before the loop), so both games start
+their frames together. The message formats are in `session.cpp`.
+
+### Determinism and the shared seed
+
+The main loop seeds the random generator with the clock:
+`g_initRandom(osGetTime())` (`func_80225840`, after the first pad read). A
+hook at `g_initRandom` puts the session's seed in (the host's, sent in the
+hello) or `BM64_COOP_SEED`'s. Runs of `p2-slot4` (player 2's bombs, its
+death and respawn) with a state hash logged every frame:
+
+| Runs | Same hashes |
+|---|---|
+| two runs, the clock's seed | none, they differ from frame 0 |
+| two runs, `BM64_COOP_SEED=12345` | all 1602 frames |
+| host and client of `session-lockstep` | all 448 frames |
+
+So on one machine the game is deterministic given the seed and the pads per
+frame: nothing else (the audio thread, the scheduler's timings, the 50 Hz
+pacing of the Europe build) reached the hashed state in these runs.
+
+The **state hash** (FNV-1a, `coop_state_hash`) covers the scene (overlay,
+flow flags, lives, S), the random generator's state, the five player records
+and command records, and the players' actor positions. Enemies, bombs and
+the room's tiles are not in it: a divergence there shows once it reaches a
+player or the random generator (inferred). Each machine sends its hash with
+its pad; a different hash for the same frame logs `coop: session desync`
+on both sides (once, then a count every 600 frames). In `session-desync` a
+tile step on the client alone moves player 1 there; both games log the
+desync for the same frame (366), and the session goes on.
+
+### Ending
+
+A peer that closes, or sends nothing for 10 s, ends the session (`coop:
+session lost`); the game then reads its own pads again and plays alone
+(`session-lost`). Player 2 stays in the room with no pad. A client that
+finds no host, or a host no client, within the timeout plays alone without
+player 2 (`session-alone`). Something on the port that never sends a hello
+gives up after the same timeout (tried once by hand).
+
+### Not done
+
+- Two machines, the internet (the host's port must be reachable: a forwarded
+  port, no NAT traversal), Windows and macOS: not run. The Winsock branch of
+  `session.cpp` was not compiled.
+- The same build on both sides is not checked: the hello compares the
+  protocol and the game version only; another build shows as a desync.
+- The save: both games must start from the same save data. In the scenarios
+  both have none (fresh run folders); the client should take the host's
+  save at the hello and not write its own (section 11).
+- The camera follows player 1 on both machines, so the client sees player
+  1's view (section 5).
+- Starting a session takes environment switches; there is no menu for it.
+- A fixed delay: a slow or lost message stalls both games, with no rollback.
+
 ## Open questions for a running build
 
 1. Every address on this page, the 0x10 bss shift in particular, on US.
@@ -678,7 +769,8 @@ where it fell; not looked at on screen).
 3. What does the command record hold, and in which frame? (#13: the pad
    path's angle before the camera's yaw, an elevation and a length, read by
    the update in the same frame; see *Player 2 in a story room*.)
-4. Does the camera feed anything back into the simulation?
+4. Does the camera feed anything back into the simulation? (Not yet asked by
+   a run: in every session so far both cameras followed player 1.)
 5. Who sets the actor hit bits; do enemies and bosses hit slot 4 like slot 0?
    (Spike: bomb blasts, its own and player 1's, hit slot 4; enemies and
    bosses not tried.)
