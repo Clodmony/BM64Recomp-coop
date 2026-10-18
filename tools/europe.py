@@ -5,7 +5,8 @@ usage:
   python3 -I tools/europe.py configs
       Writes the Europe configs into the checkout root (all gitignored), each
       derived from its US counterpart so upstream changes carry over:
-        bm64.eu.toml      bm64.us.toml reading bm64.decomp.eu.z64 and dump.eu.toml
+        bm64.eu.toml      bm64.us.toml reading bm64.decomp.eu.z64 and dump.eu.toml,
+                          plus PAL_HOOK
         aspMain.eu.toml   aspMain.toml reading bm64.decomp.eu.z64
         patches.eu.toml   patches.toml resolving symbols in the two files below
         dump.eu.toml      BM64Syms/dump.toml with Europe function bounds (FUNC_FIXES)
@@ -19,7 +20,8 @@ usage:
                  original references them; one the original lacks, where
                  Europe differs, must be made by another Europe function
                  (needs the built patches.elf)
-        sites    every [[patches.instruction]] site holds the expected kind of word
+        sites    every [[patches.instruction]] site holds the expected kind of
+                 word, and the PAL hook site the expected code
       Prints one line per check and a RESULT line; exit 0 only if all pass.
 
 Why: the Europe code has the US layout (the same functions at the same
@@ -80,6 +82,28 @@ NO_JR_RA = {
     "send_mesg", "handle_CpU", "__osEnqueueAndYield", "__osDispatchThread", "_bcopy",
     "exec_zerojmp_func",
 }
+
+
+# PAL pacing (src/coop/debug.cpp, coop_pal_skip_retrace): in the scheduler
+# loop, after osRecvMesg and `lw $a0, 0x94($sp)` loaded the message and before
+# it is compared with VIDEO_MSG, a dropped retrace becomes message 0, which the
+# loop ignores. PAL_SITE holds the Europe words there, checked by `check`.
+PAL_HOOK = """
+# Added by tools/europe.py: PAL pacing, 50 of the runtime's 60 retraces a
+# second reach the game (src/coop/debug.cpp, coop_pal_skip_retrace).
+[[patches.hook]]
+func = "__scMain"
+before_vram = 0x80001078
+text = \"\"\"
+{
+    extern int coop_pal_skip_retrace(uint32_t msg);
+    if (coop_pal_skip_retrace((uint32_t)ctx->r4)) {
+        ctx->r4 = 0;
+    }
+}
+\"\"\"
+"""
+PAL_SITE = {0x80001074: 0x8FA40094, 0x80001078: 0x2401029A, 0x8000107C: 0x10810009}
 
 
 def to_eu(addr):
@@ -156,7 +180,7 @@ def configs():
     files = {
         "bm64.eu.toml": HEADER.format(src="bm64.us.toml") + replace_once(
             replace_once(read("bm64.us.toml"), us_rom, eu_rom, "bm64.us.toml"),
-            '"BM64Syms/dump.toml"', '"dump.eu.toml"', "bm64.us.toml"),
+            '"BM64Syms/dump.toml"', '"dump.eu.toml"', "bm64.us.toml") + PAL_HOOK,
         "aspMain.eu.toml": HEADER.format(src="aspMain.toml")
             + replace_once(read("aspMain.toml"), us_rom, eu_rom, "aspMain.toml"),
         "patches.eu.toml": HEADER.format(src="patches.toml") + replace_once(
@@ -385,7 +409,11 @@ def check(image, elf):
         n += 1
         if not ok:
             bad.append(f"{p['func']} {p['vram']:#x}: {w:08x}")
-    report("sites", not bad, f"{n} instruction patch sites" if not bad else "; ".join(bad[:5]))
+    rom, base = where["__scMain"]
+    for va, expected in PAL_SITE.items():
+        if word(rom, base, va) != expected:
+            bad.append(f"PAL hook site {va:#x}: {word(rom, base, va):08x}, expected {expected:08x}")
+    report("sites", not bad, f"{n} instruction patch sites and the PAL hook site" if not bad else "; ".join(bad[:5]))
 
     passed = sum(results)
     print(f"{passed}/{len(results)} checks passed")

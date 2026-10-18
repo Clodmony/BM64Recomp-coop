@@ -572,6 +572,18 @@ text = """
 }
 """
 
+# coop: count game frames (the main loop calls this once per frame) for speed
+# measurements (src/coop/debug.cpp; only with BM64_COOP_LOG_FRAMES=N).
+[[patches.hook]]
+func = "func_8023A208"
+before_vram = 0x8023A208
+text = """
+{
+    extern void coop_log_frame(uint8_t* rdram);
+    coop_log_frame(rdram);
+}
+"""
+
 # When osAiGetLength returns a number that exceeds the target amount of samples per frame, the calculation (target samples per frame - osAiGetLength()) will result in a negative number.
 # When the clamping takes place to prevent a number of bytes that is too small, it doesn't take into account the negative number that resulted from the calculation.
 # Not doing this results in a negative number being given to osAiSetNextBuffer causing a massive memory leak and crash (because a signed negative number is being read as unsigned).
