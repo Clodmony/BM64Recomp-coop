@@ -40,3 +40,17 @@ set(BM64_PATCHES_STAMP ${CMAKE_SOURCE_DIR}/RecompiledPatches/version_${BM64_VERS
 set(BM64_PATCHES_STAMPS
     ${CMAKE_SOURCE_DIR}/RecompiledPatches/version_us.stamp
     ${CMAKE_SOURCE_DIR}/RecompiledPatches/version_eu.stamp)
+
+# The build identity an online session's hello compares (src/coop/session.cpp,
+# #26) covers the hooks through the recompiler config of the game, hashed here
+# (configuring again when it changes); the patches' binary is hashed at run time.
+set(BM64_ROM_TOML ${CMAKE_SOURCE_DIR}/bm64.${BM64_VERSION}.toml)
+set(BM64_COOP_HOOKS_ID 0)
+if(EXISTS ${BM64_ROM_TOML})
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${BM64_ROM_TOML})
+    file(SHA256 ${BM64_ROM_TOML} BM64_ROM_TOML_SHA256)
+    string(SUBSTRING ${BM64_ROM_TOML_SHA256} 0 8 BM64_COOP_HOOKS_ID)
+    set(BM64_COOP_HOOKS_ID 0x${BM64_COOP_HOOKS_ID})
+endif()
+set_property(SOURCE ${CMAKE_SOURCE_DIR}/src/coop/session.cpp APPEND PROPERTY
+    COMPILE_DEFINITIONS BM64_COOP_HOOKS_ID=${BM64_COOP_HOOKS_ID})

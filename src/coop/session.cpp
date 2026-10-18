@@ -14,14 +14,23 @@
 //                                         runs on the same script then match)
 //   BM64_COOP_LOG_HASH=<n>                log the state hash every n frames
 //   BM64_COOP_CONNECT_TIMEOUT=<s>         wait this long for the other (60)
+//   BM64_COOP_BUILD_ID=<n>                claim build identity n (a test of
+//                                         the hello's build check)
 //
 // The connection is made at the game's first pad read (before the random
 // generator is seeded), so both machines start the game together. The frame
 // protocol, over TCP with Nagle off, little-endian:
 //
 //   hello  "COOP", u16 protocol, u8 role (0 host, 1 client), u8 game (0 US,
-//          1 Europe), u32 seed, u16 delay, u16 0; the client takes the host's
-//          seed and delay, and either side refuses another protocol or game
+//          1 Europe), u32 seed, u16 delay, u16 0, u32 build; the client takes
+//          the host's seed and delay, and either side refuses another
+//          protocol, game or build (the first 8 bytes stay the same in every
+//          protocol version, so an older peer is refused, not misread)
+//   save   from the host after the hellos: u32 size, then its save file as
+//          the game will read it (zeros without one). The client plays on a
+//          copy of it (saves/coop-session/<game id>.bin), so both games read
+//          and write the same save data and the client's own file is never
+//          written (docs/coop/design.md, section 11)
 //   frame  u32 frame, u16 buttons, u16 0, f32 x, f32 y (the bits the game
 //          will read), u32 hash frame, u32 hash (of the state after that
 //          frame)
@@ -34,7 +43,8 @@
 // this machine's for the same frame logs "coop: session desync" (once, then a
 // count every 600 frames). A peer that closes, or sends nothing for 10 s,
 // ends the session: "coop: session lost", and the game reads the local pads
-// again.
+// again. The build identity (build_id) is a hash of the patches' binary and
+// of the game's recompiler config, which holds the hooks (src/coop/version.cmake).
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -43,11 +53,14 @@
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <filesystem>
+#include <fstream>
 #include <map>
 #include <mutex>
 #include <random>
 #include <string>
 #include <thread>
+#include <vector>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -70,13 +83,22 @@ constexpr int send_flags = MSG_NOSIGNAL; // a closed peer is an error, not SIGPI
 static void close_socket(socket_t s) { close(s); }
 #endif
 
+#include "librecomp/files.hpp"
+#include "librecomp/game.hpp"
+#include "ultramodern/ultramodern.hpp"
+
 #include "session.h"
+
+// The patches' binary, as librecomp loads it (RecompiledPatches/patches_bin.c).
+extern "C" const char mm_patches_bin[];
+extern "C" const size_t mm_patches_bin_size;
 
 namespace {
 
-constexpr uint16_t protocol = 1;
+constexpr uint16_t protocol = 2;
 constexpr uint32_t no_frame = 0xFFFFFFFF;
-constexpr size_t hello_size = 16;
+constexpr size_t hello_head = 8; // "COOP", protocol, role, game: the same in every protocol
+constexpr size_t hello_size = 20;
 constexpr size_t frame_size = 24;
 constexpr auto peer_timeout = std::chrono::seconds(10);
 
@@ -84,6 +106,10 @@ constexpr auto peer_timeout = std::chrono::seconds(10);
 constexpr uint8_t game_version = 1;
 #else
 constexpr uint8_t game_version = 0;
+#endif
+
+#ifndef BM64_COOP_HOOKS_ID
+#define BM64_COOP_HOOKS_ID 0 // src/coop/version.cmake defines it
 #endif
 
 enum class Role { None, Host, Client };
@@ -101,6 +127,8 @@ struct Config {
     uint32_t delay = 2;
     bool seed_set = false;
     uint32_t seed = 0;
+    bool build_set = false;
+    uint32_t build = 0;
     uint32_t log_hash = 0;
     int connect_timeout = 60;
 };
@@ -144,6 +172,11 @@ Config read_config() {
     if (seed != nullptr && seed[0] != '\0') {
         config.seed_set = true;
         config.seed = static_cast<uint32_t>(std::strtoul(seed, nullptr, 0));
+    }
+    const char* build = std::getenv("BM64_COOP_BUILD_ID");
+    if (build != nullptr && build[0] != '\0') {
+        config.build_set = true;
+        config.build = static_cast<uint32_t>(std::strtoul(build, nullptr, 0));
     }
     config.delay = env_number("BM64_COOP_DELAY", 2);
     config.log_hash = env_number("BM64_COOP_LOG_HASH", 0);
@@ -326,6 +359,75 @@ void receive_frames(socket_t sock) {
     session.arrived.notify_all();
 }
 
+// This build's identity: FNV-1a of the patches' binary, then of the hash of
+// the recompiler config (bm64.<version>.toml, with the hooks) taken when
+// configuring. Another build of the same commit with another compiler may
+// differ (not tried).
+uint32_t build_id() {
+    uint32_t hash = 2166136261u;
+    auto add = [&hash](uint8_t byte) {
+        hash ^= byte;
+        hash *= 16777619;
+    };
+    for (size_t i = 0; i < mm_patches_bin_size; i++) {
+        add(static_cast<uint8_t>(mm_patches_bin[i]));
+    }
+    for (int i = 0; i < 4; i++) {
+        add(static_cast<uint8_t>(static_cast<uint32_t>(BM64_COOP_HOOKS_ID) >> (i * 8)));
+    }
+    return hash;
+}
+
+// The size of librecomp's save buffer for the game's save type (pi.cpp's
+// get_save_size).
+size_t save_size() {
+    switch (recomp::get_save_type()) {
+        case recomp::SaveType::AllowAll:
+        case recomp::SaveType::Flashram:
+            return 0x20000;
+        case recomp::SaveType::Sram:
+            return 0x8000;
+        case recomp::SaveType::Eep16k:
+            return 0x800;
+        case recomp::SaveType::Eep4k:
+            return 0x200;
+        default:
+            return 0;
+    }
+}
+
+// The host's save as the game will read it: the file librecomp loaded when
+// the game started (the game reads the EEPROM after the session connects,
+// func_80225840, and writes nothing before), zeros where it has none.
+std::vector<uint8_t> read_own_save() {
+    std::vector<uint8_t> save(save_size(), 0);
+    std::ifstream file = recomp::open_input_file_with_backup(ultramodern::get_save_file_path(), std::ios_base::binary);
+    if (file.good()) {
+        file.read(reinterpret_cast<char*>(save.data()), static_cast<std::streamsize>(save.size()));
+    }
+    return save;
+}
+
+// The client plays on a copy of the host's save: written to
+// saves/coop-session/<game id>.bin and loaded into librecomp's save buffer in
+// place of the client's own file, before the game reads it.
+bool use_host_save(const std::vector<uint8_t>& save) {
+    const std::u8string game_id = recomp::current_game_id();
+    const std::u8string folder = u8"coop-session";
+    std::filesystem::path path = ultramodern::get_save_file_path().parent_path() / folder / (game_id + u8".bin");
+    std::error_code error;
+    std::filesystem::create_directories(path.parent_path(), error);
+    {
+        std::ofstream file(path, std::ios_base::binary | std::ios_base::trunc);
+        file.write(reinterpret_cast<const char*>(save.data()), static_cast<std::streamsize>(save.size()));
+        if (!file.good()) {
+            return false;
+        }
+    }
+    ultramodern::change_save_file(folder, game_id);
+    return ultramodern::get_save_file_path() == path;
+}
+
 // Connects and exchanges the hellos; true when the session is live.
 bool start(Session& s) {
 #ifdef _WIN32
@@ -343,31 +445,63 @@ bool start(Session& s) {
     int on = 1;
     setsockopt(s.sock, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&on), sizeof(on));
     s.seed = c.seed_set ? c.seed : std::random_device{}();
+    uint32_t build = c.build_set ? c.build : build_id();
+    std::fprintf(stderr, "coop: session build 0x%08X%s\n", build, c.build_set ? " (BM64_COOP_BUILD_ID)" : "");
     uint8_t hello[hello_size] = {'C', 'O', 'O', 'P'};
     put16(hello + 4, protocol);
     hello[6] = host ? 0 : 1;
     hello[7] = game_version;
     put32(hello + 8, host ? s.seed : 0);
     put16(hello + 12, static_cast<uint16_t>(c.delay));
+    put32(hello + 16, build);
     uint8_t theirs[hello_size];
     set_recv_timeout(s.sock, c.connect_timeout); // something else on the port may never say hello
-    if (!send_all(s.sock, hello, sizeof(hello)) || !recv_all(s.sock, theirs, sizeof(theirs))) {
+    if (!send_all(s.sock, hello, sizeof(hello)) || !recv_all(s.sock, theirs, hello_head)) {
         std::fprintf(stderr, "coop: session: no hello from the other side; playing alone\n");
         close_socket(s.sock);
         return false;
     }
-    set_recv_timeout(s.sock, 0);
-    const char* refused = nullptr;
+    char refused[96] = "";
     if (std::memcmp(theirs, "COOP", 4) != 0) {
-        refused = "not a co-op session";
+        std::snprintf(refused, sizeof(refused), "not a co-op session");
     } else if (get16(theirs + 4) != protocol) {
-        refused = "another protocol version";
+        std::snprintf(refused, sizeof(refused), "another protocol version (%u, this %u)", get16(theirs + 4), protocol);
+    } else if (!recv_all(s.sock, theirs + hello_head, hello_size - hello_head)) {
+        std::snprintf(refused, sizeof(refused), "the hello was cut off");
     } else if (theirs[6] != (host ? 1 : 0)) {
-        refused = "both sides have the same role";
+        std::snprintf(refused, sizeof(refused), "both sides have the same role");
     } else if (theirs[7] != game_version) {
-        refused = "another game version (US and Europe do not mix)";
+        std::snprintf(refused, sizeof(refused), "another game version (US and Europe do not mix)");
+    } else if (get32(theirs + 16) != build) {
+        std::snprintf(refused, sizeof(refused), "another build (the other's 0x%08X)", get32(theirs + 16));
     }
-    if (refused != nullptr) {
+    // the save, from the host to the client
+    std::vector<uint8_t> save;
+    if (refused[0] == '\0' && host) {
+        save = read_own_save();
+        uint8_t size[4];
+        put32(size, static_cast<uint32_t>(save.size()));
+        if (!send_all(s.sock, size, sizeof(size)) || !send_all(s.sock, save.data(), save.size())) {
+            std::snprintf(refused, sizeof(refused), "the save could not be sent");
+        }
+    } else if (refused[0] == '\0') {
+        uint8_t size[4];
+        if (!recv_all(s.sock, size, sizeof(size))) {
+            std::snprintf(refused, sizeof(refused), "no save from the host");
+        } else if (get32(size) != save_size()) {
+            std::snprintf(refused, sizeof(refused), "the host's save is 0x%X bytes, this game's 0x%zX", get32(size),
+                          save_size());
+        } else {
+            save.resize(save_size());
+            if (!recv_all(s.sock, save.data(), save.size())) {
+                std::snprintf(refused, sizeof(refused), "the host's save was cut off");
+            } else if (!use_host_save(save)) {
+                std::snprintf(refused, sizeof(refused), "the host's save could not be stored");
+            }
+        }
+    }
+    set_recv_timeout(s.sock, 0);
+    if (refused[0] != '\0') {
         std::fprintf(stderr, "coop: session refused: %s; playing alone\n", refused);
         close_socket(s.sock);
         return false;
@@ -376,6 +510,8 @@ bool start(Session& s) {
         s.seed = get32(theirs + 8);
         s.config.delay = get16(theirs + 12);
     }
+    std::fprintf(stderr, host ? "coop: session host: sent the save, %zu bytes\n"
+                              : "coop: session client: playing on the host's save, %zu bytes\n", save.size());
     std::fprintf(stderr, "coop: session %s: connected, seed=0x%08X delay=%u\n", host ? "host" : "client", s.seed,
                  s.config.delay);
     std::thread(receive_frames, s.sock).detach();

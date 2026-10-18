@@ -6,8 +6,8 @@ repository so it survives any worktree path and any tool; per-checkout agent
 memory is not read by a session that starts in another worktree. State goes
 here; stable recipes go into `docs/coop/`; personal data and hardware never.
 
-Last updated 2026-10-18 (#21, the session core, in draft PR #25, stacked on
-#20, #15 and #12).
+Last updated 2026-10-18 (#26, the host's save and the build check, in draft
+PR #30, stacked on #25, #20, #15 and #12).
 
 ## Repository state
 
@@ -19,8 +19,8 @@ Last updated 2026-10-18 (#21, the session core, in draft PR #25, stacked on
 - Open issues: #2 and #6–#10 (closed by PR #12 when merged), #4 (closed by
   PR #15), #13, #17, #18 (closed by PR #20), #14 and #16 (partly done in
   PR #20, kept open for leftover checks), #19 (the group), #21 (closed by
-  PR #25), #11 (Europe follow-ups), #22–#24 (follow-ups of #19), #26–#29
-  (follow-ups of #21).
+  PR #25), #11 (Europe follow-ups), #22–#24 (follow-ups of #19), #26 (closed
+  by PR #30), #27–#29 (follow-ups of #21), #31 (scripted pads on the title).
 - Local git config of the clone: Claude identity, `upstream` with push
   `DISABLED`, `core.hooksPath .githooks`, `pushguard.romDir` set.
 
@@ -34,6 +34,10 @@ Last updated 2026-10-18 (#21, the session core, in draft PR #25, stacked on
   (#21). Verify 2026-10-18: Europe `--full --scenarios`, all 8 stages,
   145/145 checks (the 6 `p2-*` and 4 new `session-*` scenarios); US not run
   (CI compiles it without a ROM).
+- **#30** `coop/26-host-save`, draft, stacked on #25: the client plays on
+  the host's save, the hello checks the build (#26). Verify 2026-10-18:
+  Europe `--full --scenarios`, all 8 stages, 167/167 checks (new:
+  `save-file`, `session-save`, `session-build`); US not run.
 - Owner (2026-10-18): review first, merge later in that order, when the
   owner says so. Each one merged shrinks the next one's diff.
 
@@ -45,36 +49,40 @@ Last updated 2026-10-18 (#21, the session core, in draft PR #25, stacked on
   (accepted; PR #25 closes #21). Filed: #26 the host's save and a build
   check, #27 each camera on its own player, #28 host or join from the
   launcher, #29 two machines and the Windows/macOS builds.
-- PRs: review first, merge later in order (12, 15, 20, 25).
+- PRs: review first, merge later in order (12, 15, 20, 25, then 30).
+- #26 next (chosen at the start of its session). End of #26: PR #30 review
+  first, merge later after #25; the client keeps playing on a copy of the
+  host's save (not no-op saves); the build identity covering patches and
+  hooks only (not host code, librecomp, mods) is enough for now, revisit
+  with #29.
 
-## What #21 found and did (details: design.md, *The session core*)
+## What #26 found and did (details: design.md, *The save and the build*)
 
-- Lockstep on the **pads**, not the command record: each machine sends its
-  pad 0 per frame; in both games the host's is pad 0, the client's pad 1
-  (player 2 in slot 4 fills its record from pad 1, #13). Pads also cover
-  menus and the title. Accepted by the owner.
-- The step is in the per-frame hook (`func_8023A208`): upstream's main loop
-  reads the pads twice per frame (`Recomp_ProcessCheats`), so a step at the
-  read ran twice per frame.
-- TCP, host listens and client joins (`BM64_COOP_SESSION=host:PORT` /
-  `join:HOST:PORT`), delay 2 frames, hello with protocol, role, game
-  version, seed, delay. Connect at the first pad read, before
-  `g_initRandom`, whose clock seed is replaced by the host's.
-- Determinism on one machine: with a fixed seed two runs of `p2-slot4`
-  hash the same 1602 frames; the clock's seed differs from frame 0.
-- Desync: per-frame FNV-1a of players, records, positions, RNG, scene
-  (`patches/coop_session.c`), compared on both sides.
-- Harness: `#session` scenarios run host and client on one machine
-  (`tools/scenario.py`, `tools/run.sh --name`); `#client`, `#env-host`,
-  `#env-client`, `#check-client`, `#check same-hashes`.
+- The game reads the EEPROM once, right after the first pad read
+  (`func_80225840`: `func_8023A22C`, then `func_80294E54`), where the
+  session connects. After the hellos the host sends its whole save file
+  (0x20000 bytes); the client writes it to `saves/coop-session/<id>.bin`
+  and switches librecomp to it (`ultramodern::change_save_file`). The
+  client's own save is never written; both games run the same code.
+- Hello protocol 2 with a build identity: FNV-1a of `mm_patches_bin` and a
+  SHA-256 prefix of `bm64.<version>.toml` (configure time,
+  `src/coop/version.cmake`). Not covered: host code, librecomp, mods.
+- The state hash covers the save data (`D_80063000`, `D_8008E570`,
+  `D_802A1DB4`).
+- Harness: `save FILE` step, `BM64_COOP_WARP=ID:ENTRY:FILE`, `run.sh
+  --saves`, `#saves-host`/`#saves-client`, `file`/`no-file` checks,
+  `BM64_COOP_BUILD_ID`. Scripted START taps do not get past the title (#31).
+- The #21 notes (lockstep on the pads, per-frame step, desync hash) are in
+  design.md, *The session core*.
 
 ## Next candidates
 
-1. **Session follow-ups**: #26 (the client on the host's save, a build
-   check in the hello; first: where librecomp loads the save), #27 (the
-   client's camera on player 2; open question 4), #28 (host or join from
-   the launcher), #29 (two machines, Windows/macOS). #26 first: a real
-   session needs it.
+1. **Session follow-ups**: #27 (the client's camera on player 2; open
+   question 4; first: a per-machine camera target on the client, then
+   session-lockstep with same-hashes), #28 (host or join from the launcher;
+   first: ui_launcher.cpp's Start path and coop::autostart), #29 (two
+   machines, Windows/macOS; also whether two compilers give the same build
+   identity). #27 first: the client sees player 1's view today.
 2. **Rest of #14 and #16** (kept open, owner): a story teleport
    (`func_802512C0` from a room script; find one with `xref/callers.tsv`
    beyond Green Garden stage 1) and a scene with player 2 already in the
@@ -82,6 +90,8 @@ Last updated 2026-10-18 (#21, the session core, in draft PR #25, stacked on
 3. Follow-ups of #19: #22 (player 1 downed), #23 (freeze during player 1's
    death animation), #24 (slot-0 resets, US run).
 4. **#11**, Europe follow-ups.
+5. **#31**, scripted pads on the title (needed to test the file select,
+   Custom screen and pause menu through their own menus).
 
 ## Scratch (not in the repository)
 
@@ -118,9 +128,14 @@ Under `~/dev-scratch/BM64Recomp-coop/`:
   needs the full pipeline (configs, ROM recompile): `cmake --build` alone
   links against the old hooks and fails.
 - A session scenario opens two game windows at once.
+- Never screenshot with `spectacle -a` (the active window): the game rarely
+  has the focus, and it captures whatever does (happened once in #26; both
+  captures deleted at once).
+- `python3 -m py_compile` leaves `tools/__pycache__/` (now ignored); the
+  push guard refuses a commit that holds one.
 
 ## Cleanup the owner may approve
 
-- After #12, #15, #20 and #25 are merged: delete their branches.
+- After #12, #15, #20, #25 and #30 are merged: delete their branches.
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/` in scratch:
   when the player 2 follow-ups are done.

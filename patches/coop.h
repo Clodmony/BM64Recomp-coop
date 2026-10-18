@@ -38,9 +38,13 @@ extern s32 D_802AC5D4;      // overlay ID being played
 extern s32 D_802AC894;      // S, the story player's slot
 extern s32 D_802AC624;      // lives (story session block +0x14)
 extern s32 D_802ACEC8[5][3]; // each slot's tile, as the rectangle tests last read it
+extern u8 D_80063000[0x1B8]; // the EEPROM mirror: a header block, then files 0-2 of 0x90 bytes
 
 void func_8023DA04(s32 continued);
 void func_8023AE6C(s32 overlay, s32 entry, s32 fade);
+void func_80293EA0(s32 file); // make file 0-2 the current one
+s32 func_80293E1C(void);      // load the current file into the live progress block
+void func_802947AC(void);     // save the live block into the current file and the EEPROM
 void func_802511EC(s32 slot, s32 x, s32 y, s32 z);
 void func_802454F8(s32 slot, s32* tile);
 void g_SpawnPlayer(s32 slot);

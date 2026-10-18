@@ -3,17 +3,41 @@
 // probes. Both run only when the per-frame hook in bm64.us.toml asks for them.
 #include "coop.h"
 
+// File 0-2 in the EEPROM mirror (docs/coop/design.md, section 11): +0 the play
+// time in seconds, bit 7 of +4 "slot used".
+static u8* coop_save_slot(s32 file) {
+    return D_80063000 + 8 + file * 0x90;
+}
+
 static s32 coop_mm(f32 v) {
     return (s32)(v * 10.0f);
 }
 
-// From the per-frame hook: a warp asked for by BM64_COOP_WARP. Starts a new
-// story session the way the file select does for a new file, then asks for
-// the scene the way the world map starts a stage (entry 0x10).
-void coop_warp(s32 overlay, s32 entry) {
-    recomp_printf("coop: warp overlay=0x%02X entry=0x%02X\n", overlay, entry);
-    func_8023DA04(0);
+// From the per-frame hook: a warp asked for by BM64_COOP_WARP. Starts a story
+// session the way the file select does, for a new file (file < 0) or by
+// loading that file (0-2), then asks for the scene the way the world map
+// starts a stage (entry 0x10).
+void coop_warp(s32 overlay, s32 entry, s32 file) {
+    if (file < 0) {
+        recomp_printf("coop: warp overlay=0x%02X entry=0x%02X\n", overlay, entry);
+        func_8023DA04(0);
+    } else {
+        func_80293EA0(file);
+        func_80293E1C();
+        recomp_printf("coop: warp overlay=0x%02X entry=0x%02X file=%d used=%d time=%d\n", overlay, entry, file,
+                      (coop_save_slot(file)[4] & 0x80) != 0, *(u32*)coop_save_slot(file));
+        func_8023DA04(1);
+    }
     func_8023AE6C(overlay, entry, 0);
+}
+
+// From the per-frame hook: a save step of the input script. Writes the live
+// progress block into file 0-2 and the EEPROM, as the pause menu's save does.
+void coop_harness_save(s32 file) {
+    func_80293EA0(file);
+    func_802947AC();
+    recomp_printf("coop: save file=%d used=%d time=%d\n", file, (coop_save_slot(file)[4] & 0x80) != 0,
+                  *(u32*)coop_save_slot(file));
 }
 
 // From the per-frame hook: a probe asked for by the input script. One line

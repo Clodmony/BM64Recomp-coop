@@ -27,6 +27,9 @@ lines the script itself ignores as comments:
     #check field PROBE SLOT NAME OP VALUE
                                  a field of the player's probe line, OP one of
                                  = != < > <= >=, e.g. hearts < 2
+    #check file PATH             the run left a file PATH (relative to its
+                                 run folder, a glob: saves/bm64_*.bin)
+    #check no-file PATH          ... did not
 
 A session scenario (#21) runs two instances of the game, a host and a client
 of an online session (src/coop/session.cpp) on a free local port, with these
@@ -42,6 +45,9 @@ header lines besides:
                                  the host's)
     #check same-hashes           both logged the same state hash for every
                                  frame both logged (needs BM64_COOP_LOG_HASH)
+    #saves-host SCENARIO         the host starts with the saves/ folder that
+                                 SCENARIO's run left (also #saves-client);
+                                 SCENARIO runs first, alone, with its checks
 
 Both logs are cut at their "coop: input end": once one game is stopped the
 other loses the session. Both scripts should end at the same frame.
@@ -99,7 +105,7 @@ def player(probes, label, slot):
     return probes[label][slot]
 
 
-def check(text, lines, probes):
+def check(text, lines, probes, folder=None):
     kind, _, rest = text.partition(" ")
     rest = rest.strip()
     if kind in ("log", "no-log"):
@@ -143,24 +149,31 @@ def check(text, lines, probes):
         if got is None:
             return False, f"no field {name}"
         return OPS[op](got, value), f"{name}={got}"
+    if kind in ("file", "no-file"):
+        if folder is None:
+            return False, "no run folder"
+        there = any(folder.glob(args[0]))
+        return there == (kind == "file"), "there" if there else "not there"
     raise ValueError(f"unknown check {kind}")
 
 
-def run_cmd(script, version, timeout, envs, name=None):
+def run_cmd(script, version, timeout, envs, name=None, saves=None):
     cmd = [str(ROOT / "tools/run.sh"), "--input", str(script), "--until-log", "coop: input end",
            "--timeout", str(timeout)]
     if version:
         cmd += ["--version", version]
     if name:
         cmd += ["--name", name]
+    if saves:
+        cmd += ["--saves", str(saves)]
     for env in envs:
         cmd += ["--env", env]
     return cmd
 
 
-def read_run(proc, label, results):
+def read_run(proc, label, results, folder=None):
     """The run's game log, cut at the script's end in a session; a failed
-    run is a failed check."""
+    run is a failed check. Its run folder is appended to `folder`."""
     out = proc.stdout.read() if hasattr(proc.stdout, "read") else proc.stdout
     summary = out.strip().splitlines()[-1] if out.strip() else ""
     print(f"{label}: {summary}")
@@ -168,6 +181,8 @@ def read_run(proc, label, results):
     if proc.returncode != 0 or not m:
         results.append((False, "run", f"run.sh exit {proc.returncode}"))
     lines = (Path(m.group(1)) / "game.log").read_text(errors="replace").splitlines() if m else []
+    if m and folder is not None:
+        folder.append(Path(m.group(1)))
     errors = [line for line in lines if line.startswith("coop: input error")]
     if errors:
         results.append((False, "input script", errors[0]))
@@ -193,13 +208,13 @@ def same_hashes(host, client):
     return True, f"{len(both)} frames"
 
 
-def run_checks(checks, lines, probes, results, other=None):
+def run_checks(checks, lines, probes, results, other=None, folder=None):
     for text in checks:
         try:
             if text == "same-hashes":
                 ok, detail = same_hashes(lines, other)
             else:
-                ok, detail = check(text, lines, probes)
+                ok, detail = check(text, lines, probes, folder)
         except (LookupError, ValueError, IndexError, re.error) as err:
             ok, detail = False, str(err)
         results.append((ok, text, detail))
@@ -210,9 +225,15 @@ def until_end(lines):
     return lines[:end + 1]
 
 
-def run_scenario(path, version, timeout, extra_envs):
+def scenario_path(name):
+    path = Path(name)
+    return path if path.is_file() else ROOT / "tools/scenarios" / f"{name}.txt"
+
+
+def run_scenario(path, version, timeout, extra_envs, folder=None):
     envs, checks = [], []
     session, host_envs, client_envs, client_steps, client_checks = False, [], [], [], []
+    saves_from = {}
     for line in path.read_text().splitlines():
         if line.startswith("#env "):
             envs.append(line[5:].strip())
@@ -228,11 +249,29 @@ def run_scenario(path, version, timeout, extra_envs):
             client_steps.append(line[8:].strip())
         elif line.startswith("#check-client "):
             client_checks.append(line[14:].strip())
-    results = []
+        elif line.startswith(("#saves-host ", "#saves-client ")):
+            side, _, name = line[7:].partition(" ")
+            saves_from[side] = name.strip()
+    results, saves = [], {}
+    for side, name in saves_from.items():
+        # the scenario that leaves the saves runs first, with its checks
+        before, ran = scenario_path(name), []
+        if not before.is_file():
+            results.append((False, f"#saves-{side} {name}", "no such scenario"))
+            continue
+        results += [(ok, f"{before.stem}: {text}", detail)
+                    for ok, text, detail in run_scenario(before, version, timeout, extra_envs, ran)]
+        if ran and (ran[0] / "saves").is_dir():
+            saves[side] = ran[0] / "saves"
+        else:
+            results.append((False, f"#saves-{side} {name}", "its run left no saves/ folder"))
+    own = len(results)  # the earlier scenarios printed their own
     if not session:
-        proc = subprocess.run(run_cmd(path, version, timeout, envs + extra_envs), capture_output=True, text=True)
-        lines = read_run(proc, path.stem, results)
-        run_checks(checks, lines, parse_probes(lines), results)
+        proc = subprocess.run(run_cmd(path, version, timeout, envs + extra_envs, saves=saves.get("host")),
+                              capture_output=True, text=True)
+        ran = folder if folder is not None else []
+        lines = read_run(proc, path.stem, results, ran)
+        run_checks(checks, lines, parse_probes(lines), results, folder=ran[-1] if ran else None)
     else:
         port = free_port()
         runs = Path.home() / "dev-scratch/BM64Recomp-coop/runs"
@@ -243,18 +282,21 @@ def run_scenario(path, version, timeout, extra_envs):
         for name, script, own_envs, session_env in (
                 ("host", path, host_envs, f"BM64_COOP_SESSION=host:{port}"),
                 ("client", client_script, client_envs, f"BM64_COOP_SESSION=join:127.0.0.1:{port}")):
-            cmd = run_cmd(script, version, timeout, envs + own_envs + [session_env] + extra_envs, name)
+            cmd = run_cmd(script, version, timeout, envs + own_envs + [session_env] + extra_envs, name,
+                          saves.get(name))
             procs.append(subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True))
         for proc in procs:
             proc.wait()
         client_script.unlink()
-        host = until_end(read_run(procs[0], f"{path.stem} host", results))
-        client = until_end(read_run(procs[1], f"{path.stem} client", results))
-        run_checks(checks, host, parse_probes(host), results, client)
+        host_dir, client_dir = [], []
+        host = until_end(read_run(procs[0], f"{path.stem} host", results, host_dir))
+        client = until_end(read_run(procs[1], f"{path.stem} client", results, client_dir))
+        run_checks(checks, host, parse_probes(host), results, client, host_dir[0] if host_dir else None)
         client_results = []
-        run_checks(client_checks, client, parse_probes(client), client_results, host)
+        run_checks(client_checks, client, parse_probes(client), client_results, host,
+                   client_dir[0] if client_dir else None)
         results += [(ok, f"client: {text}", detail) for ok, text, detail in client_results]
-    for ok, text, detail in results:
+    for ok, text, detail in results[own:]:
         print(f"  {'ok    ' if ok else 'FAILED'} {text}{'  (' + detail + ')' if detail else ''}")
     return results
 
@@ -268,9 +310,7 @@ def main():
     args = parser.parse_args()
     results = []
     for name in args.scenarios:
-        path = Path(name)
-        if not path.is_file():
-            path = ROOT / "tools/scenarios" / f"{name}.txt"
+        path = scenario_path(name)
         if not path.is_file():
             print(f"FAILED no scenario {name}")
             results.append((False, name, ""))

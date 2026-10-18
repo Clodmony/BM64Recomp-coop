@@ -194,7 +194,8 @@ Options: `--version`, `--until-overlay ID` (success once the game loads that
 overlay), `--until-log TEXT` (success once a line of the log starts with
 TEXT), `--timeout` (default 60 s), `--exe`, `--rom`, `--env NAME=VALUE`
 (repeatable), `--input FILE` (an input script, copied into the run folder;
-*The test harness*, below), `--audio` (sound on the default device; by
+*The test harness*, below), `--saves DIR` (start with a copy of DIR, e.g. an
+earlier run's `saves/`, as the run's save folder), `--audio` (sound on the default device; by
 default SDL's dummy driver, which consumes audio at the real rate). Exit
 status: 0 overlay reached or log line seen (or ran until the timeout
 without either), 1 timeout before them, 2 the game exited or crashed, 3 the
@@ -242,15 +243,21 @@ Everything is off unless a switch asks for it:
   - `tile SLOT X Z`: put the player in that slot on tile X, Z of the room at
     the floor level it stands on (`func_802511EC`, as a room entry does), and
     log `coop: tile slot=… from=… to=…`;
+  - `save FILE`: save the live progress block into file 0–2 and the EEPROM,
+    as the pause menu's save does (`func_802947AC`), and log
+    `coop: save file=… used=… time=…` (the file's "used" bit and play time);
   - `log TEXT`, and `end`, which logs `coop: input end`.
 
   A bad line logs `coop: input error …` and the script does not run. The
   script steps once per game frame, from the per-frame hook of
   `func_8023A208`.
-- `BM64_COOP_WARP=ID[:ENTRY]`: 30 frames after the title (overlay 0x20)
-  loads, start a new story session as the file select does for a new file
-  (`func_8023DA04(0)`) and ask for overlay ID with entry code ENTRY (default
-  0x10, the code the world map starts a stage with; `func_8023AE6C`). Room
+- `BM64_COOP_WARP=ID[:ENTRY[:FILE]]`: 30 frames after the title (overlay
+  0x20) loads, start a story session as the file select does, for a new file
+  (`func_8023DA04(0)`) or, with FILE, by loading file 0–2
+  (`func_80293EA0`, `func_80293E1C`, `func_8023DA04(1)`; it logs the file's
+  "used" bit and play time), and ask for overlay ID with entry code ENTRY
+  (default 0x10, the code the world map starts a stage with;
+  `func_8023AE6C`). Room
   0x28 opens with the tutorial's dialogue, which waits for A; room 0x29 with
   entry 0x13 (room 0x28's exit) starts with player 1's short entry walk and
   then plays.
@@ -288,7 +295,9 @@ REGEX2 after the first match of REGEX1), `not-after REGEX1 REGEX2` (none),
 `still P1 P2 SLOT [MAX]` (distance between two probes, in world units),
 `delta P1 P2 SLOT AXIS OP VALUE` (the move along one axis), `near PROBE A B
 MAX [MIN]` (two slots' distance at one probe; a tile is 100 units), `field
-PROBE SLOT NAME OP VALUE`. The output is one line per check, `N/M checks passed`
+PROBE SLOT NAME OP VALUE`, `file PATH` and `no-file PATH` (a file the run
+left, a glob relative to its run folder: `saves/bm64_*.bin`). The output is
+one line per check, `N/M checks passed`
 and a RESULT line; exit 0 only if all passed. A scenario takes 15–35 s.
 
 ### Session scenarios: two games on one machine
@@ -306,6 +315,15 @@ The session's own switches (`src/coop/session.cpp`):
   a session, where two runs of the same script then hash the same frames.
 - `BM64_COOP_LOG_HASH=N`: log `coop: hash frame=… hash=…` every N frames
   (the state hash of `patches/coop_session.c`).
+- `BM64_COOP_BUILD_ID=N`: claim build identity N in the hello (a test of the
+  build check, `session-build`).
+
+A session's client plays on a copy of the host's save,
+`saves/coop-session/<game id>.bin` in its own folder; its own save file is
+never written. A scenario's `#saves-host NAME` (or `#saves-client`) runs
+scenario NAME first, alone and with its checks, and starts that side with
+the `saves/` folder NAME's run left (`run.sh --saves`): `session-save` gives
+the host the file `save-file` makes, and the client none.
 
 A scenario with a `#session` line runs both games at once (`tools/run.sh
 --name host` and `--name client`, so their run folders differ). The scenario
