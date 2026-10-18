@@ -363,7 +363,8 @@ cards: possible, not recommended first.
   fire, bombs, bomb types and hearts to the slot that touched the item; gems
   go to the shared counter. Exceptions: the "got item" notice only for S, and
   the heart item treats slot 0 differently in rival stages. The item's
-  starting direction uses slot 0's position (cosmetic).
+  starting direction uses slot 0's position (cosmetic). Co-op: a full
+  player passes through a heart (#36, *The knocked-out heart*).
 - **Boss reward** (`func_80233E3C`, 3 boss overlays) flies to S; the item it
   drops can be picked up by anyone.
 - **Gold cards**: no dedicated pickup was found. The stage clear
@@ -535,9 +536,9 @@ Scenarios `p2-slot4`, `p2-slot1`, `p2-entry-walk` (`tools/scenarios/`), room
   a heart for good depends on the seed: in room 0x29, after player 2's
   first bomb, seed 1's heart flies away and seed 2's lands back on player 2,
   30–40 frames after the hit (`p2-slot4` pins seed 1, `p2-heart` seed 2).
-  The pickup looks up the slot whose actor touched the item, so by the code
-  player 1 can also catch player 2's heart and the other way round (not
-  run).
+  The pickup looks up the slot whose actor touched the item, so player 1
+  can also catch player 2's heart and the other way round (run in #36,
+  `p2-heart-swap`; the co-op rule is in *The knocked-out heart*, below).
 - **Death: as predicted.** A second hit kills slot 4: `func_8023A870(4, 1)`,
   flow flags 0x92, slot 4's controlType becomes 3, and the room reloads as
   player 1's retry with one life fewer (2 → 1); the reload frees and
@@ -670,6 +671,30 @@ before: the retry reloads the room and player 2 comes back with it
 2 (remote bombs, continue), and what a downed player 2 looks like (it stays
 where it fell; not looked at on screen).
 
+### The knocked-out heart (#36)
+
+Run (Europe, seed 1, room 0x29): either player catches the other's
+knocked-out heart. Player 2's heart flies off along +x; player 1, walked to
+tile 8, 15, catches it (`pickup slot=0`, player 1 1 → 2 hearts, player 2
+stays at 1). Player 1's own heart, from its bomb, flies off along −x, +z;
+player 2, walked there, catches it (2 → 1 and 1 → 2): `p2-heart-swap`.
+
+The pickup sets the catcher's hearts to 2 (`func_8024512C`; with stage flag
+0x8 of `D_802AC5C0` it adds one for slots 1–4), so a player at 2 hearts used
+the other's heart up for nothing. **Rule (owner, 2026-10-18): the heart is
+shared, but a full player does not take it.** While player 2 plays, a heart
+that would give a player nothing passes through that player: a hook in the
+item collision callback `func_80279CA8` (at 0x80279CFC, the toucher in v0)
+asks `coop_item_passes` (`patches/coop_player2.c`) and, for a full player,
+clears v0, so the callback skips the pickup and the item's removal
+(`func_802790E0`). The heart flies on and stays in the room (`coop: pass
+slot=0 item=4`, `p2-heart-full`). It applies to every heart item, also ones
+the stage drops; alone, player 1 picks hearts up as before.
+
+Not covered: `func_802308B8` returns one actor that touches the item, so a
+full player standing on a heart may keep a partner on the same spot from
+getting it (not run).
+
 ### Hooks and patches
 
 | Where | Does |
@@ -681,6 +706,7 @@ where it fell; not looked at on screen).
 | `func_8023A870` entry (death) | player 2 while player 1 plays: downed, the function skipped |
 | `func_802457D8`, `func_802456FC`, `func_802455A8` (`RECOMP_PATCH`) | rectangle tests for S or player 2 |
 | `g_SpawnPlayer` at 0x80245BC0 | slot 4: model asset 0x4B |
+| `func_80279CA8` at 0x80279CFC (item collision) | a heart passes through a full player while player 2 plays (#36) |
 
 ## The session core
 

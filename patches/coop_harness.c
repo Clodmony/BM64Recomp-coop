@@ -41,9 +41,11 @@ void coop_harness_save(s32 file) {
 }
 
 // From the per-frame hook: a probe asked for by the input script. The camera,
-// then one line per slot that is in play; positions in tenths of a world unit,
-// the camera's yaw and pitch in tenths of a degree.
-void coop_probe(void) {
+// then one line per slot that is in play, then the item a hit knocked out of
+// item_slot (#36; src/coop/harness.cpp notes it, NULL once picked up or the
+// room is gone); positions in tenths of a world unit, the camera's yaw and
+// pitch in tenths of a degree.
+void coop_probe(u8* item, s32 item_slot) {
     s32 slot;
 
     recomp_printf("coop: state overlay=0x%02X S=%d flags=0x%X lives=%d\n", D_802AC5D4 & 0xFFFF, D_802AC894,
@@ -80,6 +82,13 @@ void coop_probe(void) {
                           coop_mm(cmd->move[1]), coop_mm(cmd->move[2]), cmd->held, cmd->pressed);
         }
     }
+    // +0x2 is 1 once func_802790E0 has removed the item; its actor at +0x14
+    // is placed like a player's (func_8027AA74)
+    if (item != NULL && *(s16*)(item + 0x2) == 0) {
+        f32* pos = (f32*)(*(u8**)(*(u8**)(item + 0x14) + 0x40) + 0x10);
+        recomp_printf("coop: item from=%d type=%d pos=%d,%d,%d\n", item_slot, *(s16*)(item + 0x20), coop_mm(pos[0]),
+                      coop_mm(pos[1]), coop_mm(pos[2]));
+    }
 }
 
 // From the per-frame hook: a tile step of the input script. Puts the player in
@@ -94,4 +103,11 @@ void coop_harness_tile(s32 slot, s32 x, s32 z) {
     func_802454F8(slot, tile);
     recomp_printf("coop: tile slot=%d from=%d,%d,%d to=%d,%d,%d\n", slot, tile[0], tile[1], tile[2], x, tile[1], z);
     func_802511EC(slot, x, tile[1], z);
+}
+
+// From the per-frame hook: a hearts step of the input script. Sets the
+// player's hearts, as a heart pickup does (func_8024512C).
+void coop_harness_hearts(s32 slot, s32 hearts) {
+    recomp_printf("coop: hearts slot=%d from=%d to=%d\n", slot, g_Players[slot].heartCount, hearts);
+    g_Players[slot].heartCount = hearts;
 }

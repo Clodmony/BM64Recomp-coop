@@ -241,10 +241,17 @@ Everything is off unless a switch asks for it:
     camera` line (its eye, its yaw and pitch in tenths of a degree and its
     distance from the point it looks at) and one `coop: player slot=…` line per player in play
     (controlType, hearts, bombs, fire, flags, position in tenths of a world
-    unit);
+    unit) and, with `BM64_COOP_LOG_PLAYERS=1`, a `coop: item from=SLOT
+    type=T pos=…` line for the item a hit knocked out last while it is in
+    the room (#36);
   - `tile SLOT X Z`: put the player in that slot on tile X, Z of the room at
     the floor level it stands on (`func_802511EC`, as a room entry does), and
-    log `coop: tile slot=… from=… to=…`;
+    log `coop: tile slot=… from=… to=…`. With player 2 on, a tile step of
+    slot 0 is a room entry: player 2 stays frozen and cannot be hurt until
+    player 1's next step places it (#36); walk player 1 instead when player
+    2 must stay where it is;
+  - `hearts SLOT N`: set the player's hearts to N (0–9), as a heart pickup
+    does, and log `coop: hearts slot=… from=… to=…`;
   - `save FILE`: save the live progress block into file 0–2 and the EEPROM,
     as the pause menu's save does (`func_802947AC`), and log
     `coop: save file=… used=… time=…` (the file's "used" bit and play time);
@@ -265,7 +272,8 @@ Everything is off unless a switch asks for it:
   then plays.
 - `BM64_COOP_LOG_PLAYERS=1`: one line per room init, spawn (and the model
   asset it gets), placement on a tile, bomb, hit, the heart a hit knocks
-  out (`drop … item=4`), an item picked up (`pickup … item=T`), death,
+  out (`drop … item=4`), an item picked up (`pickup … item=T`), a heart a
+  full player passes through (`pass … item=4`, #36), death,
   cutscene freeze and room teardown, from hooks in `bm64.us.toml`.
 - `BM64_COOP_P2=1|4`: player 2 in that slot in story rooms, driven by pad 1
   ([design.md](design.md), *Player 2 in a story room*). Its own lines

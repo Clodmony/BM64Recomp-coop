@@ -575,7 +575,7 @@ text = """
 # coop: count game frames (the main loop calls this once per frame) for speed
 # measurements (src/coop/debug.cpp; only with BM64_COOP_LOG_FRAMES=N).
 # The same hook runs the test harness (src/coop/harness.cpp): the input script,
-# and the warp, probes, tile and save steps it asks for, which run in
+# and the warp, probes, tile, hearts and save steps it asks for, which run in
 # patches/coop_harness.c on a copy of the registers with the stack pointer
 # moved down. Last, in an online session (or with BM64_COOP_LOG_HASH), the
 # hash of the frame's state (patches/coop_session.c) and the session's
@@ -589,14 +589,16 @@ text = """
 {
     extern void coop_log_frame(uint8_t* rdram);
     extern uint32_t coop_harness_frame(int32_t* args);
+    extern uint32_t coop_noted_item(int32_t* slot);
     void coop_warp(uint8_t* rdram, recomp_context* ctx);
     void coop_probe(uint8_t* rdram, recomp_context* ctx);
     void coop_harness_tile(uint8_t* rdram, recomp_context* ctx);
     void coop_harness_save(uint8_t* rdram, recomp_context* ctx);
+    void coop_harness_hearts(uint8_t* rdram, recomp_context* ctx);
     extern uint32_t coop_session_hashing(void);
     extern void coop_session_frame(uint32_t hash);
     void coop_state_hash(uint8_t* rdram, recomp_context* ctx);
-    int32_t args[7];
+    int32_t args[9];
     uint32_t requests;
     coop_log_frame(rdram);
     requests = coop_harness_frame(args);
@@ -613,6 +615,9 @@ text = """
         recomp_context c = *ctx;
         c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
         c.r29 -= 0x40;
+        int32_t item_slot;
+        c.r4 = (int64_t)(int32_t)coop_noted_item(&item_slot);
+        c.r5 = (int64_t)item_slot;
         coop_probe(rdram, &c);
     }
     if (requests & 4) {
@@ -630,6 +635,14 @@ text = """
         c.r29 -= 0x40;
         c.r4 = (int64_t)args[6];
         coop_harness_save(rdram, &c);
+    }
+    if (requests & 16) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = (int64_t)args[7];
+        c.r5 = (int64_t)args[8];
+        coop_harness_hearts(rdram, &c);
     }
     if (coop_session_hashing()) {
         recomp_context c = *ctx;
@@ -832,6 +845,46 @@ text = """
 }
 """
 
+# coop: the item func_8027AA74 made for it (v0, 0 if none; the slot is the
+# halfword a1 the function saved at sp+0x3C), for the probes' "coop: item"
+# line (#36).
+[[patches.hook]]
+func = "func_8027B39C"
+before_vram = 0x8027B3F0
+text = """
+{
+    extern void coop_note_item(int32_t slot, uint32_t item);
+    coop_note_item((int16_t)MEM_W(0x3C, ctx->r29), (uint32_t)ctx->r2);
+}
+"""
+
+# coop: the item collision callback, with the actor that touches the item in
+# v0 (0 for none; the branch skips the pickup and the item's removal) and the
+# item in s0. A full player passes through a heart while player 2 plays
+# (#36; patches/coop_player2.c, coop_item_passes): the callback then sees no
+# toucher and the heart stays.
+[[patches.hook]]
+func = "func_80279CA8"
+before_vram = 0x80279CFC
+text = """
+{
+    void coop_item_passes(uint8_t* rdram, recomp_context* ctx);
+    extern void coop_log_item_pass(int32_t slot, uint32_t item);
+    if (ctx->r2 != 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = ctx->r2;
+        c.r5 = ctx->r16;
+        coop_item_passes(rdram, &c);
+        if ((int32_t)c.r2 >= 0) {
+            coop_log_item_pass((int32_t)c.r2, (uint32_t)ctx->r16);
+            ctx->r2 = 0;
+        }
+    }
+}
+"""
+
 # coop: a slot picks up an item (s0 the slot, the item at sp+0x54, its type
 # the halfword at +0x20), before the switch on the type (#32).
 [[patches.hook]]
@@ -840,7 +893,9 @@ before_vram = 0x80279888
 text = """
 {
     extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    extern void coop_note_item_gone(uint32_t item);
     coop_log_player_event("pickup", (int32_t)ctx->r16, "item", MEM_H(0x20, MEM_W(0x54, ctx->r29)), NULL, 0);
+    coop_note_item_gone((uint32_t)MEM_W(0x54, ctx->r29));
 }
 """
 
@@ -875,7 +930,9 @@ before_vram = 0x80245868
 text = """
 {
     extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    extern void coop_note_item_gone(uint32_t item);
     coop_log_player_event("room teardown", -1, NULL, 0, NULL, 0);
+    coop_note_item_gone(0);
 }
 """
 

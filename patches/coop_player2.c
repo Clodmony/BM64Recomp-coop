@@ -306,3 +306,26 @@ void coop_feed_command(s32 slot) {
     cmd->held = func_80239FF8(COOP_P2_PAD);
     cmd->pressed = func_802399AC(COOP_P2_PAD);
 }
+
+// From the hook in the item collision callback (func_80279CA8), which has the
+// actor that touches an item: the slot of a player who leaves the item where
+// it is, else -1 (#36). While player 2 plays, a heart (type 4) passes through
+// a player it would give nothing, so a full player does not use up the
+// other's knocked-out heart: the pickup (func_802797BC) sets hearts to 2, or
+// adds one with stage flag 0x8 for slots 1-4.
+s32 coop_item_passes(u8* actor, u8* item) {
+    s32 slot;
+
+    if (!coop_partner_active() || *(s16*)(item + 0x20) != 4) {
+        return -1;
+    }
+    for (slot = 0; slot < 5; slot++) {
+        if (g_Players[slot].levelClass == actor) {
+            if ((D_802AC5C0 & 0x8) && slot != 0) {
+                return -1;
+            }
+            return g_Players[slot].heartCount >= 2 ? slot : -1;
+        }
+    }
+    return -1;
+}
