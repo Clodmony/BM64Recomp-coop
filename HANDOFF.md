@@ -6,7 +6,7 @@ repository so it survives any worktree path and any tool; per-checkout agent
 memory is not read by a session that starts in another worktree. State goes
 here; stable recipes go into `docs/coop/`; personal data and hardware never.
 
-Last updated 2026-10-18 (group #19 done in draft PR #PR19, stacked on #15
+Last updated 2026-10-18 (group #19 done in draft PR #20, stacked on #15
 and #12).
 
 ## Repository state
@@ -17,8 +17,8 @@ and #12).
 - Merged into `bm64recomp-coop`: #1 (workflow setup), #5 (closes #3, the
   story-mode audit, `docs/coop/design.md`).
 - Open issues: #2 and #6–#10 (closed by PR #12 when merged), #4 (closed by
-  PR #15), #13, #17, #18 (closed by PR #PR19), #14 and #16 (partly done in
-  PR #PR19, see below), #19 (the group), #11 (Europe follow-ups).
+  PR #15), #13, #17, #18 (closed by PR #20), #14 and #16 (partly done in
+  PR #20, see below), #19 (the group), #11 (Europe follow-ups).
 - Local git config of the clone: Claude identity, `upstream` with push
   `DISABLED`, `core.hooksPath .githooks`, `pushguard.romDir` set.
 
@@ -27,7 +27,7 @@ and #12).
 - **#12** `coop/2-europe-build` → `bm64recomp-coop`, draft: the Europe build.
 - **#15** `coop/4-player2-spike`, draft, stacked on #12: the test harness and
   the player 2 spike.
-- **#PR19** `coop/19-player2-playable`, draft, stacked on #15: the group #19.
+- **#20** `coop/19-player2-playable`, draft, stacked on #15: the group #19.
   Verify 2026-10-18: Europe `--full --scenarios`, all stages and all 7
   scenarios passed; US not run (compile-only check, see the PR).
 - Owner (2026-10-18): review #12 and #15, merge later, when the owner says
@@ -102,6 +102,6 @@ Under `~/dev-scratch/BM64Recomp-coop/`:
 
 ## Cleanup the owner may approve
 
-- After #12, #15 and #PR19 are merged: delete their branches.
+- After #12, #15 and #20 are merged: delete their branches.
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/` in scratch:
   when the player 2 follow-ups are done.
