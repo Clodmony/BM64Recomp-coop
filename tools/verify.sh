@@ -2,7 +2,7 @@
 # One unattended check of the checked-out branch (the co-op fork's verify
 # script), with a summary of a few lines at the end.
 #
-#   tools/verify.sh [--quick] [--full] [--version us|eu]
+#   tools/verify.sh [--quick] [--full] [--version us|eu] [--scenarios]
 #
 #   --quick     only the fast gates: submodules, configs, patches, europe
 #   --full      a decompressed ROM is required; without one the recomp and
@@ -10,6 +10,8 @@
 #   --version   the game version to build (BM64_VERSION, src/coop/version.cmake);
 #               default: us if its decompressed image exists, else eu if that
 #               one does, else us
+#   --scenarios also run the game's test scenarios (tools/scenarios/*.txt,
+#               tools/scenario.py) on the linked build; opens the game window
 #
 # Stages:
 #   submodules  every submodule checked out at the commit the branch records
@@ -31,6 +33,8 @@
 #               without it: every object file the game links compiled (host
 #               code, runtime, RT64, UI) except the ROM's output and
 #               register_overlays.cpp; stubs let CMake configure; no link
+#   scenarios   with --scenarios and a linked build: tools/scenario.py on every
+#               scenario, each in its own portable run folder
 #
 # Full logs go to $VERIFY_OUT/<stamp>/ (default
 # ~/dev-scratch/BM64Recomp-coop/verify), the summary to <stamp>/summary.txt and
@@ -38,21 +42,24 @@
 # $VERIFY_BUILD (default ~/dev-scratch/BM64Recomp-coop/build/<checkout name>,
 # with -eu appended for the Europe build).
 # Exits 0 only if no stage failed; a skipped stage is listed in the summary.
-# Nothing here starts the game or reads the owner's saves and settings.
+# Only --scenarios starts the game, through tools/run.sh (portable run folders,
+# never the owner's saves and settings).
 set -uo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 scratch="$HOME/dev-scratch/BM64Recomp-coop"
 quick=0
 full=0
+scenarios=0
 version=
 while (( $# )); do
 	case "$1" in
 		--quick) quick=1 ;;
 		--full) full=1 ;;
+		--scenarios) scenarios=1 ;;
 		--version) version="${2:-}"; shift ;;
 		--version=*) version="${1#--version=}" ;;
-		-h|--help) sed -n '2,42p' "$0"; exit 0 ;;
+		-h|--help) sed -n '2,46p' "$0"; exit 0 ;;
 		*) echo "unknown option: $1" >&2; exit 2 ;;
 	esac
 	shift
@@ -203,6 +210,14 @@ if (( ! quick )); then
 	else
 		stage build host_build
 		[ "$mode" = compile ] && sed -i 's/^build: ok$/build: ok (compile only, no ROM: not linked)/' "$summary"
+	fi
+	if (( scenarios )); then
+		if [ "$mode" = link ] && grep -q '^build: ok$' "$summary"; then
+			stage scenarios python3 -I tools/scenario.py --version "$version" tools/scenarios/*.txt
+			grep -E 'checks passed$|FAILED' "$out/scenarios.log" | sed 's/^/    /' >> "$summary"
+		else
+			skip scenarios "no linked build"
+		fi
 	fi
 fi
 

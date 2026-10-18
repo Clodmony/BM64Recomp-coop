@@ -8,6 +8,7 @@
 #include "librecomp/game.hpp"
 #include "recomp_ui.h"
 #include "coop_debug.h"
+#include "harness.h"
 
 extern std::vector<recomp::GameEntry> supported_games;
 
@@ -22,8 +23,10 @@ bool env_flag(const char* name) {
 // (bm64.us.toml), with the overlay ID it is asked to load. With
 // BM64_COOP_LOG_OVERLAYS=1 each load is one line on stderr, e.g.
 // "coop: overlay 0x20" for the title screen (docs/coop/design.md, *Overlay map*).
+// The test harness counts the loads (src/coop/harness.cpp).
 extern "C" void coop_log_overlay_load(uint32_t id) {
     static const bool enabled = env_flag("BM64_COOP_LOG_OVERLAYS");
+    coop::note_overlay_load(id);
     if (enabled) {
         std::fprintf(stderr, "coop: overlay 0x%02X\n", id & 0xFFFF);
     }

@@ -574,13 +574,167 @@ text = """
 
 # coop: count game frames (the main loop calls this once per frame) for speed
 # measurements (src/coop/debug.cpp; only with BM64_COOP_LOG_FRAMES=N).
+# The same hook runs the test harness (src/coop/harness.cpp): the input script,
+# and the warp and probes it asks for, which run in patches/coop_spike.c on a
+# copy of the registers with the stack pointer moved down.
 [[patches.hook]]
 func = "func_8023A208"
 before_vram = 0x8023A208
 text = """
 {
     extern void coop_log_frame(uint8_t* rdram);
+    extern uint32_t coop_harness_frame(int32_t* args);
+    void coop_warp(uint8_t* rdram, recomp_context* ctx);
+    void coop_probe(uint8_t* rdram, recomp_context* ctx);
+    int32_t args[2];
+    uint32_t requests;
     coop_log_frame(rdram);
+    requests = coop_harness_frame(args);
+    if (requests & 1) {
+        recomp_context c = *ctx;
+        c.r29 -= 0x40;
+        c.r4 = (int64_t)args[0];
+        c.r5 = (int64_t)args[1];
+        coop_warp(rdram, &c);
+    }
+    if (requests & 2) {
+        recomp_context c = *ctx;
+        c.r29 -= 0x40;
+        coop_probe(rdram, &c);
+    }
+}
+"""
+
+# coop: the co-op spike (#4), player 2 in a story room (patches/coop_spike.c,
+# docs/coop/design.md, *The follow-up spike*). Off unless BM64_COOP_P2 is set;
+# the event lines only with BM64_COOP_LOG_PLAYERS=1 (src/coop/harness.cpp).
+# Stage room init, before its spawn loop: make the co-op slot a player.
+[[patches.hook]]
+func = "func_80245CDC"
+before_vram = 0x80245CDC
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    void coop_stage_init(uint8_t* rdram, recomp_context* ctx);
+    coop_log_player_event("room init", -1, NULL, 0, NULL, 0);
+    if (coop_p2_slot() != 0) {
+        recomp_context c = *ctx;
+        c.r29 -= 0x40;
+        c.r4 = coop_p2_slot();
+        coop_stage_init(rdram, &c);
+    }
+}
+"""
+
+# coop: spawn of a slot (a0) logged.
+[[patches.hook]]
+func = "g_SpawnPlayer"
+before_vram = 0x802459BC
+text = """
+{
+    extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    coop_log_player_event("spawn", (int32_t)ctx->r4, NULL, 0, NULL, 0);
+}
+"""
+
+# coop: g_SpawnPlayer picks the model asset 0x4A + slot for slots 0-3 into s1
+# and has no case for slot 4 (s1 stale); the co-op slot 4 gets 0x4B. s3 = slot,
+# s0 = the part (0-11) of the loop that assigns the parts; logged once.
+[[patches.hook]]
+func = "g_SpawnPlayer"
+before_vram = 0x80245BC0
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    if ((int32_t)ctx->r19 == 4 && coop_p2_slot() == 4) {
+        ctx->r17 = 0x4B;
+    }
+    if (ctx->r16 == 0) {
+        coop_log_player_event("model", (int32_t)ctx->r19, "asset", (int32_t)ctx->r17, NULL, 0);
+    }
+}
+"""
+
+# coop: placing slot 0 on a tile (a0 slot, a1-a3 tile x, y, z) also places the
+# co-op slot, on a tile offset by BM64_COOP_P2_TILE.
+[[patches.hook]]
+func = "func_802511EC"
+before_vram = 0x802511EC
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    extern int32_t coop_p2_tile_offset(int32_t axis);
+    void coop_place_partner(uint8_t* rdram, recomp_context* ctx);
+    coop_log_player_event("place", (int32_t)ctx->r4, "x", (int32_t)ctx->r5, "z", (int32_t)ctx->r7);
+    if ((int32_t)ctx->r4 == 0 && coop_p2_slot() != 0) {
+        recomp_context c = *ctx;
+        c.r29 -= 0x40;
+        c.r4 = coop_p2_slot();
+        c.r5 = (int32_t)ctx->r5 + coop_p2_tile_offset(0);
+        c.r7 = (int32_t)ctx->r7 + coop_p2_tile_offset(1);
+        coop_place_partner(rdram, &c);
+    }
+}
+"""
+
+# coop: the player update of slot a0; the co-op slot 4 gets its command record from pad 1 first.
+[[patches.hook]]
+func = "func_8024E088"
+before_vram = 0x8024E088
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    void coop_feed_command(uint8_t* rdram, recomp_context* ctx);
+    if ((int32_t)ctx->r4 == 4 && coop_p2_slot() == 4) {
+        recomp_context c = *ctx;
+        c.r29 -= 0x40;
+        coop_feed_command(rdram, &c);
+    }
+}
+"""
+
+# coop: the update's bomb placement returned (v0 the bomb or 0, s0 the slot).
+[[patches.hook]]
+func = "func_8024E088"
+before_vram = 0x8024E608
+text = """
+{
+    extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    coop_log_player_event("bomb", (int32_t)ctx->r16, "placed", ctx->r2 != 0, NULL, 0);
+}
+"""
+
+# coop: damage to a slot (a0 slot, a1 cause), a death (same), a room teardown.
+[[patches.hook]]
+func = "func_80248148"
+before_vram = 0x80248148
+text = """
+{
+    extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    coop_log_player_event("hit", (int32_t)ctx->r4, "cause", (int32_t)ctx->r5, NULL, 0);
+}
+"""
+
+[[patches.hook]]
+func = "func_8023A870"
+before_vram = 0x8023A870
+text = """
+{
+    extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    coop_log_player_event("death", (int32_t)ctx->r4, "cause", (int32_t)ctx->r5, NULL, 0);
+}
+"""
+
+[[patches.hook]]
+func = "func_80245868"
+before_vram = 0x80245868
+text = """
+{
+    extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    coop_log_player_event("room teardown", -1, NULL, 0, NULL, 0);
 }
 """
 

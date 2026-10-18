@@ -3,6 +3,7 @@
 #include "librecomp/helpers.hpp"
 #include "recomp_input.h"
 #include "ultramodern/ultramodern.hpp"
+#include "../coop/harness.h" // coop: scripted pads for unattended runs
 
 // Arrays that hold the mappings for every input for keyboard and controller respectively.
 using input_mapping = std::array<recomp::InputField, recomp::bindings_per_input>;
@@ -80,6 +81,10 @@ bool recomp::get_n64_input(int controller_num, uint16_t* buttons_out, float* x_o
     float cur_x = 0.0f;
     float cur_y = 0.0f;
     
+    if (coop::scripted_input(controller_num, buttons_out, x_out, y_out)) { // coop: BM64_COOP_INPUT drives the pads
+        return true;
+    }
+
     if (controller_num != 0) {
         return false;
     }
