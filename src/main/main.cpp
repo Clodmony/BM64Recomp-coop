@@ -351,6 +351,18 @@ gpr get_entrypoint_address();
 
 // array of supported GameEntry objects
 std::vector<recomp::GameEntry> supported_games = {
+#ifdef BM64_VERSION_EU // coop: a Europe build runs the Europe ROM only (src/coop/version.cmake)
+    {
+        .rom_hash = 0x96c1418c31ee543aULL,
+        .internal_name = "BOMBERMAN64E",
+        .game_id = u8"bm64_eu",
+        .mod_game_id = "bm64", // the mod menu lists "bm64" mods (src/ui/ui_mod_menu.cpp)
+        .save_type = recomp::SaveType::AllowAll,
+        .is_enabled = true,
+        .entrypoint_address = get_entrypoint_address(),
+        .entrypoint = recomp_entrypoint,
+    },
+#else
     {
         .rom_hash = 0xc4c0b74bbb696426ULL,
         .internal_name = "BOMBERMAN64",
@@ -361,6 +373,7 @@ std::vector<recomp::GameEntry> supported_games = {
         .entrypoint_address = get_entrypoint_address(),
         .entrypoint = recomp_entrypoint,
     },
+#endif
 };
 
 // TODO: move somewhere else

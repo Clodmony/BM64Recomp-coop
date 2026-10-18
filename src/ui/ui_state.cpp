@@ -26,6 +26,7 @@
 #include "ui_mod_menu.h"
 #include "ui_mod_installer.h"
 #include "ui_renderer.h"
+#include "../coop/coop_debug.h" // coop: unattended runs
 
 bool can_focus(Rml::Element* element) {
     return element->GetOwnerDocument() != nullptr && element->GetProperty(Rml::PropertyId::TabIndex)->Get<Rml::Style::TabIndex>() != Rml::Style::TabIndex::None;
@@ -560,6 +561,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
     // Return to the launcher if no menu is open and the game isn't started.
     if (!recompui::is_any_context_shown() && !ultramodern::is_game_started()) {
         recompui::show_context(recompui::get_launcher_context_id(), "");
+        coop::autostart(); // coop: BM64_COOP_AUTOSTART=1 presses Start once (tools/run.sh)
     }
 
     std::lock_guard lock{ ui_state_mutex };

@@ -6,7 +6,9 @@ usage: python3 -I tools/unpack_rom.py <rom> [<out folder>]
 <rom> is the US (BOMBERMAN64, NBME) or Europe (BOMBERMAN64E, NBMP) release in
 any byte order (.z64, .n64, .v64). The image is written to
 <out folder>/bm64.decomp.<us|eu>.z64 (default ~/dev-scratch/BM64Recomp-coop/rom),
-never next to the ROM or into the checkout. Any other ROM is refused.
+never next to the ROM or into the checkout, and the ROM itself in .z64 order to
+<out folder>/bm64.<us|eu>.z64: the file the game stores and checks, which
+tools/run.sh hands it. Any other ROM is refused.
 
 The image is what Bomberhackers/bm64's tools/bm64decompress builds: the ROM in
 big-endian order as is, then every overlay table entry appended, LZSS entries
@@ -156,6 +158,8 @@ def main():
         img += blob
 
     os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, f"bm64.{version}.z64"), "wb") as f:
+        f.write(rom)
     out_path = os.path.join(out_dir, f"bm64.decomp.{version}.z64")
     with open(out_path, "wb") as f:
         f.write(img)
