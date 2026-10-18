@@ -223,6 +223,7 @@ void coop_freeze_partner(s32 on, s32 anim) {
     if (on && !(g_Players[coop_slot].flags & COOP_FLAG_FROZEN) && g_Players[0].levelClass != NULL) {
         func_802454F8(0, coop_freeze_tile);
     }
+    recomp_printf("coop: freeze partner slot=%d on=%d\n", coop_slot, on);
     if (anim) {
         D_802AC894 = coop_slot;
         func_802452E8(on);

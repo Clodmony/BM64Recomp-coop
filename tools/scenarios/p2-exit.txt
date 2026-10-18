@@ -11,6 +11,8 @@
 #check log "^coop: trigger slot=4 tile=3,"
 #check still before after 0
 #check after "^coop: trigger slot=4" "^coop: room teardown"
+# the room freezes S for the exit, and player 2 with it (#16)
+#check after "^coop: trigger slot=4" "^coop: freeze partner slot=4 on=1$"
 #check after "^coop: trigger slot=4" "^coop: overlay 0x28$"
 #check after "^coop: overlay 0x28$" "^coop: spawn slot=0$"
 #check after "^coop: overlay 0x28$" "^coop: spawn slot=4$"

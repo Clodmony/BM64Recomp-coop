@@ -11,6 +11,9 @@
 #check no-log ^coop: down slot=
 #check no-log ^coop: hit slot=4
 #check after "^coop: death slot=0" "^coop: room teardown"
+# before the retry the death freezes S, and player 2 with it (#16); during
+# player 1's death animation itself player 2 still plays
+#check after "^coop: death slot=0" "^coop: freeze partner slot=4 on=1$"
 #check after "^coop: death slot=0" "^coop: overlay 0x29$"
 #check after "^coop: death slot=0" "^coop: spawn slot=4$"
 #check after "^coop: death slot=0" "^coop: place slot=4 tile="
