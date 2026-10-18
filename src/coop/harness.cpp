@@ -1,6 +1,6 @@
 // The test harness for unattended runs (tools/run.sh, tools/scenario.py):
 // scripted pads, a warp into a stage, probes of the players, and the
-// switches of the co-op spike (#4). All of it is off unless asked for:
+// switches for player 2 (#4, #19). All of it is off unless asked for:
 //
 //   BM64_COOP_INPUT=<file>       pads 0-3 follow the script (format below)
 //   BM64_COOP_WARP=<ID>[:<entry>] once the title (overlay 0x20) has run 30
@@ -8,11 +8,9 @@
 //                                overlay ID (entry default 0x10, as the world
 //                                map starts a stage)
 //   BM64_COOP_P2=1|4             a second human player in that slot in story
-//                                rooms (patches/coop_spike.c): slot 1 reads pad
-//                                1, slot 4 reads its command record, which
+//                                rooms (patches/coop_player2.c): slot 1 reads
+//                                pad 1, slot 4 reads its command record, which
 //                                pad 1 fills
-//   BM64_COOP_P2_TILE=<dx>,<dz>  where player 2 is placed, in tiles from
-//                                player 1 (default 0,0)
 //   BM64_COOP_LOG_PLAYERS=1      one line per room init, spawn (and its model
 //                                asset), placement, bomb, hit, death and room
 //                                teardown
@@ -26,6 +24,8 @@
 //                       DU DD DL DR CU CD CL CR joined with '+', or '-' for
 //                       none) and the stick at x, y (-1..1, default 0)
 //   probe <label>       log "coop: probe <label>", then one line per player
+//   tile <slot> <x> <z> put the player in slot (0-4) on tile x, z of the room,
+//                       at its floor level (patches/coop_harness.c)
 //   log <text>          log "coop: input: <text>"
 //   end                 log "coop: input end"; the pads stay as they are
 #include <array>
@@ -58,9 +58,10 @@ struct Pad {
 };
 
 struct Step {
-    enum class Kind { Overlay, Wait, Pad, Probe, Log, End } kind;
+    enum class Kind { Overlay, Wait, Pad, Probe, Log, Tile, End } kind;
     int line;
-    uint32_t value = 0; // overlay ID, frames, pad number
+    uint32_t value = 0; // overlay ID, frames, pad number, slot
+    int32_t tile[2] = {0, 0};
     Pad pad;
     std::string text;
 };
@@ -147,6 +148,9 @@ bool parse_script(const char* path, std::vector<Step>& steps) {
             } else {
                 ok = ok && stick.empty();
             }
+        } else if (command == "tile") {
+            step.kind = Step::Kind::Tile;
+            ok = (words >> step.value >> step.tile[0] >> step.tile[1]) && step.value < 5;
         } else if (command == "probe" || command == "log") {
             step.kind = command == "probe" ? Step::Kind::Probe : Step::Kind::Log;
             std::getline(words >> std::ws, step.text);
@@ -156,7 +160,8 @@ bool parse_script(const char* path, std::vector<Step>& steps) {
             ok = false;
         }
         std::string extra;
-        if (ok && (step.kind == Step::Kind::Overlay || step.kind == Step::Kind::Wait || step.kind == Step::Kind::End)) {
+        if (ok && (step.kind == Step::Kind::Overlay || step.kind == Step::Kind::Wait || step.kind == Step::Kind::Tile ||
+                   step.kind == Step::Kind::End)) {
             ok = !(words >> extra);
         }
         if (!ok) {
@@ -184,8 +189,9 @@ void load_script() {
     std::fprintf(stderr, "coop: input %s, %zu steps\n", path, script.steps.size());
 }
 
-// Runs the script's steps due this frame; returns true when one asks for a probe.
-bool run_script() {
+// Runs the script's steps due this frame; returns true when one asks for a
+// probe. A tile step fills tile (slot, x, z) and ends the frame's steps.
+bool run_script(int32_t* tile) {
     bool probe = false;
     while (script.next < script.steps.size()) {
         const Step& step = script.steps[script.next];
@@ -219,6 +225,12 @@ bool run_script() {
             case Step::Kind::Log:
                 std::fprintf(stderr, "coop: input: %s\n", step.text.c_str());
                 break;
+            case Step::Kind::Tile:
+                tile[0] = static_cast<int32_t>(step.value);
+                tile[1] = step.tile[0];
+                tile[2] = step.tile[1];
+                script.next++;
+                return probe;
             case Step::Kind::End:
                 std::fprintf(stderr, "coop: input end\n");
                 break;
@@ -289,7 +301,8 @@ void coop::note_overlay_load(uint32_t id) {
 
 // Called by the per-frame hook (func_8023A208, bm64.us.toml). Returns what the
 // hook should call in the patches this frame: bit 0 coop_warp(args[0],
-// args[1]), bit 1 coop_probe().
+// args[1]), bit 1 coop_probe(), bit 2 coop_harness_tile(args[2], args[3],
+// args[4]).
 extern "C" uint32_t coop_harness_frame(int32_t* args) {
     static Warp warp = read_warp();
     std::lock_guard lock{mutex};
@@ -302,8 +315,12 @@ extern "C" uint32_t coop_harness_frame(int32_t* args) {
         args[1] = warp.entry;
         requests |= 1;
     }
-    if (run_script()) {
+    args[2] = -1;
+    if (run_script(&args[2])) {
         requests |= 2;
+    }
+    if (args[2] >= 0) {
+        requests |= 4;
     }
     return requests;
 }
@@ -320,21 +337,6 @@ extern "C" int32_t coop_p2_slot(void) {
         return slot;
     }();
     return slot;
-}
-
-// BM64_COOP_P2_TILE=<dx>,<dz>: where the co-op slot is placed, in tiles from
-// slot 0 (default 0,0: the same tile). axis 0 is x, 1 is z.
-extern "C" int32_t coop_p2_tile_offset(int32_t axis) {
-    static const std::array<int32_t, 2> offset = [] {
-        std::array<int32_t, 2> offset{0, 0};
-        const char* value = std::getenv("BM64_COOP_P2_TILE");
-        if (value != nullptr && std::sscanf(value, "%d,%d", &offset[0], &offset[1]) != 2) {
-            std::fprintf(stderr, "coop: BM64_COOP_P2_TILE must be <dx>,<dz>, not %s\n", value);
-            offset = {0, 0};
-        }
-        return offset;
-    }();
-    return offset[axis & 1];
 }
 
 // Hooks in bm64.us.toml report player events here (BM64_COOP_LOG_PLAYERS=1):

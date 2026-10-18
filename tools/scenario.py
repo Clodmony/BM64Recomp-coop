@@ -13,6 +13,7 @@ lines the script itself ignores as comments:
     #check after REGEX1 REGEX2   a line matching REGEX2 follows the first
                                  line matching REGEX1 (quote regexes with
                                  spaces, shell style)
+    #check not-after REGEX1 REGEX2  no line matching REGEX2 follows it
     #check moved P1 P2 SLOT [MIN]   the player in SLOT is at least MIN world
                                  units (default 10) from where it was between
                                  the probes labelled P1 and P2
@@ -20,6 +21,9 @@ lines the script itself ignores as comments:
     #check delta P1 P2 SLOT AXIS OP VALUE
                                  the player's move along AXIS (x, y or z)
                                  from probe P1 to P2, e.g. z < -100
+    #check near PROBE A B MAX [MIN]  the players in slots A and B are MIN
+                                 (default 0) to MAX world units apart at PROBE
+                                 (a tile is 100 units)
     #check field PROBE SLOT NAME OP VALUE
                                  a field of the player's probe line, OP one of
                                  = != < > <= >=, e.g. hearts < 2
@@ -89,11 +93,14 @@ def check(text, lines, probes):
     if kind == "no-log":
         hits = [line for line in lines if re.search(args[0], line)]
         return not hits, hits[0] if hits else ""
-    if kind == "after":
+    if kind in ("after", "not-after"):
         first = next((i for i, line in enumerate(lines) if re.search(args[0], line)), None)
         if first is None:
             return False, "first pattern not logged"
-        return any(re.search(args[1], line) for line in lines[first + 1:]), ""
+        hits = [line for line in lines[first + 1:] if re.search(args[1], line)]
+        if kind == "not-after":
+            return not hits, hits[0] if hits else ""
+        return bool(hits), ""
     if kind in ("moved", "still"):
         a, b, slot = args[0], args[1], int(args[2])
         limit = float(args[3]) if len(args) > 3 else (10.0 if kind == "moved" else 1.0)
@@ -101,6 +108,11 @@ def check(text, lines, probes):
         dist = math.dist(pa, pb)
         ok = dist >= limit if kind == "moved" else dist <= limit
         return ok, f"{dist:.1f} units"
+    if kind == "near":
+        label, a, b, limit = args[0], int(args[1]), int(args[2]), float(args[3])
+        least = float(args[4]) if len(args) > 4 else 0.0
+        dist = math.dist(player(probes, label, a)["pos"], player(probes, label, b)["pos"])
+        return least <= dist <= limit, f"{dist:.1f} units"
     if kind == "delta":
         a, b, slot, axis, op, value = args[0], args[1], int(args[2]), args[3], args[4], float(args[5])
         i = "xyz".index(axis)

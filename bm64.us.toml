@@ -575,11 +575,11 @@ text = """
 # coop: count game frames (the main loop calls this once per frame) for speed
 # measurements (src/coop/debug.cpp; only with BM64_COOP_LOG_FRAMES=N).
 # The same hook runs the test harness (src/coop/harness.cpp): the input script,
-# and the warp and probes it asks for, which run in patches/coop_spike.c on a
-# copy of the registers with the stack pointer moved down. A copy must point
-# its odd float registers (f_odd) at itself, as librecomp's load_context does:
-# copied as is, they stay the original's, and double arithmetic in game
-# functions called on the copy goes wrong (#13).
+# and the warp, probes and tile steps it asks for, which run in
+# patches/coop_harness.c on a copy of the registers with the stack pointer
+# moved down. A copy must point its odd float registers (f_odd) at itself, as
+# librecomp's load_context does: copied as is, they stay the original's, and
+# double arithmetic in game functions called on the copy goes wrong (#13).
 [[patches.hook]]
 func = "func_8023A208"
 before_vram = 0x8023A208
@@ -589,7 +589,8 @@ text = """
     extern uint32_t coop_harness_frame(int32_t* args);
     void coop_warp(uint8_t* rdram, recomp_context* ctx);
     void coop_probe(uint8_t* rdram, recomp_context* ctx);
-    int32_t args[2];
+    void coop_harness_tile(uint8_t* rdram, recomp_context* ctx);
+    int32_t args[5];
     uint32_t requests;
     coop_log_frame(rdram);
     requests = coop_harness_frame(args);
@@ -607,10 +608,19 @@ text = """
         c.r29 -= 0x40;
         coop_probe(rdram, &c);
     }
+    if (requests & 4) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = (int64_t)args[2];
+        c.r5 = (int64_t)args[3];
+        c.r6 = (int64_t)args[4];
+        coop_harness_tile(rdram, &c);
+    }
 }
 """
 
-# coop: the co-op spike (#4), player 2 in a story room (patches/coop_spike.c,
+# coop: player 2 in a story room (#4, #19; patches/coop_player2.c,
 # docs/coop/design.md, *The follow-up spike*). Off unless BM64_COOP_P2 is set;
 # the event lines only with BM64_COOP_LOG_PLAYERS=1 (src/coop/harness.cpp).
 # Stage room init, before its spawn loop: make the co-op slot a player.
@@ -663,8 +673,8 @@ text = """
 }
 """
 
-# coop: placing slot 0 on a tile (a0 slot, a1-a3 tile x, y, z) also places the
-# co-op slot, on a tile offset by BM64_COOP_P2_TILE.
+# coop: placing slot 0 on a tile (a0 slot, a1-a3 tile x, y, z) puts the co-op
+# slot's placement on hold until player 1's first own step.
 [[patches.hook]]
 func = "func_802511EC"
 before_vram = 0x802511EC
@@ -672,7 +682,6 @@ text = """
 {
     extern int32_t coop_p2_slot(void);
     extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
-    extern int32_t coop_p2_tile_offset(int32_t axis);
     void coop_place_partner(uint8_t* rdram, recomp_context* ctx);
     coop_log_player_event("place", (int32_t)ctx->r4, "x", (int32_t)ctx->r5, "z", (int32_t)ctx->r7);
     if ((int32_t)ctx->r4 == 0 && coop_p2_slot() != 0) {
@@ -680,26 +689,77 @@ text = """
         c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
         c.r29 -= 0x40;
         c.r4 = coop_p2_slot();
-        c.r5 = (int32_t)ctx->r5 + coop_p2_tile_offset(0);
-        c.r7 = (int32_t)ctx->r7 + coop_p2_tile_offset(1);
         coop_place_partner(rdram, &c);
     }
 }
 """
 
-# coop: the player update of slot a0; the co-op slot 4 gets its command record from pad 1 first.
+# coop: the player update of slot a0. Player 1's runs the co-op slot's pending
+# placement; the co-op slot 4's gets its command record from pad 1 first.
 [[patches.hook]]
 func = "func_8024E088"
 before_vram = 0x8024E088
 text = """
 {
     extern int32_t coop_p2_slot(void);
+    void coop_partner_tick(uint8_t* rdram, recomp_context* ctx);
     void coop_feed_command(uint8_t* rdram, recomp_context* ctx);
-    if ((int32_t)ctx->r4 == 4 && coop_p2_slot() == 4) {
+    int32_t slot = (int32_t)ctx->r4;
+    if (coop_p2_slot() != 0 && (slot == 0 || (slot == 4 && coop_p2_slot() == 4))) {
         recomp_context c = *ctx;
         c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
         c.r29 -= 0x40;
-        coop_feed_command(rdram, &c);
+        if (slot == 0) {
+            c.r4 = coop_p2_slot();
+            coop_partner_tick(rdram, &c);
+        } else {
+            coop_feed_command(rdram, &c);
+        }
+    }
+}
+"""
+
+# coop: the cutscene freeze and release of S, with the idle animation
+# (func_802452E8: v1 = S once loaded, a0 on) and without (func_80245280: a0 =
+# S before its call of func_80245208, a1 on): when S is player 1, player 2 is
+# frozen and released with it.
+[[patches.hook]]
+func = "func_802452E8"
+before_vram = 0x80245300
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    void coop_freeze_partner(uint8_t* rdram, recomp_context* ctx);
+    int32_t s = (int32_t)ctx->r3;
+    coop_log_player_event("freeze", s, "on", (int32_t)ctx->r4, "anim", 1);
+    if (s == 0 && coop_p2_slot() != 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r5 = 1;
+        coop_freeze_partner(rdram, &c);
+    }
+}
+"""
+
+[[patches.hook]]
+func = "func_80245280"
+before_vram = 0x80245294
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    void coop_freeze_partner(uint8_t* rdram, recomp_context* ctx);
+    int32_t s = (int32_t)ctx->r4;
+    coop_log_player_event("freeze", s, "on", (int32_t)ctx->r5, "anim", 0);
+    if (s == 0 && coop_p2_slot() != 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = ctx->r5;
+        c.r5 = 0;
+        coop_freeze_partner(rdram, &c);
     }
 }
 """
@@ -726,13 +786,28 @@ text = """
 }
 """
 
+# A death of player 2 while player 1 plays: player 2 is down and respawns
+# (patches/coop_player2.c, coop_partner_death), and the function is skipped,
+# returning 1 as for a death it ran.
 [[patches.hook]]
 func = "func_8023A870"
 before_vram = 0x8023A870
 text = """
 {
+    extern int32_t coop_p2_slot(void);
     extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    void coop_partner_death(uint8_t* rdram, recomp_context* ctx);
     coop_log_player_event("death", (int32_t)ctx->r4, "cause", (int32_t)ctx->r5, NULL, 0);
+    if (coop_p2_slot() != 0 && (int32_t)ctx->r4 == coop_p2_slot()) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        coop_partner_death(rdram, &c);
+        if ((int32_t)c.r2 != 0) {
+            ctx->r2 = 1;
+            return;
+        }
+    }
 }
 """
 

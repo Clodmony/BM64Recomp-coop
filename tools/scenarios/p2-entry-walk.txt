@@ -1,23 +1,45 @@
-# The co-op spike (#4), a finding to keep an eye on: player 2 placed on
-# player 1's tile (BM64_COOP_P2_TILE=0,0) stands in the way of player 1's
-# scripted entry walk into room 0x29. The walk (player flag 0x400, which
-# func_8024A824 waits on) never ends and player 1 stays locked; without
-# player 2 the walk ends on tile 5,14. This scenario checks the lock as it is
-# today: when a placement fix lands, turn these checks around.
+# Player 2's placement off player 1's entry walk (#14). Room 0x29 entered from
+# room 0x28 (entry 0x13): player 1 is put on tile 1,14 and walks in to 5,14
+# (player flag 0x400) while the room holds it frozen (0x2010000). Placed on
+# player 1's tile, player 2 stood in the way and the walk never ended (#4).
+# Now player 2 joins only at player 1's own first step: it is spawned on the
+# tile player 1 left, the walk's last tile, 5,14. (Held at the room's spawn
+# point instead, the origin here, it could not be placed after about 6 s and
+# then died with a hit of cause 3.)
+# Not the tile before it: 4,14 is blocked once the walk is over (put there,
+# player 2 was pushed to 5,15), and put there just before, player 2 took a
+# hit of cause 3 and died.
 #env BM64_COOP_WARP=0x29:0x13
 #env BM64_COOP_P2=4
-#env BM64_COOP_P2_TILE=0,0
 #env BM64_COOP_LOG_PLAYERS=1
-#check log ^coop: place slot=4 tile=1,1,14$
-#check field late 0 flags = 0x420
-#check still t300 late 0
-#check field t300 0 flags = 0x420
+#check log ^coop: place pending slot=4 p1 tile=1,1,14$
+#check field t60 0 flags = 0x2010420
+#check field t300 0 flags = 0
+# player 2 is not in the room before player 1's first step: it joins then
+#check after "^coop: probe t300$" "^coop: spawn slot=4$"
+#check not-after "^coop: spawn slot=4$" "^coop: probe t300$"
+#check log "^coop: place slot=4 tile=5,1,14 p1 tile=6,1,14$"
+#check field step 4 flags = 0
+#check near step 0 4 150 50
+#check no-log ^coop: hit slot=
+# then both play: player 1 steps right (-z), player 2 right too
+#check moved step late 0 50
+#check moved step late 4 50
 overlay 0x29
-wait 300
+wait 60
+probe t60
+wait 240
 probe t300
 pad 0 - 0.05 -1
-wait 30
+wait 15
 pad 0 -
-wait 300
+wait 10
+probe step
+pad 0 - 1 0.05
+pad 1 - 1 0.05
+wait 15
+pad 0 -
+pad 1 -
+wait 200
 probe late
 end

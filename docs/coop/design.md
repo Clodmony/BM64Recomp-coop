@@ -474,8 +474,9 @@ Issue #4, run on the **Europe** build (2026-10-18). The plan was:
 ### How it is built
 
 Hooks (`[[patches.hook]]` in `bm64.us.toml`, inserted into the recompiled
-game function at an instruction) call into `patches/coop_spike.c` on a copy
-of the registers, with the stack pointer moved down. No game function is
+game function at an instruction) call into `patches/coop_spike.c` (since #19
+`patches/coop_player2.c` and `patches/coop_harness.c`) on a copy of the
+registers, with the stack pointer moved down. No game function is
 replaced, so none had to be rewritten in C. All of it is off unless
 `BM64_COOP_P2=1|4` is set; the test harness
 ([building.md](building.md), *The test harness*) gets a run into a room
@@ -543,15 +544,115 @@ Scenarios `p2-slot4`, `p2-slot1`, `p2-entry-walk` (`tools/scenarios/`), room
 The warp leaves the flow flag 0x80 (set at boot) set in the room, with or
 without player 2; play is not affected.
 
-### What follows
+### What followed
 
-- Fill slot 4's command record in the format the update expects for
-  controlType 2 (or run player 2 through a pad buffer, as slot 1 does), so
-  it moves like a pad player (#13). Needed before the session core sends
-  input.
-- Placement off the entry walk (#14), then the cutscene, death and camera
-  work of the sections above.
-- A US build run of the same scenarios.
+The group #19 (next section) took the input, placement, cutscene, exit and
+death findings up. The input finding above was a harness bug, not the
+record's format.
+
+## Player 2 in a story room
+
+The group #19 (#13, #14, #16, #17, #18), run on the **Europe** build
+(2026-10-18) with the scenarios in `tools/scenarios/` (`p2-*.txt`). Player 2
+is still local and scripted (pad 1, `BM64_COOP_P2=4`); nothing here is online
+yet. The code is `patches/coop_player2.c`; the hooks are in `bm64.us.toml`.
+
+### Input through the command record (#13)
+
+The record holds what the pad path makes of the stick: `func_80239880` gives
+an angle in degrees (+0x0, before the camera's yaw, which the update adds), an
+elevation (+0x4, 90 for a flat stick) and a length (+0x8), and the update
+reads the record for a controlType 2 slot through the same code as a pad
+(0x8024E3E4–0x8024E46C). So filling record 4 from pad 1 with the pad
+accessors was right. What made slot 4 move along one axis was the hooks'
+**register copy**: `recomp_context c = *ctx` keeps `f_odd` pointing at the
+original context's odd float registers, so double arithmetic in
+`func_8022FF58` (the angle) read half of each double from the wrong context
+(stick 124,3 gave 182.3° from the hook and 91.4° inside the update). Each
+copy now points `f_odd` at itself, as librecomp's `load_context` does. Slot 4
+then moves camera-relative like slots 0 and 1 (`p2-slot4`); moving off its
+lane's centre, the game also slides it back onto the lane. The record is
+therefore a workable input point for the session core: the stick as the pad
+path reads it plus buttons, no camera state needed on the sender's side
+(inferred: the receiver adds its own camera's yaw, the same on both sides
+while the camera follows player 1).
+
+### Placement: player 2 joins at player 1's first step (#14)
+
+Any placement of player 2 while player 1 is in its entry walk failed:
+
+- on player 1's tile or ahead: the walk never ends (#4);
+- held frozen at the room's spawn point (the origin in room 0x29) and placed
+  after the walk: after about 6 s it can no longer be placed, and released it
+  takes a hit of cause 3 and dies;
+- on the tile player 1 left last during the walk (4,14 in room 0x29): blocked
+  once the walk is over (the game pushes player 2 to 5,15), and placed just
+  before that, player 2 is killed there (cause 3).
+
+The rule now: the room's init does **not** spawn player 2. Player 1's
+placement (`func_802511EC(0, …)`, room entries and story teleports) only
+makes player 2's placement pending. At player 1's **first own step**
+(a step along x or z while player 1 is neither walking, flag 0x400, nor
+frozen, 0x2010000; a fall to a lower floor is not a step) player 2 is put on
+the tile player 1 just left: player 1 stood there, so it is floor, and it is
+next to player 1. The first time in a room this spawns player 2
+(`func_802511EC` without an actor sets its spawn point, then `g_SpawnPlayer`,
+as the battle respawn `func_8023EB28` does); later (a teleport, a respawn) it
+moves the actor and releases it. Checked in room 0x29 (entry walk, a retry
+after player 1's death) and room 0x28 (entered from 0x29's floor exit, where
+player 1 falls in), `p2-entry-walk`, `p2-p1-death`, `p2-exit`. Not checked:
+a story teleport by `func_802512C0` from a room script (none found in the
+rooms run); the same hook covers it.
+
+Cost: player 2 appears only once player 1 moves.
+
+### Cutscenes (#16)
+
+The freeze and release wrappers of S (`func_802452E8`, with the idle
+animation, and `func_80245280`) apply to player 2 too when S is player 1,
+the way `func_8023C170` freezes every player: hooks after they load S call
+`coop_freeze_partner`. A release when player 1 was moved during the scene
+makes player 2's placement pending again (it joins player 1 at its next
+step). While player 2 waits for a placement it is left alone. Scripted walks
+(`func_802506B8`) and facing (`func_80245F74`) stay player 1's.
+
+### Exits and triggers (#17)
+
+The update sends the room event 0x50 for **any** slot that stops centred on
+an event tile (`func_8024857C`, called from `func_8024E088` for every slot);
+the room then asks the rectangle tests, which looked at S only. The three
+tests (`func_802457D8`, `func_802456FC`, `func_802455A8`) are rewritten in C
+(`RECOMP_PATCH`): S's tile first, kept in `D_802ACEC8[S]` as before, then
+player 2's. So player 2 can take an exit while player 1 stands still; the
+next room's init and player 1's first step there bring player 2 along
+(`p2-exit`: room 0x29's floor exit at x=3, z=4..7, into room 0x28).
+
+### Death: downed and respawn with shared lives (#18)
+
+A hook at the entry of `func_8023A870` takes player 2's death while player 1
+plays (controlType 1, hearts > 0): no 0x92, no death process, no retry.
+It returns 1 as the function would, and the damage handler puts the slot out
+(controlType 3), as in battle. After 120 frames player 2 respawns with 2
+hearts for one shared life (`D_802AC624`, 2 → 1) and joins player 1 at its
+next step. With no life left it stays out until the next room. A death of
+player 1, or of player 2 while player 1 is out, runs the story death as
+before: the retry reloads the room and player 2 comes back with it
+(`p2-slot4`, `p2-p1-death`). Not done: player 1 downed while player 2 plays
+(S would have to change), the slot-0 resets of section 7, step 5, for player
+2 (remote bombs, continue), and what a downed player 2 looks like (it stays
+where it fell, not drawn as dead).
+
+### Hooks and patches
+
+| Where | Does |
+|---|---|
+| `func_80245CDC` entry (room player init) | player 2's stats (2 hearts, player 1's bombs and fire, bomb type 0x200), not spawned yet, placement pending |
+| `func_802511EC` entry (put a slot on a tile) | slot 0 placed: player 2's placement pending (held frozen if it is in the room) |
+| `func_8024E088` entry (player update) | slot 0: respawn countdown, player 1's trail, player 2's placement; slot 4: its command record from pad 1 |
+| `func_802452E8` at 0x80245300, `func_80245280` at 0x80245294 | S = 0: freeze or release player 2 with player 1 |
+| `func_8023A870` entry (death) | player 2 while player 1 plays: downed, the function skipped |
+| `func_802457D8`, `func_802456FC`, `func_802455A8` (`RECOMP_PATCH`) | rectangle tests for S or player 2 |
+| `g_SpawnPlayer` at 0x80245BC0 | slot 4: model asset 0x4B |
 
 ## Open questions for a running build
 
@@ -559,10 +660,9 @@ without player 2; play is not affected.
 2. Is slot 4 free in every story room, and are all per-slot arrays used with
    it at least 5 entries? (Spike: free in rooms 0x28 and 0x29; the arrays
    not checked.)
-3. What does the command record hold, and in which frame? (Spike: not the
-   pad path's camera-relative vector; filled with it, slot 4 moves along one
-   world axis. The rival AI writes a direction from its own state and a
-   speed.)
+3. What does the command record hold, and in which frame? (#13: the pad
+   path's angle before the camera's yaw, an elevation and a length, read by
+   the update in the same frame; see *Player 2 in a story room*.)
 4. Does the camera feed anything back into the simulation?
 5. Who sets the actor hit bits; do enemies and bosses hit slot 4 like slot 0?
    (Spike: bomb blasts, its own and player 1's, hit slot 4; enemies and
