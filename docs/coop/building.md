@@ -264,8 +264,9 @@ Everything is off unless a switch asks for it:
   entry 0x13 (room 0x28's exit) starts with player 1's short entry walk and
   then plays.
 - `BM64_COOP_LOG_PLAYERS=1`: one line per room init, spawn (and the model
-  asset it gets), placement on a tile, bomb, hit, death, cutscene freeze and
-  room teardown, from hooks in `bm64.us.toml`.
+  asset it gets), placement on a tile, bomb, hit, the heart a hit knocks
+  out (`drop … item=4`), an item picked up (`pickup … item=T`), death,
+  cutscene freeze and room teardown, from hooks in `bm64.us.toml`.
 - `BM64_COOP_P2=1|4`: player 2 in that slot in story rooms, driven by pad 1
   ([design.md](design.md), *Player 2 in a story room*). Its own lines
   (`coop: place …`, `trigger`, `down`, `respawn`) come from

@@ -6,6 +6,10 @@
 #env BM64_COOP_WARP=0x29:0x13
 #env BM64_COOP_P2=4
 #env BM64_COOP_LOG_PLAYERS=1
+# A hit knocks a heart out that flies off in a random direction and can be
+# caught again (p2-heart, #32); with this seed it is not, so the second bomb
+# is a death.
+#env BM64_COOP_SEED=1
 #
 # spawned by the room's own init (an overlay call), with model 0x4B, placed
 #check log ^coop: room init
@@ -37,6 +41,8 @@
 # player 2's bomb, its blast takes one of player 2's hearts and not player 1's
 #check log ^coop: bomb slot=4 placed=1$
 #check after "^coop: bomb slot=4 placed=1" "^coop: hit slot=4 cause="
+#check after "^coop: hit slot=4" "^coop: drop slot=4 item=4$"
+#check no-log ^coop: pickup slot=4 item=4$
 #check field hit1 4 hearts = 1
 #check no-log ^coop: hit slot=0
 # the second hit is a death: player 2 is down while player 1 plays on (no
