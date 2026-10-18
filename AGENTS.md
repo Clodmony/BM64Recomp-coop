@@ -37,8 +37,10 @@ Read before working:
   `tools/europe.py`, which also holds the Europe address map.
 - `src/game/`: host-side C++ (input, config, the recomp APIs patches call),
   `src/ui/`: the RmlUi menus and launcher, `src/main/`: startup,
-  `src/coop/`: co-op host code (the build version, debug switches).
+  `src/coop/`: co-op host code (the build version, debug switches, the test
+  harness: scripted pads, warp, probes).
 - `tools/`: `verify.sh` (the check of a branch), `run.sh` (unattended runs),
+  `scenario.py` and `scenarios/` (scripted runs of the game with checks),
   `unpack_rom.py` (decompressed image from either ROM), `europe.py` (Europe
   configs and their check), `n64recomp.sh`.
 - `lib/N64ModernRuntime` (librecomp, ultramodern), `lib/rt64` (renderer),
@@ -157,6 +159,11 @@ tools/verify.sh --version eu   # the Europe build (default: the image that exist
 # An unattended run of a built executable in its own portable folder under
 # ~/dev-scratch/BM64Recomp-coop/runs/; 0 once overlay 0x20 (title) loads.
 tools/run.sh --version eu --until-overlay 0x20 --timeout 60
+
+# Scenarios: scripted pads and checks on the game's log (docs/coop/building.md,
+# *The test harness*); --scenarios runs them all after a linked build.
+tools/scenario.py --version eu tools/scenarios/*.txt
+tools/verify.sh --full --version eu --scenarios
 
 python3 -I tools/unpack_rom.py <rom>     # decompressed image into scratch
 python3 -I tools/europe.py check <image> # the Europe map on the image

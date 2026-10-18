@@ -9,6 +9,7 @@
 #include "SDL.h"
 #include "promptfont.h"
 #include "GamepadMotion.hpp"
+#include "../coop/harness.h" // coop: scripted pads for unattended runs
 
 constexpr float axis_threshold = 0.5f;
 
@@ -517,6 +518,12 @@ void recomp::set_rumble(int controller_num, bool on) {
 }
 
 ultramodern::input::connected_device_info_t recomp::get_connected_device_info(int controller_num) {
+    if (controller_num != 0 && controller_num < 4 && coop::scripted_input_active()) { // coop: a script drives pads 0-3
+        return ultramodern::input::connected_device_info_t {
+            .connected_device = ultramodern::input::Device::Controller,
+            .connected_pak = ultramodern::input::Pak::None,
+        };
+    }
     switch (controller_num) {
         case 0:
             return ultramodern::input::connected_device_info_t {

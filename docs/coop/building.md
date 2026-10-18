@@ -123,11 +123,14 @@ tools/verify.sh --quick          # submodules, configs, patches, europe: about a
 tools/verify.sh --full           # a missing ROM is a failure, not a skip
 tools/verify.sh --version eu     # the Europe build (default: the decompressed
                                  # image that exists, US first, else US)
+tools/verify.sh --scenarios      # also the game's test scenarios (below);
+                                 # needs the linked build, opens the game window
 ```
 
 Stages: `submodules`, `configs` (`tools/europe.py configs`, then the US and
 Europe configs parse), `n64recomp`, `patches`, `europe` (Europe only:
-`tools/europe.py check` on the image), `recomp`, `build`. Logs and
+`tools/europe.py check` on the image), `recomp`, `build`, and with
+`--scenarios` `scenarios` (*The test harness*, below). Logs and
 `summary.txt` go to `~/dev-scratch/BM64Recomp-coop/verify/<stamp>/`, the
 summary's first line names the version; the CMake folder stays in
 `~/dev-scratch/BM64Recomp-coop/build/<checkout name>/` (Europe:
@@ -188,12 +191,14 @@ stderr) and `summary.txt`. The script stops only the process it started
 `~/.config/BM64Recompiled` was created or changed.
 
 Options: `--version`, `--until-overlay ID` (success once the game loads that
-overlay), `--timeout` (default 60 s), `--exe`, `--rom`, `--env NAME=VALUE`
-(repeatable), `--audio` (sound on the default device; by default SDL's dummy
-driver, which consumes audio at the real rate). Exit status: 0 overlay
-reached (or ran until the timeout without `--until-overlay`), 1 timeout
-before the overlay, 2 the game exited or crashed, 3 the owner's config
-folder changed, 4 bad setup. The game opens its window on the desktop; there
+overlay), `--until-log TEXT` (success once a line of the log starts with
+TEXT), `--timeout` (default 60 s), `--exe`, `--rom`, `--env NAME=VALUE`
+(repeatable), `--input FILE` (an input script, copied into the run folder;
+*The test harness*, below), `--audio` (sound on the default device; by
+default SDL's dummy driver, which consumes audio at the real rate). Exit
+status: 0 overlay reached or log line seen (or ran until the timeout
+without either), 1 timeout before them, 2 the game exited or crashed, 3 the
+owner's config folder changed, 4 bad setup. The game opens its window on the desktop; there
 is no headless mode.
 
 Debug switches, all off unless set (`src/coop/debug.cpp`):
@@ -213,6 +218,67 @@ Debug switches, all off unless set (`src/coop/debug.cpp`):
 
 Captures (screenshots, clips) are fine for debugging but stay in the run
 folder: never in commits, issues or pull requests.
+Capture only the game's window: a capture of the active window takes
+whatever window has the focus once the game loses it.
+
+## The test harness
+
+`src/coop/harness.cpp` drives and observes the game in an unattended run.
+Everything is off unless a switch asks for it:
+
+- `BM64_COOP_INPUT=<file>` (`tools/run.sh --input`): an input script drives
+  pads 0–3, which all report connected; the real keyboard and controller are
+  ignored. One step per line, `#` starts a comment:
+  - `overlay ID`: wait for the next load of that overlay (the n-th such step
+    waits for the n-th load);
+  - `wait N`: wait N game frames;
+  - `pad N BUTTONS [X Y]`: from now on pad N holds the buttons (`A`, `B`, `Z`,
+    `START`, `L`, `R`, `DU` `DD` `DL` `DR`, `CU` `CD` `CL` `CR`, joined with
+    `+`, or `-` for none) and the stick at X, Y in −1..1;
+  - `probe LABEL`: log `coop: probe LABEL`, a `coop: state` line (overlay,
+    S, flow flags, lives), the stick reading of pads 0 and 1, and one
+    `coop: player slot=…` line per player in play (controlType, hearts,
+    bombs, fire, flags, position in tenths of a world unit);
+  - `log TEXT`, and `end`, which logs `coop: input end`.
+
+  A bad line logs `coop: input error …` and the script does not run. The
+  script steps once per game frame, from the per-frame hook of
+  `func_8023A208`.
+- `BM64_COOP_WARP=ID[:ENTRY]`: 30 frames after the title (overlay 0x20)
+  loads, start a new story session as the file select does for a new file
+  (`func_8023DA04(0)`) and ask for overlay ID with entry code ENTRY (default
+  0x10, the code the world map starts a stage with; `func_8023AE6C`). Room
+  0x28 opens with the tutorial's dialogue, which waits for A; room 0x29 with
+  entry 0x13 (room 0x28's exit) starts with player 1's short entry walk and
+  then plays.
+- `BM64_COOP_LOG_PLAYERS=1`: one line per room init, spawn (and the model
+  asset it gets), placement on a tile, bomb, hit, death and room teardown,
+  from hooks in `bm64.us.toml`.
+- `BM64_COOP_P2=1|4`, `BM64_COOP_P2_TILE=DX,DZ`: the co-op spike's second
+  player ([design.md](design.md), *The follow-up spike*).
+
+Patches print with `recomp_printf` (stdout), the host with stderr; with any
+of these switches stdout is line-buffered, so both stay in order in
+`game.log`. The warp and the probes run in `patches/coop_spike.c`, called
+from the frame hook on a copy of the registers with the stack pointer moved
+down.
+
+A **scenario** (`tools/scenarios/*.txt`) is an input script with `#env`
+lines (switches for the game) and `#check` lines. `tools/scenario.py` runs
+each through `tools/run.sh` (until `coop: input end`) and checks the log:
+
+```bash
+tools/scenario.py --version eu p2-slot4                       # one scenario
+tools/scenario.py --version eu tools/scenarios/*.txt          # all of them
+tools/scenario.py --version eu --env BM64_COOP_P2=0 p2-slot4  # override an #env
+```
+
+Checks: `log REGEX`, `no-log REGEX`, `after REGEX1 REGEX2` (a match of
+REGEX2 after the first match of REGEX1), `moved P1 P2 SLOT [MIN]` and
+`still P1 P2 SLOT [MAX]` (distance between two probes, in world units),
+`delta P1 P2 SLOT AXIS OP VALUE` (the move along one axis), `field PROBE
+SLOT NAME OP VALUE`. The output is one line per check, `N/M checks passed`
+and a RESULT line; exit 0 only if all passed. A scenario takes 15–35 s.
 
 ## Europe speed
 

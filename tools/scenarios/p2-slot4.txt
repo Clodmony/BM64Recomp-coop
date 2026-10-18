@@ -1,0 +1,78 @@
+# The co-op spike (#4), step 2: player 2 in slot 4, the proposed co-op slot
+# (docs/coop/design.md, *The follow-up spike*). Slot 4 runs as controlType 2
+# and reads its command record, which pad 1 fills. Green Garden stage 1, room
+# 0x29, entered the way room 0x28's exit enters it (entry 0x13). Player 2 is
+# placed off player 1's entry walk (4 tiles along x, 3 along z), on open floor.
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_P2=4
+#env BM64_COOP_P2_TILE=4,3
+#env BM64_COOP_LOG_PLAYERS=1
+#
+# spawned by the room's own init (an overlay call), with model 0x4B, placed
+#check log ^coop: room init
+#check log ^coop: stage init overlay=0x29 slot=4 controlType=2 hearts=2
+#check log ^coop: spawn slot=4$
+#check log ^coop: model slot=4 asset=75$
+#check log ^coop: place slot=4 tile=5,1,17$
+#check field start 0 flags = 0
+#check field start 4 controlType = 2
+#check field start 4 hearts = 2
+# pad 1 moves player 2 and not player 1; pad 0 moves player 1 and not player 2
+#check moved p2-0 p2-1 4
+#check still p2-0 p2-1 0
+#check moved p1-0 p1-1 0
+#check still p1-0 p1-1 4
+# a finding: the command record does not move slot 4 the way the pad moves a
+# controlType 1 slot. Filled with the pad path's own vector (func_80239880),
+# stick right moves slot 4 along -x, where it moves slots 0 and 1 along -z
+# (p2-slot1). Turn this around when the record is filled right.
+#check delta right4-0 right4-1 4 x < -100
+#check delta right4-0 right4-1 4 z > -10
+# player 2's bomb, its blast takes one of player 2's hearts
+#check log ^coop: bomb slot=4 placed=1$
+#check after "^coop: bomb slot=4 placed=1" "^coop: hit slot=4 cause="
+#check field hit1 4 hearts = 1
+#check field hit1 0 hearts = 1
+# the second hit is a death; today it fails the room for player 1 (retry:
+# the room reloads), which frees and respawns player 2
+#check after "^coop: hit slot=4" "^coop: death slot=4 cause="
+#check after "^coop: death slot=4" "^coop: room teardown"
+#check after "^coop: death slot=4" "^coop: overlay 0x29$"
+#check after "^coop: death slot=4" "^coop: spawn slot=4$"
+#check field respawn 4 controlType = 2
+#check field respawn 4 hearts = 2
+#check log "^coop: state overlay=0x29 .* lives=2$"
+#check after "^coop: death slot=4" "^coop: state overlay=0x29 .* lives=1$"
+overlay 0x29
+wait 300
+probe start
+probe p2-0
+pad 1 - 0.05 -1
+wait 15
+pad 1 -
+wait 10
+probe p2-1
+probe p1-0
+pad 0 - 1 0.05
+wait 15
+pad 0 -
+wait 10
+probe p1-1
+probe right4-0
+pad 1 - 1 0.05
+wait 15
+pad 1 -
+wait 10
+probe right4-1
+pad 1 A
+wait 2
+pad 1 -
+wait 400
+probe hit1
+pad 1 A
+wait 2
+pad 1 -
+overlay 0x29
+wait 300
+probe respawn
+end

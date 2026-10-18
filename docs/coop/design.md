@@ -6,10 +6,10 @@ player, and proposes a co-op approach for each assumption. It is the base for
 the co-op issues that follow.
 
 **Status (2026-10-18).** Everything here was read from a disassembly of the
-**Europe** release, named with the US symbols in `BM64Syms/`. Nothing has been
-run: there is no linked build yet (the recompilation needs the US ROM, #2 would
-add Europe). Every finding is to be re-checked on a US build. "Read" means the
-instructions show it; "inferred" means an interpretation beyond them.
+**Europe** release, named with the US symbols in `BM64Syms/`. The spike (#4,
+*The follow-up spike* below) ran parts of it on the Europe build; the rest is
+read, not run. Every finding is to be re-checked on a US build. "Read" means
+the instructions show it; "inferred" means an interpretation beyond them.
 
 **Scope (owner, 2026-10-18).** The work targets **online** co-op. Local couch
 co-op (split-screen or a shared screen) is dropped for now; its notes stay
@@ -462,34 +462,111 @@ gameplay work.
 
 ## The follow-up spike: player 2 in a story stage
 
-Issue #4. It needs a running build (a US ROM, or #2).
+Issue #4, run on the **Europe** build (2026-10-18). The plan was:
 
-1. **Slot 1, a room without rivals** (Green Garden stage 1, overlay 0x28):
-   a hook after the slot reset in `func_8023D0F8` sets
-   `g_Players[1].controlType = 1`, and a patch of `func_80245CDC` gives slot 1
-   hearts, bombs, fire and player 1's position plus one tile. Pad 1 drives it
-   with no input change.
+1. **Slot 1, a room without rivals** (Green Garden stage 1): slot 1 made a
+   human player (controlType 1) before the room's spawn loop, with hearts,
+   bombs and fire; pad 1 drives it with no input change.
 2. **Slot 4**: model case in `g_SpawnPlayer` (asset 0x4B), controlType 2,
    pad 1 copied into `g_ComputerPlayerMovement[4]` before the player update.
-3. Placement: patch `func_802511EC` so placing slot 0 places the co-op slot
-   next to it.
+3. Placement: placing slot 0 also places the co-op slot.
 
-Observe and log (`recomp_printf` from the patches): the actor exists and
-renders with its own colour and shadow; pad 1 moves it, places and kicks
-bombs, pad 0 is unaffected; a hit takes its hearts; a room change frees and
-respawns it; a death today ends as player 1's death (expected); the camera,
-exits and cutscenes ignore it (expected). Also check that the patched main
-functions are reached from overlay stub calls, and that no actor pool or heap
-runs out with a second player and its bombs.
+### How it is built
+
+Hooks (`[[patches.hook]]` in `bm64.us.toml`, inserted into the recompiled
+game function at an instruction) call into `patches/coop_spike.c` on a copy
+of the registers, with the stack pointer moved down. No game function is
+replaced, so none had to be rewritten in C. All of it is off unless
+`BM64_COOP_P2=1|4` is set; the test harness
+([building.md](building.md), *The test harness*) gets a run into a room
+(`BM64_COOP_WARP`), drives the pads (`BM64_COOP_INPUT`) and logs players and
+events.
+
+| Hook | Does |
+|---|---|
+| `func_80245CDC` entry (room player init) | co-op slot: controlType 1 (slot 1) or 2 (slot 4), 2 hearts, player 1's bombs and fire, bomb type 0x200 |
+| `g_SpawnPlayer` at 0x80245BC0 | slot 4: model asset 0x4B in s1 (the switch has no case for it) |
+| `func_802511EC` entry (put a slot on a tile) | slot 0 placed: place the co-op slot too, offset by `BM64_COOP_P2_TILE` |
+| `func_8024E088` entry (player update) | slot 4: fill its command record from pad 1 with `func_80239880`, `func_80239FF8`, `func_802399AC` |
+| `func_8024E088` at 0x8024E608, `func_80248148`, `func_8023A870`, `func_80245868` | log bomb placed, hit, death, room teardown |
+
+The input path needed one host change: only controller 0 was connected and
+read (`src/game/controls.cpp`, `src/game/input.cpp`); with an input script,
+pads 0–3 report connected and read the script.
+
+### What the runs showed
+
+Scenarios `p2-slot4`, `p2-slot1`, `p2-entry-walk` (`tools/scenarios/`), room
+0x29 (Green Garden stage 1, the room after the tutorial, entered with entry
+0x13), plus exploratory runs in room 0x28.
+
+- **Spawn: confirmed.** With controlType set before the spawn loop, the
+  room's own init spawns the co-op slot, slot 1 or slot 4, and every reload
+  respawns it (the hook sets it again after `func_8023D0F8`'s reset). Rooms
+  0x28 and 0x29 call `func_80245CDC` from overlay code, so hooks in main
+  functions are reached from overlay stub calls.
+- **Model: confirmed.** Slot 4 with asset 0x4B is drawn as the dark bomber
+  with a shadow (seen on a local capture in room 0x28); slot 1 gets 0x4B from
+  the game's own switch.
+- **Input, slot 1 (pad 1, controlType 1): confirmed.** The same stick moves
+  slot 0 and slot 1 the same way, camera-relative (right is −z, down +x in
+  room 0x29's camera); A places a bomb.
+- **Input, slot 4 (command record): partly.** Pad 1 moves slot 4 and pad 0
+  does not; pad 0 moves player 1 and pad 1 does not; A places a bomb. But the
+  record filled with the pad path's own vector does **not** move slot 4 the
+  way a pad moves a controlType 1 slot: stick right moves it along −x (slots
+  0 and 1: −z), left and up also −x, down +x. Inside the update the vector
+  for slot 0 equals the probe's for the same stick, so the difference is in
+  how the update uses a controlType 2 slot's vector, not traced. The rival
+  AI, the record's normal writer (`func_802553D4`), writes +0x0 from its own
+  state (AI+0x74, inferred a world-space direction) and a speed at +0x8. So
+  the record holds something other than the pad vector (open question 3).
+- **Bombs and hits: confirmed.** Slot 4's and slot 1's bombs explode and
+  their blasts take one of their hearts (2 → 1); player 1's bombs hit slot 4
+  too (room 0x28).
+- **Death: as predicted.** A second hit kills slot 4: `func_8023A870(4, 1)`,
+  flow flags 0x92, slot 4's controlType becomes 3, and the room reloads as
+  player 1's retry with one life fewer (2 → 1); the reload frees and
+  respawns slot 4. In room 0x28, during the tutorial, the room had not
+  reloaded 10 s after the death (not looked into).
+- **Cutscenes: as predicted.** During room 0x28's tutorial dialogue player 1
+  is locked (flags 0x2010000) and slot 4 is not: it walks.
+- **Placement: refuted as planned.** Placed on player 1's tile, or one tile
+  ahead, the co-op slot stands in the way of player 1's scripted **entry
+  walk**: the walk (flag 0x400) never ends and player 1 stays locked
+  (`p2-entry-walk`). Off the walk's path (here 4 tiles along x and 3 along z)
+  both play. One tile behind fell off the map. A placement rule needs a free,
+  walkable tile off the entry path (or player 2 placed when the walk ends).
+- **Pools:** no failure with two players and their bombs in these runs; not
+  stressed.
+
+The warp leaves the flow flag 0x80 (set at boot) set in the room, with or
+without player 2; play is not affected.
+
+### What follows
+
+- Fill slot 4's command record in the format the update expects for
+  controlType 2 (or run player 2 through a pad buffer, as slot 1 does), so
+  it moves like a pad player (#13). Needed before the session core sends
+  input.
+- Placement off the entry walk (#14), then the cutscene, death and camera
+  work of the sections above.
+- A US build run of the same scenarios.
 
 ## Open questions for a running build
 
 1. Every address on this page, the 0x10 bss shift in particular, on US.
 2. Is slot 4 free in every story room, and are all per-slot arrays used with
-   it at least 5 entries?
-3. Is the stick vector in the command record camera-relative?
+   it at least 5 entries? (Spike: free in rooms 0x28 and 0x29; the arrays
+   not checked.)
+3. What does the command record hold, and in which frame? (Spike: not the
+   pad path's camera-relative vector; filled with it, slot 4 moves along one
+   world axis. The rival AI writes a direction from its own state and a
+   speed.)
 4. Does the camera feed anything back into the simulation?
 5. Who sets the actor hit bits; do enemies and bosses hit slot 4 like slot 0?
+   (Spike: bomb blasts, its own and player 1's, hit slot 4; enemies and
+   bosses not tried.)
 6. Does retargeting the rival AI record make rivals chase another player?
 7. Which screens are overlay 0x9B and the game-over/continue targets (0x20 and
    0x21 with entry 0x11)?
