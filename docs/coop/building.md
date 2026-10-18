@@ -208,8 +208,8 @@ Debug switches, all off unless set (`src/coop/debug.cpp`):
   button does (start the stored ROM, hide the launcher). `tools/run.sh` sets it.
 - `BM64_COOP_LOG_OVERLAYS=1`: one line `coop: overlay 0xID` per overlay load,
   from a hook at the loader's entry (`func_8022691C`, `bm64.us.toml`).
-  `tools/run.sh` sets it. The boot path loads 0x20 (title and main menu); left
-  alone, the game then cycles through the attract demo (0x1B) and its stages
+  `tools/run.sh` sets it. The boot path loads 0x20 (first the logos, later
+  the title and main menu); left alone, the game then cycles through the attract demo (0x1B) and its stages
   (0x38, 0x50, 0x58, …) and back to 0x20 (the overlay map is in
   [design.md](design.md)).
 - `BM64_COOP_LOG_FRAMES=N`: every N game frames, from a hook on
@@ -263,7 +263,19 @@ Everything is off unless a switch asks for it:
 
   A bad line logs `coop: input error …` and the script does not run. The
   script steps once per game frame, from the per-frame hook of
-  `func_8023A208`.
+  `func_8023A208`; a pad change reaches the game's pad history (Europe
+  `D_802AC418`, filled by `func_8023A104` at the top of the next frame) one
+  frame later, as a press (the edge the menus read) in its first frame.
+
+  **Driving the menus** (#31, `title-menu`): the boot's first load of overlay
+  0x20 only shows the logos and goes on to the opening demo (0x1B) whatever
+  is pressed: START there does not open the main menu. START in the demo
+  (60 frames after its load) brings back the title, a second load of 0x20:
+  wait for it with a second `overlay 0x20` step, then START opens the main
+  menu and A (60 frames later) takes its first entry, Adventure, into the
+  file select (0x1F). In a run without saves, A picks the first file and A
+  again starts it: the new file's opening cutscene (0x1A). A tap is
+  `pad 0 START`, `wait 4`, `pad 0 -`.
 - `BM64_COOP_WARP=ID[:ENTRY[:FILE]]`: 30 frames after the title (overlay
   0x20) loads, start a story session as the file select does, for a new file
   (`func_8023DA04(0)`) or, with FILE, by loading file 0–2

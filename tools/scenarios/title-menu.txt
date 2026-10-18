@@ -1,0 +1,42 @@
+# The title, its main menu and the file select driven by pad 0 (#31). The
+# boot's first load of overlay 0x20 only shows the logos and goes on to the
+# opening demo (0x1B) whatever is pressed; START in the demo brings back the
+# title (0x20, its second load), where START opens the main menu and A takes
+# its first entry, Adventure, into the file select (0x1F). There, on a run
+# without saves, A picks the first (empty) file and A again starts it: the
+# opening cutscene of a new file (0x1A).
+#check after "^coop: overlay 0x1B$" "^coop: probe title$"
+#check after "^coop: probe title$" "^coop: overlay 0x1F$"
+#check after "^coop: overlay 0x1F$" "^coop: probe file-select$"
+#check after "^coop: probe file-select$" "^coop: overlay 0x1A$"
+#check log "^coop: state overlay=0x1A "
+overlay 0x20
+overlay 0x1B
+wait 60
+pad 0 START
+wait 4
+pad 0 -
+overlay 0x20
+wait 60
+probe title
+pad 0 START
+wait 4
+pad 0 -
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+overlay 0x1F
+wait 60
+probe file-select
+pad 0 A
+wait 4
+pad 0 -
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+overlay 0x1A
+wait 30
+probe opening
+end
