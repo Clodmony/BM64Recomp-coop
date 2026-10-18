@@ -205,8 +205,8 @@ Last updated 2026-10-18 (#33 done, PR #40 merged).
 ## Next candidates
 
 1. **A hand try of the Co-op menu** (owner): two games on one machine, Host
-   7777 in one, Join 127.0.0.1 7777 in the other; what breaks becomes an
-   issue.
+   7777 in one, Join 127.0.0.1 7777 in the other, then turn each camera with
+   the C-buttons (#33); what breaks becomes an issue.
 2. **Other session follow-ups**: #29 (two machines, Windows/macOS; also
    whether two compilers give the same build identity; whether two games on
    one machine read the same gamepad); #39 (the flaky launcher check:
