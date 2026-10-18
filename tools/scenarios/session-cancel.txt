@@ -1,0 +1,19 @@
+# Cancel a session from its waiting prompt (#28, docs/coop/design.md,
+# *Hosting and joining*): Join from the launcher's Co-op menu to a port
+# nothing listens on (the discard port 9). A launcher session tries without a
+# time limit; BM64_COOP_CANCEL_AFTER presses the prompt's Cancel after 2 s.
+# The launcher goes back to its menu, where the test switch presses Start.
+#env BM64_COOP_LAUNCHER=join:127.0.0.1:9
+#env BM64_COOP_CANCEL_AFTER=2
+#
+#check log "^coop: launcher: join 127.0.0.1 port 9$"
+#check log "^coop: session ui: Co-op session: Connecting to 127.0.0.1 port 9$"
+#check after "^coop: session ui: Co-op session: Connecting" "^coop: session ui: cancel$"
+#check after "^coop: session ui: cancel$" "^coop: session: cancelled$"
+#check after "^coop: session: cancelled$" "^coop: launcher: start alone "
+#check no-log ^coop: session: no host within
+#check no-log ^coop: session lockstep
+#check after "^coop: launcher: start alone " "^coop: overlay 0x20$"
+overlay 0x20
+wait 30
+end

@@ -217,6 +217,10 @@ Debug switches, all off unless set (`src/coop/debug.cpp`):
   `coop: frame <frames> <ms> <retraces> <audio frames> <audio queue µs> <audio skips>`.
 - `BM64_COOP_PAL60=1`: turn the Europe build's PAL pacing off.
 
+A run's own `general.json` turns background input off, so a controller in
+use elsewhere does not press the test game's buttons; a key or button
+pressed while a test game has the focus still reaches it.
+
 Captures (screenshots, clips) are fine for debugging but stay in the run
 folder: never in commits, issues or pull requests.
 Capture only the game's window: a capture of the active window takes
@@ -326,8 +330,16 @@ with two games on this machine, a host and a client on a free local port.
 The session's own switches (`src/coop/session.cpp`):
 
 - `BM64_COOP_SESSION=host:PORT` or `join:HOST:PORT`: be the session's host or
-  its client; the game waits for the other side at its first pad read
-  (`BM64_COOP_CONNECT_TIMEOUT`, default 60 s) and plays alone if none comes.
+  its client; with `tools/run.sh`'s autostart the launcher waits for the other
+  side, with its prompts (`BM64_COOP_CONNECT_TIMEOUT`, default 60 s), then
+  starts the game, alone if none came. Without the autostart the launcher's
+  Start runs the game, which waits at its first pad read.
+- `BM64_COOP_LAUNCHER=host:PORT` or `join:HOST:PORT`: instead of Start, fill
+  the launcher's Co-op menu with it and press Host or Join (#28,
+  [design.md](design.md), *Hosting and joining*); no time limit. If it does
+  not connect, the menu comes back and the switch presses Start.
+- `BM64_COOP_CANCEL_AFTER=S`: press the waiting prompt's Cancel after S
+  seconds.
 - `BM64_COOP_DELAY=N`: the input delay in frames, 1–60 (the host's counts,
   default 2).
 - `BM64_COOP_SEED=N`: seed the game's random generator with N; also without
@@ -348,7 +360,9 @@ The client's camera follows player 2, the host's player 1
 (`BM64_COOP_CAMERA` above; `session-camera` checks both and the hashes).
 
 A scenario with a `#session` line runs both games at once (`tools/run.sh
---name host` and `--name client`, so their run folders differ). The scenario
+--name host` and `--name client`, so their run folders differ). With a
+`#launcher` line both start the session from the launcher's Co-op menu
+(`BM64_COOP_LAUNCHER` in place of `BM64_COOP_SESSION`; `session-launcher`). The scenario
 is the host's script; `#client STEP` lines are the client's script (its pad
 0 is pad 1, player 2, in both games), `#env-host` and `#env-client` set one
 side's environment, `#check-client` checks the client's log, and `#check

@@ -27,6 +27,7 @@
 #include "ui_mod_installer.h"
 #include "ui_renderer.h"
 #include "../coop/coop_debug.h" // coop: unattended runs
+#include "../coop/session_ui.h" // coop: the online session's prompts
 
 bool can_focus(Rml::Element* element) {
     return element->GetOwnerDocument() != nullptr && element->GetProperty(Rml::PropertyId::TabIndex)->Get<Rml::Style::TabIndex>() != Rml::Style::TabIndex::None;
@@ -563,6 +564,8 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
         recompui::show_context(recompui::get_launcher_context_id(), "");
         coop::autostart(); // coop: BM64_COOP_AUTOSTART=1 presses Start once (tools/run.sh)
     }
+
+    coop::update_session_ui(); // coop: the online session's state as prompts (#28)
 
     std::lock_guard lock{ ui_state_mutex };
 

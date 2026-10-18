@@ -744,9 +744,13 @@ frames below it hold no buttons.
 The transport is TCP with Nagle off: the host listens (IPv6 and IPv4), the
 client connects, retrying until `BM64_COOP_CONNECT_TIMEOUT`. A hello carries
 the protocol version, the role, the game version (US and Europe are refused
-together), the host's seed and delay, and the build identity (#26, below). The connection is made at the game's
-first pad read (`func_8023A22C`, before the loop), so both games start
-their frames together. The message formats are in `session.cpp`.
+together), the host's seed and delay, and the build identity (#26, below).
+The launcher connects and exchanges the hellos before it starts the game
+(#28, *Hosting and joining*); the save follows at the game's first pad read
+(`func_8023A22C`, before the loop), where the lockstep starts, so both games
+start their frames together. A game started without the launcher's
+connection (its plain Start with `BM64_COOP_SESSION` set) still connects at
+that read. The message formats are in `session.cpp`.
 
 ### Determinism and the shared seed
 
@@ -781,8 +785,8 @@ desync for the same frame (366), and the session goes on.
 ### Ending
 
 A peer that closes, or sends nothing for 10 s, ends the session (`coop:
-session lost`); the game then reads its own pads again and plays alone
-(`session-lost`). Player 2 stays in the room with no pad. A client that
+session lost`, and a *Co-op session lost* prompt); the game then reads its
+own pads again and plays alone (`session-lost`). Player 2 stays in the room with no pad. A client that
 finds no host, or a host no client, within the timeout plays alone without
 player 2 (`session-alone`). Something on the port that never sends a hello
 gives up after the same timeout (tried once by hand).
@@ -863,6 +867,55 @@ which the hash would show only once they reach a player or the random
 generator. The C-buttons (`func_80235934`) read pad 0, which in a session is
 the host's: the host turns both cameras, the client none (#33).
 
+### Hosting and joining (#28)
+
+The launcher's **Co-op** button (under Start game, once a ROM is chosen)
+opens a menu: *Host on port* (default 7777) or *Join* an address and port
+(`src/coop/session_ui.cpp`). It sets the session as `BM64_COOP_SESSION`
+would (`configure_session`; a port outside 1–65535 or an empty address is
+shown under the menu) and connects on a thread of its own while a prompt
+shows the wait (*Waiting for player 2 on port N*, or *Connecting to H port
+P*) with a Cancel button. A wait from the menu has no time limit. Once the
+hellos agree, both start the game, which shows *Player 2 joined* or
+*Connected to the host* for 2 s; the save and the lockstep follow at its
+first pad read. A refusal (*No co-op session* and the reason: another
+build, protocol or game version, a port it cannot listen on) or a Cancel
+goes back to the Co-op menu without starting the game, and the session is
+cleared, so the launcher's Start then plays alone.
+
+Why the wait is in the launcher: once the game has started, RT64 presents
+only the frames the game makes, and a game held at its first pad read makes
+none. A run with the menu's join (to a port nothing listens on) showed it:
+the UI drew fewer than 60 frames in a 15 s wait (a counter logged every 60th
+draw: none until the game ran), so the waiting prompt would not show and its
+Cancel could not be pressed; the test switch's Cancel came only when the run
+stopped the game.
+
+A session from `BM64_COOP_SESSION` with `tools/run.sh`'s autostart connects
+the same way, with the same prompts except that its wait has no Cancel (its
+timeout still applies), and starts the game whatever comes of it, alone if
+it did not connect (as before). In one full verify run both games of
+`session-save` logged `cancelled` without the test switch, which nothing in
+the code does on its own; a press on the waiting prompt's focused Cancel
+from a controller fits (the game reads controllers in the background by
+default, so both test games got it; inferred, not reproduced). Since then
+`tools/run.sh` turns background input off in its runs.
+Every prompt is also a log line, `coop: session ui: <header>: <text>`, which
+the scenarios check: `session-launcher` (the menu's Host and Join, both in
+lockstep, the same hashes), `session-cancel` (Cancel after 2 s, back to the
+menu), and the prompts in `session-alone`, `session-build` and
+`session-lost`. The test switches `BM64_COOP_LAUNCHER` and
+`BM64_COOP_CANCEL_AFTER` press the menu's buttons and the prompt's Cancel
+through the same code as a click ([building.md](building.md)).
+
+Not run: the menu and prompts clicked and typed into by hand (the scenarios
+call the buttons' code, not RmlUi's clicks; a field's text is read from its
+`value` attribute), how they look, a controller's navigation of them, and
+the menu coming back after a refusal or Cancel (the test switch presses
+Start there). A game that reaches its first pad read more than 10 s after
+the other's would lose the session at its first step (inferred from the
+lockstep's 10 s wait; not seen in the runs).
+
 ### Not done
 
 - (#29) Two machines, the internet (the host's port must be reachable: a forwarded
@@ -870,7 +923,6 @@ the host's: the host turns both cameras, the client none (#33).
   `session.cpp` was not compiled.
 - (#33) The camera in a room whose camera turns, and the client's
   own C-buttons (*The camera*).
-- (#28) Starting a session takes environment switches; there is no menu for it.
 - A fixed delay: a slow or lost message stalls both games, with no rollback.
 
 ## Open questions for a running build

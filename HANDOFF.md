@@ -6,7 +6,7 @@ repository so it survives any worktree path and any tool; per-checkout agent
 memory is not read by a session that starts in another worktree. State goes
 here; stable recipes go into `docs/coop/`; personal data and hardware never.
 
-Last updated 2026-10-18 (state review; #37 merged; #28 next).
+Last updated 2026-10-18 (#28 done, PR #38 merged).
 
 ## Repository state
 
@@ -17,9 +17,10 @@ Last updated 2026-10-18 (state review; #37 merged; #28 next).
   audit), and on 2026-10-18 the chain #12 (Europe build), #15 (harness,
   player 2 spike), #20 (group #19), #25 (session core), #30 (host's save,
   build check), #34 (camera), #35 (#32, the knocked-out heart), #37 (#36,
-  heart items). Their branches are deleted. No open pull requests.
+  heart items), #38 (#28, the launcher's Co-op menu). Their branches are
+  deleted. No open pull requests.
 - Open issues: #14 and #16 (leftover checks, owner), #19 (their group),
-  #11 (Europe follow-ups), #22–#24 (follow-ups of #19), #28, #29 (session
+  #11 (Europe follow-ups), #22–#24 (follow-ups of #19), #29 (session
   follow-ups), #31 (scripted pads on the title), #33 (cameras that turn,
   the client's C-buttons).
 - Local git config of the clone: Claude identity, `upstream` with push
@@ -27,7 +28,8 @@ Last updated 2026-10-18 (state review; #37 merged; #28 next).
 
 ## Open pull requests
 
-- None. #37 (closes #36) was merged on GitHub by the owner on 2026-10-18.
+- None. #38 (closes #28) merged on the owner's word, 2026-10-18, without a
+  hand try: the menu was never clicked by hand or seen (the PR's *Not run*).
 
 ## Owner decisions (2026-10-18)
 
@@ -74,6 +76,34 @@ Last updated 2026-10-18 (state review; #37 merged; #28 next).
 - **#28 next** (host or join from the launcher), chosen over a separate
   playtest issue, #29 and #33.
 - `coop/36-heart-catch` deleted, and this workspace's build folders.
+
+## Owner decisions, end of #28 (2026-10-18)
+
+- Merge #38 now (done), on the scenario results; problems found by hand
+  become new issues.
+- Test runs keep background input off (`run.sh`'s `general.json`).
+- A Cancel or refusal in the Co-op menu goes back to the menu (not: start
+  alone).
+
+## What #28 found and did (details: design.md, *Hosting and joining*)
+
+- The launcher's **Co-op** button opens a menu (`src/coop/session_ui.cpp`):
+  Host on a port, or Join an address and port. It connects and exchanges the
+  hellos on a thread while a prompt shows the wait (Cancel, no time limit),
+  then starts the game; refused or cancelled, back to the menu. Connected,
+  refused and lost show as prompts and log `coop: session ui: …`.
+- Why the wait is in the launcher: once the game has started, RT64 presents
+  only the game's frames, and a game held at its first pad read makes none
+  (probe: the UI drew fewer than 60 frames in a 15 s wait).
+- `session.cpp`: `configure_session`, `session_status`, `cancel_session`,
+  `connect_session`; `start()` split into `connect_hello` and
+  `exchange_save` (still at the first pad read).
+- `BM64_COOP_SESSION` with run.sh's autostart now also connects in the
+  launcher (notification, no Cancel) and then starts, alone if it failed.
+- Harness: `BM64_COOP_LAUNCHER`, `BM64_COOP_CANCEL_AFTER`, scenario.py's
+  `#launcher`; `run.sh` writes a `general.json` with background input off
+  (a full verify once saw both games of `session-save` cancel their wait;
+  a controller press fits, inferred).
 
 ## What #36 found and did (details: design.md, *The knocked-out heart*)
 
@@ -146,11 +176,9 @@ Last updated 2026-10-18 (state review; #37 merged; #28 next).
 
 ## Next candidates
 
-1. **#28** (owner's choice, next): host or join from the launcher. First:
-   `src/ui/ui_launcher.cpp`'s Start path and `coop::autostart`
-   (`BM64_COOP_AUTOSTART`), and how `src/coop/session.cpp` reads
-   `BM64_COOP_SESSION` today (the menu must set the same before the first
-   pad read). Then a hand-played run is possible without switches.
+1. **A hand try of the Co-op menu** (owner): two games on one machine, Host
+   7777 in one, Join 127.0.0.1 7777 in the other; what breaks becomes an
+   issue.
 2. **Other session follow-ups**: #33 (cameras that turn and the client's
    C-buttons; first: find a story room with a turning camera, run
    session-camera's moves there with same-hashes), #29
@@ -210,6 +238,8 @@ Under `~/dev-scratch/BM64Recomp-coop/`:
 ## Cleanup the owner may approve
 
 - The Superset workspace `prepare-project-according-a3ceb80a` (its branch
-  and build folders are gone; remove it in Superset).
+  is merged and deleted; its build folder
+  `build/prepare-project-according-a3ceb80a-eu` in scratch): remove it in
+  Superset.
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/` in scratch:
   when the player 2 follow-ups are done.

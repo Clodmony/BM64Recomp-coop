@@ -8,6 +8,8 @@
 //
 //   BM64_COOP_SESSION=host:<port>         wait for the client on TCP <port>
 //   BM64_COOP_SESSION=join:<host>:<port>  connect to the host
+//                                         (or the launcher's Co-op menu,
+//                                         configure_session, #28)
 //   BM64_COOP_DELAY=<frames>              the input delay, 1-60 (host's, default 2)
 //   BM64_COOP_SEED=<n>                    seed the random generator with n;
 //                                         works without a session too (two
@@ -18,7 +20,10 @@
 //                                         the hello's build check)
 //
 // The connection is made at the game's first pad read (before the random
-// generator is seeded), so both machines start the game together. The frame
+// generator is seeded), so both machines start the game together. A session
+// from the launcher waits for the other side without a time limit, until
+// cancel_session; session_status() tells the launcher's prompts what goes on
+// (src/coop/session_ui.cpp). The frame
 // protocol, over TCP with Nagle off, little-endian:
 //
 //   hello  "COOP", u16 protocol, u8 role (0 host, 1 client), u8 game (0 US,
@@ -131,6 +136,7 @@ struct Config {
     uint32_t build = 0;
     uint32_t log_hash = 0;
     int connect_timeout = 60;
+    bool launcher = false; // from the launcher's menu: wait until cancelled
 };
 
 struct Session {
@@ -161,9 +167,35 @@ struct Session {
 Session session;
 std::atomic<uint32_t> hashed_frames{0};
 
+std::mutex status_mutex;
+coop::SessionStatus status;
+std::atomic<bool> cancelled{false};
+
+void set_status(coop::SessionState state, bool host, const std::string& text) {
+    std::lock_guard lock{status_mutex};
+    status.serial++;
+    status.state = state;
+    status.host = host;
+    status.text = text;
+}
+
 uint32_t env_number(const char* name, uint32_t fallback) {
     const char* value = std::getenv(name);
     return value != nullptr && value[0] != '\0' ? static_cast<uint32_t>(std::strtoul(value, nullptr, 0)) : fallback;
+}
+
+// Reads host:<port> or join:<host>:<port> into config's role, host and port.
+bool parse_spec(const std::string& text, Config& config) {
+    config.role = Role::None;
+    if (text.rfind("host:", 0) == 0) {
+        config.role = Role::Host;
+        config.port = text.substr(5);
+    } else if (text.rfind("join:", 0) == 0 && text.rfind(':') > 5) {
+        config.role = Role::Client;
+        config.host = text.substr(5, text.rfind(':') - 5);
+        config.port = text.substr(text.rfind(':') + 1);
+    }
+    return config.role != Role::None && !config.port.empty();
 }
 
 Config read_config() {
@@ -185,16 +217,7 @@ Config read_config() {
     if (value == nullptr || value[0] == '\0') {
         return config;
     }
-    std::string text = value;
-    if (text.rfind("host:", 0) == 0) {
-        config.role = Role::Host;
-        config.port = text.substr(5);
-    } else if (text.rfind("join:", 0) == 0 && text.rfind(':') > 5) {
-        config.role = Role::Client;
-        config.host = text.substr(5, text.rfind(':') - 5);
-        config.port = text.substr(text.rfind(':') + 1);
-    }
-    if (config.role == Role::None || config.port.empty() || config.delay < 1 || config.delay > 60) {
+    if (!parse_spec(value, config) || config.delay < 1 || config.delay > 60) {
         std::fprintf(stderr, "coop: session: BM64_COOP_SESSION must be host:<port> or join:<host>:<port> "
                              "(BM64_COOP_DELAY 1-60), not %s; off\n", value);
         config.role = Role::None;
@@ -202,8 +225,10 @@ Config read_config() {
     return config;
 }
 
-const Config& config() {
-    static const Config config = read_config();
+// The session's config: BM64_COOP_SESSION and the other switches, or the
+// launcher's menu (configure_session) before the game starts.
+Config& config() {
+    static Config config = read_config();
     return config;
 }
 
@@ -282,6 +307,13 @@ bool wait_readable(socket_t sock, int timeout_ms) {
 #endif
 }
 
+// Whether a wait that started at `start` should go on: not cancelled and,
+// unless the launcher started it, within the connect timeout.
+bool keep_waiting(const Config& config, std::chrono::steady_clock::time_point start) {
+    return !cancelled && (config.launcher ||
+                          std::chrono::steady_clock::now() < start + std::chrono::seconds(config.connect_timeout));
+}
+
 socket_t accept_client(const Config& config) {
     addrinfo hints{};
     hints.ai_family = AF_INET6;
@@ -304,12 +336,18 @@ socket_t accept_client(const Config& config) {
     }
     if (listener == no_socket) {
         std::fprintf(stderr, "coop: session: cannot listen on port %s\n", config.port.c_str());
+        set_status(coop::SessionState::Refused, true, "cannot listen on port " + config.port);
         return no_socket;
     }
     std::fprintf(stderr, "coop: session host: waiting on port %s\n", config.port.c_str());
+    set_status(coop::SessionState::Waiting, true, "Waiting for player 2 on port " + config.port);
     socket_t sock = no_socket;
-    if (wait_readable(listener, config.connect_timeout * 1000)) {
-        sock = accept(listener, nullptr, nullptr);
+    auto start = std::chrono::steady_clock::now();
+    while (keep_waiting(config, start)) {
+        if (wait_readable(listener, 250)) {
+            sock = accept(listener, nullptr, nullptr);
+            break;
+        }
     }
     close_socket(listener);
     return sock;
@@ -318,8 +356,9 @@ socket_t accept_client(const Config& config) {
 socket_t connect_host(const Config& config) {
     std::fprintf(stderr, "coop: session client: connecting to %s port %s\n", config.host.c_str(),
                  config.port.c_str());
-    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(config.connect_timeout);
-    while (std::chrono::steady_clock::now() < deadline) {
+    set_status(coop::SessionState::Waiting, false, "Connecting to " + config.host + " port " + config.port);
+    auto start = std::chrono::steady_clock::now();
+    while (keep_waiting(config, start)) {
         addrinfo hints{};
         hints.ai_family = AF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
@@ -428,18 +467,31 @@ bool use_host_save(const std::vector<uint8_t>& save) {
     return ultramodern::get_save_file_path() == path;
 }
 
-// Connects and exchanges the hellos; true when the session is live.
-bool start(Session& s) {
+// Connects and exchanges the hellos: from the launcher (connect_session,
+// before the game starts) or at the game's first pad read. True when both
+// sides agree; the status is then Connected.
+bool connect_hello(Session& s) {
 #ifdef _WIN32
     WSADATA wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
 #endif
     const Config& c = s.config;
     bool host = c.role == Role::Host;
+    const char* alone = c.launcher ? "" : "; playing alone"; // the launcher goes back to its menu
     s.sock = host ? accept_client(c) : connect_host(c);
     if (s.sock == no_socket) {
-        std::fprintf(stderr, "coop: session: no %s within %d s; playing alone\n", host ? "client" : "host",
-                     c.connect_timeout);
+        if (cancelled) {
+            std::fprintf(stderr, "coop: session: cancelled%s\n", alone);
+            set_status(coop::SessionState::Cancelled, host, "");
+            return false;
+        }
+        std::fprintf(stderr, "coop: session: no %s within %d s%s\n", host ? "client" : "host", c.connect_timeout,
+                     alone);
+        if (coop::session_status().state == coop::SessionState::Waiting) { // not a port it cannot listen on
+            set_status(coop::SessionState::Refused, host,
+                       std::string("no ") + (host ? "client" : "host") + " within " +
+                           std::to_string(c.connect_timeout) + " s");
+        }
         return false;
     }
     int on = 1;
@@ -457,7 +509,8 @@ bool start(Session& s) {
     uint8_t theirs[hello_size];
     set_recv_timeout(s.sock, c.connect_timeout); // something else on the port may never say hello
     if (!send_all(s.sock, hello, sizeof(hello)) || !recv_all(s.sock, theirs, hello_head)) {
-        std::fprintf(stderr, "coop: session: no hello from the other side; playing alone\n");
+        std::fprintf(stderr, "coop: session: no hello from the other side%s\n", alone);
+        set_status(coop::SessionState::Refused, host, "no hello from the other side");
         close_socket(s.sock);
         return false;
     }
@@ -475,16 +528,36 @@ bool start(Session& s) {
     } else if (get32(theirs + 16) != build) {
         std::snprintf(refused, sizeof(refused), "another build (the other's 0x%08X)", get32(theirs + 16));
     }
-    // the save, from the host to the client
+    set_recv_timeout(s.sock, 0);
+    if (refused[0] != '\0') {
+        std::fprintf(stderr, "coop: session refused: %s%s\n", refused, alone);
+        set_status(coop::SessionState::Refused, host, refused);
+        close_socket(s.sock);
+        return false;
+    }
+    if (!host) {
+        s.seed = get32(theirs + 8);
+        s.config.delay = get16(theirs + 12);
+    }
+    set_status(coop::SessionState::Connected, host, host ? "Player 2 joined" : "Connected to the host");
+    return true;
+}
+
+// At the game's first pad read, after the hellos: the host sends its save,
+// the client plays on it. Then the session is live.
+bool exchange_save(Session& s) {
+    bool host = s.config.role == Role::Host;
+    char refused[96] = "";
+    set_recv_timeout(s.sock, s.config.connect_timeout); // the host's game may start later
     std::vector<uint8_t> save;
-    if (refused[0] == '\0' && host) {
+    if (host) {
         save = read_own_save();
         uint8_t size[4];
         put32(size, static_cast<uint32_t>(save.size()));
         if (!send_all(s.sock, size, sizeof(size)) || !send_all(s.sock, save.data(), save.size())) {
             std::snprintf(refused, sizeof(refused), "the save could not be sent");
         }
-    } else if (refused[0] == '\0') {
+    } else {
         uint8_t size[4];
         if (!recv_all(s.sock, size, sizeof(size))) {
             std::snprintf(refused, sizeof(refused), "no save from the host");
@@ -503,12 +576,9 @@ bool start(Session& s) {
     set_recv_timeout(s.sock, 0);
     if (refused[0] != '\0') {
         std::fprintf(stderr, "coop: session refused: %s; playing alone\n", refused);
+        set_status(coop::SessionState::Refused, host, refused);
         close_socket(s.sock);
         return false;
-    }
-    if (!host) {
-        s.seed = get32(theirs + 8);
-        s.config.delay = get16(theirs + 12);
     }
     std::fprintf(stderr, host ? "coop: session host: sent the save, %zu bytes\n"
                               : "coop: session client: playing on the host's save, %zu bytes\n", save.size());
@@ -518,8 +588,13 @@ bool start(Session& s) {
     return true;
 }
 
+// The launcher's connection (connect_session): 0 none, 1 connecting, 2 the
+// hellos agreed, 3 not.
+std::atomic<int> preconnect{0};
+
 void lose(Session& s, const char* why) {
     std::fprintf(stderr, "coop: session lost frame=%u: %s; playing alone\n", s.frame, why);
+    set_status(coop::SessionState::Lost, s.config.role == Role::Host, why);
     s.live = false;
     shutdown(s.sock, 2);
 }
@@ -603,6 +678,55 @@ void step(Session& s, uint32_t hash) {
 
 } // namespace
 
+coop::SessionStatus coop::session_status() {
+    std::lock_guard lock{status_mutex};
+    return status;
+}
+
+void coop::cancel_session() {
+    std::lock_guard lock{status_mutex};
+    if (status.state == SessionState::Waiting) {
+        cancelled = true;
+    }
+}
+
+bool coop::configure_session(const std::string& spec, std::string& error) {
+    Config parsed = config();
+    if (!parse_spec(spec, parsed)) {
+        error = "Not host:<port> or join:<address>:<port>: " + spec;
+        return false;
+    }
+    char* end = nullptr;
+    unsigned long port = std::strtoul(parsed.port.c_str(), &end, 10);
+    if (*end != '\0' || port < 1 || port > 65535) {
+        error = "The port must be a number from 1 to 65535.";
+        return false;
+    }
+    if (parsed.role == Role::Client && parsed.host.empty()) {
+        error = "Enter the host's address.";
+        return false;
+    }
+    parsed.launcher = true;
+    config() = parsed;
+    return true;
+}
+
+void coop::connect_session() {
+    if (!session_configured() || session.started || preconnect == 1) {
+        return;
+    }
+    cancelled = false;
+    session.config = config();
+    preconnect = 1;
+    std::thread([] {
+        bool ok = connect_hello(session);
+        if (!ok && session.config.launcher) {
+            config().role = Role::None; // back in the launcher; its Start plays alone
+        }
+        preconnect = ok ? 2 : (session.config.launcher ? 0 : 3);
+    }).detach();
+}
+
 bool coop::session_configured() {
     return config().role != Role::None;
 }
@@ -623,9 +747,16 @@ std::optional<bool> coop::session_input(int pad, uint16_t* buttons, float* x, fl
     if (!s.started) {
         // the game's first pad read, before its random generator is seeded
         s.started = true;
-        s.config = config();
         s.local = local;
-        s.live = start(s);
+        while (preconnect == 1) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        bool hellos = preconnect == 2;
+        if (preconnect == 0) {
+            s.config = config(); // cleared if the launcher's connection just failed
+            hellos = s.config.role != Role::None && connect_hello(s);
+        }
+        s.live = hellos && exchange_save(s);
         s.connected = s.live;
         if (!s.live) {
             return std::nullopt;

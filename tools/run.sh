@@ -27,7 +27,9 @@
 #                    the saves/ of an earlier run)
 #
 # The run folder ~/dev-scratch/BM64Recomp-coop/runs/<stamp>-<version>[-<name>]/ holds
-# everything the run writes: portable.txt (so saves and config stay in it), the
+# everything the run writes: portable.txt (so saves and config stay in it),
+# general.json with background input off (controllers in use elsewhere do not
+# reach the game), the
 # stored ROM <game_id>.z64 the launcher would have written, assets/ and the
 # controller database (links into the checkout), game.log (the game's stdout
 # and stderr) and summary.txt. The game starts without the launcher
@@ -93,6 +95,9 @@ fi
 run="$scratch/runs/$(date +%Y%m%d-%H%M%S)-$version${name:+-$name}"
 mkdir -p "$run"
 touch "$run/portable.txt"
+# no background input: a controller in use elsewhere must not press the test
+# game's buttons (its prompts' too)
+printf '{\n    "background_input_mode": "Off"\n}\n' > "$run/general.json"
 ln -s "$root/assets" "$run/assets"
 ln -s "$root/recompcontrollerdb.txt" "$run/recompcontrollerdb.txt"
 cp "$rom" "$run/bm64_$version.z64"   # librecomp's stored ROM: <game_id>.z64

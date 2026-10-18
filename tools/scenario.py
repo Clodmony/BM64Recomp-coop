@@ -39,6 +39,9 @@ of an online session (src/coop/session.cpp) on a free local port, with these
 header lines besides:
 
     #session                     the scenario is a session's
+    #launcher                    both start it from the launcher's Co-op
+                                 menu (BM64_COOP_LAUNCHER) instead of
+                                 BM64_COOP_SESSION
     #env-host NAME=VALUE         environment for the host only (also
                                  #env-client)
     #client STEP                 a step of the client's input script (the
@@ -255,6 +258,7 @@ def scenario_path(name):
 def run_scenario(path, version, timeout, extra_envs, folder=None):
     envs, checks = [], []
     session, host_envs, client_envs, client_steps, client_checks = False, [], [], [], []
+    switch = "BM64_COOP_SESSION"
     saves_from = {}
     for line in path.read_text().splitlines():
         if line.startswith("#env "):
@@ -263,6 +267,8 @@ def run_scenario(path, version, timeout, extra_envs, folder=None):
             checks.append(line[7:].strip())
         elif line.strip() == "#session":
             session = True
+        elif line.strip() == "#launcher":
+            switch = "BM64_COOP_LAUNCHER"
         elif line.startswith("#env-host "):
             host_envs.append(line[10:].strip())
         elif line.startswith("#env-client "):
@@ -302,8 +308,8 @@ def run_scenario(path, version, timeout, extra_envs, folder=None):
         client_script.write_text("\n".join(client_steps) + "\n")
         procs = []
         for name, script, own_envs, session_env in (
-                ("host", path, host_envs, f"BM64_COOP_SESSION=host:{port}"),
-                ("client", client_script, client_envs, f"BM64_COOP_SESSION=join:127.0.0.1:{port}")):
+                ("host", path, host_envs, f"{switch}=host:{port}"),
+                ("client", client_script, client_envs, f"{switch}=join:127.0.0.1:{port}")):
             cmd = run_cmd(script, version, timeout, envs + own_envs + [session_env] + extra_envs, name,
                           saves.get(name))
             procs.append(subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True))

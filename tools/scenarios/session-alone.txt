@@ -7,6 +7,8 @@
 #
 #check log "^coop: session client: connecting to 127.0.0.1 port 9$"
 #check log "^coop: session: no host within 2 s; playing alone$"
+# the launcher reports it (#28)
+#check log "^coop: session ui: No co-op session: no host within 2 s$"
 #check no-log ^coop: session lockstep
 #check no-log ^coop: seed
 #check log ^coop: overlay 0x29$

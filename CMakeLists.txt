@@ -166,6 +166,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/coop/debug.cpp # coop: debug output for unattended runs
     ${CMAKE_SOURCE_DIR}/src/coop/harness.cpp # coop: test harness (scripted pads, warp, probes)
     ${CMAKE_SOURCE_DIR}/src/coop/session.cpp # coop: the session core of online co-op
+    ${CMAKE_SOURCE_DIR}/src/coop/session_ui.cpp # coop: the launcher's Co-op menu and the session's prompts
     ${CMAKE_SOURCE_DIR}/src/game/quicksaving.cpp
     ${CMAKE_SOURCE_DIR}/src/game/recomp_api.cpp
     ${CMAKE_SOURCE_DIR}/src/game/recomp_actor_api.cpp

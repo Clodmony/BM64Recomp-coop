@@ -8,7 +8,9 @@ namespace coop {
     // With BM64_COOP_AUTOSTART=1, does once what the launcher's Start button
     // does: starts the game from its stored ROM (<game_id>.z64 in the app
     // folder) and hides the launcher. tools/run.sh sets it. Called on the UI
-    // thread when the launcher is shown, so the runtime is up by then.
+    // thread when the launcher is shown, so the runtime is up by then. With
+    // BM64_COOP_LAUNCHER set, its Co-op menu's Host or Join instead
+    // (src/coop/session_ui.cpp).
     void autostart();
 
     // Audio the game handed the host (frames), the host queue's depth when it

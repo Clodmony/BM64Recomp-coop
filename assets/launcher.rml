@@ -39,6 +39,11 @@
 							<div class="menu-list-item__bullet">•</div>
 							<div class="menu-list-item__label">Start game</div>
 						</button>
+						<!-- coop: host or join an online session (#28) -->
+						<button data-if="mm_rom_valid" onclick="open_coop" class="menu-list-item menu-list-item--right">
+							<div class="menu-list-item__bullet">•</div>
+							<div class="menu-list-item__label">Co-op</div>
+						</button>
 						<button onclick="open_controls" class="menu-list-item menu-list-item--right">
 							<div class="menu-list-item__bullet">•</div>
 							<div class="menu-list-item__label">Setup controls</div>
