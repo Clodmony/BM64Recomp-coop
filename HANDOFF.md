@@ -18,7 +18,8 @@ and #12).
   story-mode audit, `docs/coop/design.md`).
 - Open issues: #2 and #6–#10 (closed by PR #12 when merged), #4 (closed by
   PR #15), #13, #17, #18 (closed by PR #20), #14 and #16 (partly done in
-  PR #20, see below), #19 (the group), #11 (Europe follow-ups).
+  PR #20, kept open for leftover checks), #19 (the group), #11 (Europe
+  follow-ups), #21–#24 (follow-ups of #19).
 - Local git config of the clone: Claude identity, `upstream` with push
   `DISABLED`, `core.hooksPath .githooks`, `pushguard.romDir` set.
 
@@ -30,8 +31,18 @@ and #12).
 - **#20** `coop/19-player2-playable`, draft, stacked on #15: the group #19.
   Verify 2026-10-18: Europe `--full --scenarios`, all stages and all 7
   scenarios passed; US not run (compile-only check, see the PR).
-- Owner (2026-10-18): review #12 and #15, merge later, when the owner says
-  so. Each one merged shrinks the next one's diff to its own commits.
+- Owner (2026-10-18): review #12, #15 and #20 first, merge later in that
+  order, when the owner says so. Each one merged shrinks the next one's diff
+  to its own commits.
+
+## Owner decisions (2026-10-18, end of #19)
+
+- #14 and #16 stay open for their leftover checks (a story teleport; a scene
+  with player 2 already in the room); comments on both say what is left.
+- Player 2 joining only at player 1's first step is fine for now.
+- Filed: #21 session core (online), #22 player 1 downed, #23 player 2 frozen
+  during player 1's death animation, #24 player 2's slot-0 resets and a US
+  run of the scenarios.
 
 ## What #19 found and did (details: design.md, *Player 2 in a story room*)
 
@@ -52,19 +63,16 @@ and #12).
 
 ## Next candidates
 
-1. **Rest of #14 and #16** (if the owner keeps them open): a story teleport
+1. **Rest of #14 and #16** (kept open, owner): a story teleport
    (`func_802512C0` from a room script; find one with
    `xref/callers.tsv` beyond Green Garden stage 1) and a scene with player 2
    already in the room (room 0x28's later tutorial, or a boss intro), then a
    check that pad 1 does not move a frozen player 2.
-2. **The session core** for online co-op (still to file): lockstep, host and
-   client, input transport through the command record (#13 settled its
-   format), shared seed, desync detection. Both players need the same
-   version.
-3. Follow-ups from #19 to file (owner to decide): player 1 downed while
-   player 2 plays; player 2 frozen during player 1's death animation; the
-   slot-0 resets (remote bombs, continue) for player 2; player 2 visible only
-   after player 1's first step; a US run of the scenarios.
+2. **#21, the session core** for online co-op: lockstep, host and client,
+   input transport through the command record (#13 settled its format),
+   shared seed, desync detection. Both players need the same version.
+3. Follow-ups of #19: #22 (player 1 downed), #23 (freeze during player 1's
+   death animation), #24 (slot-0 resets, US run).
 4. **#11**, Europe follow-ups.
 
 ## Scratch (not in the repository)
