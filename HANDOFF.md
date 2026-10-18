@@ -30,7 +30,9 @@ Last updated 2026-10-18 (#33 done, PR #40 merged).
 
 - None. #40 (closes #33) merged on the owner's word, 2026-10-18, on the
   scenario results (verify 266/267, the failure is #39); not played by
-  hand.
+  hand. GitHub shows #40 as closed, not merged (its branch was deleted
+  before the merge push went through); #33 was closed by hand. Delete a
+  branch only after the merge push succeeded.
 
 ## Owner decisions (2026-10-18)
 
