@@ -218,7 +218,7 @@ tools/run.sh --version eu --until-overlay 0x20 --timeout 60   # boot check
 tools/run.sh --version eu --timeout 100 --env BM64_COOP_LOG_FRAMES=50
 ```
 
-Each run gets a folder `~/dev-scratch/BM64Recomp-coop/runs/<stamp>-<version>/`
+Each run gets a folder `~/dev-scratch/BM64Recomp-coop/runs/<stamp>-<version>-<suffix>/`
 that holds everything it writes: an empty `portable.txt` (so
 `zelda64::get_app_folder_path()`, `src/game/config.cpp`, keeps config, saves
 and mods there), the stored ROM `bm64_<version>.z64` (what the launcher writes
