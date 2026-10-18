@@ -6,8 +6,7 @@ repository so it survives any worktree path and any tool; per-checkout agent
 memory is not read by a session that starts in another worktree. State goes
 here; stable recipes go into `docs/coop/`; personal data and hardware never.
 
-Last updated 2026-10-18 (#32 done: PR #35 merged into `bm64recomp-coop`;
-no open pull requests).
+Last updated 2026-10-18 (#36 done: draft PR #37 open, not merged).
 
 ## Repository state
 
@@ -18,19 +17,20 @@ no open pull requests).
   audit), and on 2026-10-18 the chain #12 (Europe build), #15 (harness,
   player 2 spike), #20 (group #19), #25 (session core), #30 (host's save,
   build check), #34 (camera), #35 (#32, the knocked-out heart). Their
-  branches are deleted.
+  branches are deleted. Open: `coop/36-heart-catch` (PR #37).
 - Open issues: #14 and #16 (leftover checks, owner), #19 (their group),
   #11 (Europe follow-ups), #22–#24 (follow-ups of #19), #28, #29 (session
   follow-ups), #31 (scripted pads on the title), #33 (cameras that turn,
-  the client's C-buttons), #36 (who may catch a knocked-out heart).
+  the client's C-buttons), #36 (who may catch a knocked-out heart; PR #37
+  closes it).
 - Local git config of the clone: Claude identity, `upstream` with push
   `DISABLED`, `core.hooksPath .githooks`, `pushguard.romDir` set.
 
 ## Open pull requests
 
-None. #35 (closes #32) merged 2026-10-18; its verify, Europe `--full
---scenarios`: 8/8 stages, 194/194 checks. US not run (CI compiles it
-without a ROM).
+- **#37** (draft, closes #36): `coop/36-heart-catch` → `bm64recomp-coop`.
+  Verify, Europe `--full --scenarios`: 8/8 stages, 218/218 checks. US not
+  run (CI compiles it without a ROM). Needs the owner's review and merge.
 
 ## Owner decisions (2026-10-18)
 
@@ -55,6 +55,31 @@ without a ROM).
 - Merge #35 now (done). Who may catch the other player's knocked-out heart:
   filed as #36 (run it first, then the owner decides: shared, or only the
   player who lost it).
+
+## Owner decisions, #36 (2026-10-18)
+
+- #36 next (chosen at the start of its session). Heart rule: shared, but a
+  full player does not take it (not "only who lost it", not the game's
+  rule as is).
+
+## What #36 found and did (details: design.md, *The knocked-out heart*)
+
+- Run, seed 1, room 0x29: either player catches the other's heart
+  (`p2-heart-swap`). The pickup sets the catcher's hearts to 2, so a full
+  player used the other's heart up.
+- Fix: a hook in `func_80279CA8` at 0x80279CFC asks `coop_item_passes`
+  (`patches/coop_player2.c`); a player a heart would give nothing, while
+  player 2 plays, passes through it (`coop: pass`), the heart stays
+  (`p2-heart-full`, red before the hook: 8/11). Every heart item, also the
+  stage's. Not run: a full player standing on a heart with the partner on
+  the same spot (the collision returns one actor).
+- Harness: `coop: item from=… type=… pos=…` probe line (last knocked-out
+  item while in the room), `hearts SLOT N` step, `coop: pass` event.
+- A `tile` step on slot 0 is a room entry: player 2 is held frozen and
+  damage-guarded until player 1's next step (now in building.md); walk
+  player 1 instead.
+- Probe and `tile` steps each take a frame: time a scenario's probes from a
+  trace with the same steps.
 
 ## What #32 found and did (details: design.md, *What the runs showed*)
 
@@ -108,9 +133,7 @@ without a ROM).
 
 ## Next candidates
 
-1. **#36**, who may catch a knocked-out heart. First: from `p2-heart`, put
-   player 1 where player 2's heart lands (or try seeds) and look for
-   `coop: pickup slot=0 item=4` after `coop: drop slot=4 item=4`.
+1. **Merge #37** when the owner says so.
 2. **Session follow-ups**: #33 (cameras that turn and the client's
    C-buttons; first: find a story room with a turning camera, run
    session-camera's moves there with same-hashes), #28 (host or join from the
@@ -170,8 +193,8 @@ Under `~/dev-scratch/BM64Recomp-coop/`:
 
 ## Cleanup the owner may approve
 
-- The Superset workspace this session ran in (#35 merged, its branch
-  deleted; the checkout is on `bm64recomp-coop`) and its build folders
+- The Superset workspace this session ran in (on `coop/36-heart-catch`
+  until #37 is merged) and its build folders
   `build/prepare-project-according-a3ceb80a{,-eu}/` in scratch.
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/` in scratch:
   when the player 2 follow-ups are done.
