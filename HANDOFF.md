@@ -6,7 +6,7 @@ repository so it survives any worktree path and any tool; per-checkout agent
 memory is not read by a session that starts in another worktree. State goes
 here; stable recipes go into `docs/coop/`; personal data and hardware never.
 
-Last updated 2026-10-18 (#28 done, PR #38 merged).
+Last updated 2026-10-18 (#33 done, PR #40 open).
 
 ## Repository state
 
@@ -18,18 +18,23 @@ Last updated 2026-10-18 (#28 done, PR #38 merged).
   player 2 spike), #20 (group #19), #25 (session core), #30 (host's save,
   build check), #34 (camera), #35 (#32, the knocked-out heart), #37 (#36,
   heart items), #38 (#28, the launcher's Co-op menu). Their branches are
-  deleted. No open pull requests.
+  deleted. Open: #40 (#33).
 - Open issues: #14 and #16 (leftover checks, owner), #19 (their group),
   #11 (Europe follow-ups), #22–#24 (follow-ups of #19), #29 (session
   follow-ups), #31 (scripted pads on the title), #33 (cameras that turn,
-  the client's C-buttons).
+  the client's C-buttons; PR #40), #39 (`session-launcher` misses the
+  Connecting prompt now and then).
 - Local git config of the clone: Claude identity, `upstream` with push
   `DISABLED`, `core.hooksPath .githooks`, `pushguard.romDir` set.
 
 ## Open pull requests
 
-- None. #38 (closes #28) merged on the owner's word, 2026-10-18, without a
-  hand try: the menu was never clicked by hand or seen (the PR's *Not run*).
+- **#40** (closes #33), draft, branch `coop/33-turning-camera`, worktree
+  `prepare-project-according-a3ceb80a`: waits for the owner's review and
+  merge word. Verify: 7/8 stages, 266/267 checks; the failure is #39 (not
+  this branch's code).
+- #38 (closes #28) merged on the owner's word, 2026-10-18, without a hand
+  try: the menu was never clicked by hand or seen.
 
 ## Owner decisions (2026-10-18)
 
@@ -84,6 +89,25 @@ Last updated 2026-10-18 (#28 done, PR #38 merged).
 - Test runs keep background input off (`run.sh`'s `general.json`).
 - A Cancel or refusal in the Co-op menu goes back to the menu (not: start
   alone).
+
+## What #33 found and did (details: design.md, *Cameras that turn*)
+
+- Room 0x29's camera turns by the C-buttons too (C-left yaw 90 → 45,
+  C-right 90 → 135, C-down/C-up distance 2400/2000). `func_80235934` read
+  pad 0, the host's: the host turned both cameras, the client none.
+- Hook in `func_80235934` at 0x80235978: pad 1 when the camera follows slot
+  4 (`coop_camera_pad`, harness.cpp). Alone, it desynced at frame 458: the
+  player update turns the stick by the camera's yaw and pitch
+  (`func_80234858` at 0x8024E880, sp+0x9C/0xA0).
+- Frame message protocol 3 (32 bytes) carries the sender's yaw and pitch;
+  hook at 0x8024E888 (s0 = slot) puts in the driving machine's angles
+  (`coop_session_view`, session.cpp). `session-camera-turn`: 672 frames the
+  same, each player walks by its own camera on both machines.
+- Harness: `#check camera PROBE yaw|pitch|distance OP VALUE`.
+- Not traced: the other ~150 readers of the angles and 202 of the eye;
+  rooms whose camera turns by itself.
+- `D_8008FFF8` (set from the actor's facing after `D_80090004` frames) is an
+  offset of the look-at point, not the yaw (read).
 
 ## What #28 found and did (details: design.md, *Hosting and joining*)
 
@@ -179,11 +203,10 @@ Last updated 2026-10-18 (#28 done, PR #38 merged).
 1. **A hand try of the Co-op menu** (owner): two games on one machine, Host
    7777 in one, Join 127.0.0.1 7777 in the other; what breaks becomes an
    issue.
-2. **Other session follow-ups**: #33 (cameras that turn and the client's
-   C-buttons; first: find a story room with a turning camera, run
-   session-camera's moves there with same-hashes), #29
-   (two machines, Windows/macOS; also whether two compilers give the same
-   build identity; whether two games on one machine read the same gamepad).
+2. **Other session follow-ups**: #29 (two machines, Windows/macOS; also
+   whether two compilers give the same build identity; whether two games on
+   one machine read the same gamepad); #39 (the flaky launcher check: look
+   for the session's own `connecting to` line instead).
 3. **Rest of #14 and #16** (kept open, owner): a story teleport
    (`func_802512C0` from a room script; find one with `xref/callers.tsv`
    beyond Green Garden stage 1) and a scene with player 2 already in the
