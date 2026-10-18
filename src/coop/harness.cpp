@@ -14,6 +14,9 @@
 //                                pad 1, slot 4 reads its command record, which
 //                                pad 1 fills (4 in an online session, whose
 //                                pad 1 is the client's: src/coop/session.cpp)
+//   BM64_COOP_CAMERA=<slot>      the camera follows the player in that slot
+//                                (0-4; -1 the game's choice) while it plays;
+//                                default: a session's client follows player 2
 //   BM64_COOP_LOG_PLAYERS=1      one line per room init, spawn (and its model
 //                                asset), placement, bomb, hit, death and room
 //                                teardown
@@ -369,6 +372,27 @@ extern "C" int32_t coop_p2_slot(void) {
     }();
     if (value == nullptr) {
         return coop::session_connected() ? 4 : 0;
+    }
+    return slot;
+}
+
+// The slot the camera follows on this machine while that player is in play
+// (#27; patches/coop_camera.c), -1 for the game's own choice (the story slot
+// S). BM64_COOP_CAMERA=<slot> picks it (0-4, or -1); without it, the client
+// of a live session follows its own player, player 2 in slot 4, and every
+// other machine the game's choice.
+extern "C" int32_t coop_camera_slot(void) {
+    static const char* value = std::getenv("BM64_COOP_CAMERA");
+    static const int32_t slot = [] {
+        int32_t slot = value != nullptr ? static_cast<int32_t>(std::strtol(value, nullptr, 0)) : -1;
+        if (slot < -1 || slot > 4) {
+            std::fprintf(stderr, "coop: BM64_COOP_CAMERA must be -1 to 4, not %s; the game's choice\n", value);
+            slot = -1;
+        }
+        return slot;
+    }();
+    if (value == nullptr) {
+        return coop::session_live_client() ? 4 : -1;
     }
     return slot;
 }

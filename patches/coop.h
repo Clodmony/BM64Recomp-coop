@@ -39,6 +39,11 @@ extern s32 D_802AC894;      // S, the story player's slot
 extern s32 D_802AC624;      // lives (story session block +0x14)
 extern s32 D_802ACEC8[5][3]; // each slot's tile, as the rectangle tests last read it
 extern u8 D_80063000[0x1B8]; // the EEPROM mirror: a header block, then files 0-2 of 0x90 bytes
+// The camera (docs/coop/design.md, *The camera*): the eye, and its yaw and
+// pitch in degrees and its distance from the point it looks at (the player
+// update adds the yaw to the stick's angle).
+extern f32 D_8008F3E8[3];
+extern f32 D_8008F3F8[3];
 
 void func_8023DA04(s32 continued);
 void func_8023AE6C(s32 overlay, s32 entry, s32 fade);

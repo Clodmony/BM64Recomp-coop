@@ -855,6 +855,30 @@ text = """
 }
 """
 
+# coop: the camera process's follow target (#27; patches/coop_camera.c). v0 is
+# the slot it follows (S, from func_80243DDC) and goes into a0 in the delay
+# slot of the call that gets the slot's actor. A machine whose camera follows
+# its own player (src/coop/harness.cpp, coop_camera_slot) puts that slot in.
+[[patches.hook]]
+func = "func_80235D7C"
+before_vram = 0x80235E28
+text = """
+{
+    extern int32_t coop_camera_slot(void);
+    void coop_camera_target(uint8_t* rdram, recomp_context* ctx);
+    int32_t wanted = coop_camera_slot();
+    if (wanted >= 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = ctx->r2;
+        c.r5 = wanted;
+        coop_camera_target(rdram, &c);
+        ctx->r2 = c.r2;
+    }
+}
+"""
+
 # When osAiGetLength returns a number that exceeds the target amount of samples per frame, the calculation (target samples per frame - osAiGetLength()) will result in a negative number.
 # When the clamping takes place to prevent a number of bytes that is too small, it doesn't take into account the negative number that resulted from the calculation.
 # Not doing this results in a negative number being given to osAiSetNextBuffer causing a massive memory leak and crash (because a signed negative number is being read as unsigned).

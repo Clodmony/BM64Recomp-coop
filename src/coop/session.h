@@ -19,6 +19,9 @@ namespace coop {
     // lost since).
     bool session_connected();
 
+    // Whether this machine is the client of a session that is still live.
+    bool session_live_client();
+
     // The pad state the game reads for pad `pad` in a session: pad 0 is the
     // host's pad, pad 1 the client's, both delayed by the same frames on both
     // machines; pads 2 and 3 are not connected. The game's first read makes
