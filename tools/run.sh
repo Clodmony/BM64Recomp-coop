@@ -11,7 +11,9 @@
 #                    0x20, the title screen; docs/coop/design.md, *Overlay map*)
 #   --timeout        seconds before the run is stopped (default 60)
 #   --exe            the executable (default: the tools/verify.sh build,
-#                    ~/dev-scratch/BM64Recomp-coop/build/<checkout>[-eu]/BM64Recompiled)
+#                    ~/dev-scratch/BM64Recomp-coop/build/<checkout>[-eu]/BM64Recompiled);
+#                    a Windows build (.exe, tools/build-windows.sh) runs in
+#                    Wine with the prefix ~/dev-scratch/BM64Recomp-coop/win/prefix
 #   --rom            the ROM in .z64 order (default
 #                    ~/dev-scratch/BM64Recomp-coop/rom/bm64.<version>.z64, from
 #                    tools/unpack_rom.py)
@@ -84,7 +86,7 @@ fi
 case "$version" in us|eu) ;; *) echo "--version must be us or eu" >&2; exit 4 ;; esac
 exe="${exe:-$(build_of "$version")}"
 rom="${rom:-$scratch/rom/bm64.$version.z64}"
-[ -x "$exe" ] || { echo "no executable at $exe (tools/verify.sh --version $version)" >&2; exit 4; }
+[ -x "$exe" ] || [[ "$exe" == *.exe && -f "$exe" ]] || { echo "no executable at $exe (tools/verify.sh --version $version)" >&2; exit 4; }
 [ -f "$rom" ] || { echo "no ROM at $rom (tools/unpack_rom.py)" >&2; exit 4; }
 [ -z "$input" ] || [ -f "$input" ] || { echo "no input script at $input" >&2; exit 4; }
 [ -z "$saves" ] || [ -d "$saves" ] || { echo "no saves folder at $saves" >&2; exit 4; }
@@ -114,17 +116,23 @@ game_env=(BM64_COOP_AUTOSTART=1 BM64_COOP_LOG_OVERLAYS=1)
 [ -z "${XDG_RUNTIME_DIR:-}" ] && [ -d "/run/user/$(id -u)" ] && game_env+=("XDG_RUNTIME_DIR=/run/user/$(id -u)")
 (( audio )) || game_env+=(SDL_AUDIODRIVER=dummy)
 [ -n "$input" ] && game_env+=("BM64_COOP_INPUT=$run/input.txt")
+case "$exe" in
+*.exe) game_env+=("WINEPREFIX=$scratch/win/prefix" "WINEDEBUG=-all") ;; # never the owner's prefix
+esac
 game_env+=("${envs[@]}")
 
 ms() { echo $(( $(date +%s%N) / 1000000 )); }
 start=$(ms)
-(cd "$run" && exec env "${game_env[@]}" "$exe") > "$log" 2>&1 &
+launch=("$exe")
+[[ "$exe" == *.exe ]] && launch=(wine "$exe")
+(cd "$run" && exec env "${game_env[@]}" "${launch[@]}") > "$log" 2>&1 &
 pid=$!
 
 elapsed() { local t=$(( $(ms) - start )); printf '%d.%d' $(( t / 1000 )) $(( t % 1000 / 100 )); }
 result= status=
 while :; do
-	if [ -n "$overlay" ] && grep -q "^coop: overlay $overlay\$" "$log"; then
+	# a Windows build's lines end in CR LF
+	if [ -n "$overlay" ] && grep -qE "^coop: overlay $overlay"$'\r'"?\$" "$log"; then
 		result="overlay $overlay loaded after $(elapsed) s"; status=0; break
 	fi
 	if [ -n "$until_log" ] && grep -qF -- "$until_log" <(cut -c1-${#until_log} "$log"); then

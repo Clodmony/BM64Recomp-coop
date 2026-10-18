@@ -17,6 +17,10 @@ namespace coop {
     // came and whether the host skipped samples for a queue over 100 ms;
     // reported by the frame log (BM64_COOP_LOG_FRAMES).
     void note_audio(size_t frames, uint64_t queued_us, bool skipped);
+
+    // In a Windows build without a console, sends stdout and stderr to
+    // coop.log in the app folder (#29); does nothing elsewhere.
+    void log_to_file_without_console();
 }
 
 #endif

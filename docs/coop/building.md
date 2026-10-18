@@ -169,6 +169,42 @@ without touching upstream files:
 - RmlUi's debugger uses `uint32_t` without including `<cstdint>`; the host
   build adds `-include cstdint` (`VERIFY_CXX_FLAGS`).
 
+## The Windows build
+
+`tools/build-windows.sh [--version us|eu]` cross-compiles the Windows x64
+build on Linux (#29), after `tools/verify.sh --full` has made
+`RecompiledFuncs/` for that version. Output:
+`~/dev-scratch/BM64Recomp-coop/build/win-<version>/` (`BM64Recompiled.exe`,
+its `.pdb`, `SDL2.dll`, `dxcompiler.dll`, `dxil.dll`). How it is put
+together (`tools/windows-cross.cmake`):
+
+- clang-cl and lld-link against Microsoft's CRT and Windows SDK, splatted by
+  [xwin](https://github.com/Jake-Shadle/xwin) into
+  `~/dev-scratch/BM64Recomp-coop/win/sdk` (`XWIN_SDK`; fetching them accepts
+  Microsoft's licence; never commit them). `RelWithDebInfo`, as upstream's
+  Windows CI. Windows finds headers and libraries in any case; the script
+  links the four spellings the sources use that the SDK lacks.
+- The patches are built by the Linux clang as in the Linux build, so both
+  builds have the same build identity and can play together.
+- Build-time tools built for Windows (`file_to_c`) run in Wine. The shaders
+  are compiled by RT64's Linux `dxc` (the same output on every platform): the
+  script points the generated `build.ninja` at it, because both CMake files
+  name `dxc.exe`, and Wine's `dxc.exe` cannot read the Unix include paths.
+- RT64's SDL 2.26.3 headers define `_m_prefetch`, a builtin in newer clang;
+  the toolchain sets their guard `__PRFCHWINTRIN_H`.
+
+`tools/run.sh --exe <…>.exe` runs it in Wine with its own prefix
+(`~/dev-scratch/BM64Recomp-coop/win/prefix`, never the owner's), and
+`tools/scenario.py --exe-client <…>.exe` makes it a session's client
+(`--exe` the host): the Linux and Windows builds against each other on one
+machine. Its log lines end in CR LF; `run.sh` and `scenario.py` take both. A
+Windows build started without a console (from Explorer) writes its log to
+`coop.log` in its app folder.
+
+`tools/playtest-kit.sh` makes portable folders of both builds for a playtest
+on two PCs (`docs/coop/playtest.md`): builds of the game, copied by hand,
+never uploaded.
+
 ## Running the game: tools/run.sh
 
 The game keeps saves, config and mods in `~/.config/BM64Recompiled` on

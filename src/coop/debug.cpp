@@ -4,12 +4,18 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include "librecomp/game.hpp"
 #include "recomp_ui.h"
 #include "coop_debug.h"
 #include "harness.h"
 #include "session_ui.h"
+#include "zelda_config.h"
 
 extern std::vector<recomp::GameEntry> supported_games;
 
@@ -18,6 +24,34 @@ bool env_flag(const char* name) {
     const char* value = std::getenv(name);
     return value != nullptr && value[0] != '\0' && value[0] != '0';
 }
+}
+
+// A Windows build started from Explorer has no console: its stdout and stderr
+// go nowhere, and with them the co-op lines a playtest needs (#29). Without
+// them, both go to coop.log in the app folder (the portable folder with
+// portable.txt), overwritten each start. Elsewhere, and with a console or a
+// redirect, nothing changes.
+void coop::log_to_file_without_console() {
+#ifdef _WIN32
+    HANDLE err = GetStdHandle(STD_ERROR_HANDLE);
+    if (err != nullptr && err != INVALID_HANDLE_VALUE) {
+        return;
+    }
+    std::error_code ec;
+    std::filesystem::path folder = zelda64::get_app_folder_path();
+    std::filesystem::create_directories(folder, ec);
+    std::string path = (folder / "coop.log").string();
+    if (FILE* empty = std::fopen(path.c_str(), "w")) {
+        std::fclose(empty);
+    }
+    // both appending, so their lines interleave instead of overwriting
+    if (std::freopen(path.c_str(), "a", stdout) != nullptr) {
+        std::setvbuf(stdout, nullptr, _IONBF, 0); // the log survives a crash (Windows has no line buffering)
+    }
+    if (std::freopen(path.c_str(), "a", stderr) != nullptr) {
+        std::setvbuf(stderr, nullptr, _IONBF, 0);
+    }
+#endif
 }
 
 // Called by a hook at the entry of the game's overlay loader, func_8022691C

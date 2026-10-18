@@ -972,9 +972,12 @@ lockstep's 10 s wait; not seen in the runs).
 
 ### Not done
 
-- (#29) Two machines, the internet (the host's port must be reachable: a forwarded
-  port, no NAT traversal), Windows and macOS: not run. The Winsock branch of
-  `session.cpp` was not compiled.
+- (#29) The Windows build (cross-compiled, building.md, *The Windows
+  build*) plays a session with the Linux build in both directions under Wine
+  on one machine: the session scenarios pass with the same hashes on every
+  frame (2026-10-18). Not run: a real Windows PC, two machines on a LAN or
+  the internet (the host's port must be reachable: a forwarded port, no NAT
+  traversal), macOS.
 - (#33) The other readers of the camera's angles and eye (*Cameras that
   turn*).
 - A fixed delay: a slow or lost message stalls both games, with no rollback.

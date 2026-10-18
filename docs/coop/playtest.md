@@ -1,0 +1,82 @@
+# Playtest: co-op Adventure on two PCs
+
+This is how to play the co-op Adventure on two PCs on the same home network,
+Linux or Windows on either side (#29). It is an early test build: what is
+known not to work yet is listed below, so a playtest can look for the rest.
+
+The kit (`tools/playtest-kit.sh`) has one folder per platform, `linux/` and
+`windows/` (also as `windows.zip`). Each is a **portable** folder: settings,
+saves and the log stay inside it, and nothing is written elsewhere. These
+folders are private builds: copy them to the two PCs by hand and do not
+share or upload them.
+
+## What you need
+
+- On each PC, a **Europe** Bomberman 64 ROM of your own (`.z64`, `.n64` or
+  `.v64`). This build plays the Europe version only, and both sides must play
+  the same one. The kit has no ROM.
+- One controller (or the keyboard) per PC.
+- Both PCs on the same network.
+
+## Set up each PC
+
+**Linux:** copy the `linux` folder and start the game with `./start.sh` from
+a terminal in it. The terminal shows the log, and `coop.log` keeps it.
+
+**Windows:** unzip `windows.zip` and double-click
+`windows\BM64Recompiled.exe`. If Windows warns about an unknown app
+("Windows protected your PC"), choose *More info*, then *Run anyway*: the
+build is not signed. If it says `VCRUNTIME140.dll` or `MSVCP140.dll` is
+missing, install Microsoft's *Visual C++ Redistributable* (x64) and start it
+again. The log goes to `coop.log` in the folder.
+
+On the first start the launcher asks for the ROM: pick your Europe ROM.
+
+## Start a session
+
+1. Decide who hosts; the host's save is the one you play on.
+2. **Find the host's address:** on Linux, `ip -4 addr` (an address such as
+   `192.168.1.20`, not `127.0.0.1`); on Windows, `ipconfig` (*IPv4 Address*).
+3. **The host** opens **Co-op** in the launcher and presses **Host** (port
+   7777). A Windows host asks whether to let the game through its firewall:
+   allow it on **private networks**. A Linux host with a firewall must open
+   TCP port 7777 (e.g. `sudo ufw allow 7777/tcp`).
+4. **The other player** opens **Co-op**, enters the host's address and port
+   7777, and presses **Join**.
+5. Both games start together once they are connected. If the join is
+   refused, the prompt says why (another build, another game version).
+
+## Playing
+
+- The host drives the title, the file select and the menus; the other
+  player's game follows. The client plays on a copy of the host's save; its
+  own saves are not touched.
+- In a story stage, player 2 (the client) appears when player 1 takes their
+  first step.
+- Each player moves with their own controller. The C-buttons turn and zoom
+  your own camera only; each camera follows its own player.
+- Both games run the same frames: if one PC stalls, both do. If the
+  connection is lost, a *Co-op session lost* prompt shows and each game goes
+  on alone.
+
+## Known not to work yet
+
+- Player 2's hearts are not shown.
+- When player 1 is downed, player 2 is not handled well (#22, #23).
+- Rooms other than Green Garden stage 1 are untested with two players.
+- No rejoining a lost session; restart both games.
+- The other uses of the camera in stages (some enemies or objects may
+  read it) were not checked; a desync there shows in the log.
+
+## What to report
+
+Afterwards, keep **both** `coop.log` files (one from each PC). Note what you
+did when something went wrong, and the time. In the logs, look for:
+
+- `coop: session desync frame=…`: the two games no longer agree (the most
+  important line).
+- `coop: session lost …`: the connection ended, and why.
+- `coop: session refused …`: the join was refused, and why.
+
+Screenshots and clips show the game's graphics: keep them to yourselves,
+never in a GitHub issue.

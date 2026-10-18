@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """Run test scenarios of the game unattended and check their logs.
 
-    tools/scenario.py [--version us|eu] [--timeout SECONDS] [--env NAME=VALUE]... SCENARIO...
+    tools/scenario.py [--version us|eu] [--timeout SECONDS] [--env NAME=VALUE]...
+                      [--exe PATH] [--exe-client PATH] SCENARIO...
+
+--exe runs another build (run.sh's --exe; a .exe in Wine), --exe-client
+another build as a session's client only (#29: the Windows build against the
+Linux one).
 
 A scenario is an input script (format in src/coop/harness.cpp) with header
 lines the script itself ignores as comments:
@@ -191,9 +196,15 @@ def check(text, lines, probes, folder=None):
     raise ValueError(f"unknown check {kind}")
 
 
+EXES = {}  # the executable of "host" (any game but a session's client) and "client"
+
+
 def run_cmd(script, version, timeout, envs, name=None, saves=None):
     cmd = [str(ROOT / "tools/run.sh"), "--input", str(script), "--until-log", "coop: input end",
            "--timeout", str(timeout)]
+    exe = EXES.get("client" if name == "client" else "host")
+    if exe:
+        cmd += ["--exe", exe]
     if version:
         cmd += ["--version", version]
     if name:
@@ -343,8 +354,12 @@ def main():
     parser.add_argument("--version", choices=["us", "eu"])
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--env", action="append", default=[])
+    parser.add_argument("--exe")
+    parser.add_argument("--exe-client")
     parser.add_argument("scenarios", nargs="+")
     args = parser.parse_args()
+    EXES["host"] = args.exe
+    EXES["client"] = args.exe_client or args.exe
     results = []
     for name in args.scenarios:
         path = scenario_path(name)
