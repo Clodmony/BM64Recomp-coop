@@ -608,6 +608,10 @@ extern OSMesg D_802A53B8;
 extern s32 D_802A53CC;
 extern s32 D_802A5800;
 
+// coop: the game's frame rate, 60, or 50 in a Europe build with its PAL
+// pacing (host: src/coop/debug.cpp, address in syms.ld)
+DECLARE_FUNC(s32, coop_game_frame_rate);
+
 RECOMP_PATCH Gfx *Gfx_InitGfx(void) {
     gBackBufferID = gFrontBufferID; // we are now using the back buffer to start a new frame rendering.
     gGfxWorkPtr = &gGfxWork[gBackBufferID];
@@ -615,7 +619,8 @@ RECOMP_PATCH Gfx *Gfx_InitGfx(void) {
     D_802A5368 = 0;
 
     gEXEnable(gMasterDisplayList++);
-    gEXSetRefreshRate(gMasterDisplayList++, 60); // this game runs at a native 60.
+    // coop: the rate the game runs at, 60, or 50 in a Europe build with its PAL pacing (src/coop/debug.cpp)
+    gEXSetRefreshRate(gMasterDisplayList++, coop_game_frame_rate());
     gEXSetRectAspect(gMasterDisplayList++, G_EX_ASPECT_AUTO);
 
     gSPSegment(gMasterDisplayList++, 0x00, 0x00000000);

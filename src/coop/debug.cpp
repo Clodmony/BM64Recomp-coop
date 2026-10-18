@@ -5,7 +5,9 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "recomp.h"
 #include "librecomp/game.hpp"
+#include "librecomp/helpers.hpp"
 #include "recomp_ui.h"
 #include "coop_debug.h"
 #include "harness.h"
@@ -93,6 +95,25 @@ extern "C" int coop_pal_skip_retrace(uint32_t msg) {
         return 0;
     }
     return ++retraces % 6 == 0;
+}
+
+// The game's frame rate, which patches/required_patches.c (Gfx_InitGfx) hands
+// RT64 with gEXSetRefreshRate every frame: 50 for a Europe build with its PAL
+// pacing, else 60. RT64 takes it as the rate the game makes frames at and,
+// when its target rate is higher, generates the frames in between
+// (docs/coop/building.md, *Europe speed*). The first call logs
+// "coop: refresh rate <N>".
+extern "C" void coop_game_frame_rate(uint8_t* rdram, recomp_context* ctx) {
+    static const int32_t rate = [] {
+#ifdef BM64_VERSION_EU
+        const int32_t value = env_flag("BM64_COOP_PAL60") ? 60 : 50;
+#else
+        const int32_t value = 60;
+#endif
+        std::fprintf(stderr, "coop: refresh rate %d\n", value);
+        return value;
+    }();
+    _return(ctx, rate);
 }
 
 void coop::autostart() {

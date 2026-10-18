@@ -14,7 +14,13 @@ toolchain needs.
 
 One executable runs one version: a Europe build accepts only the Europe ROM,
 a US build only the US one. Online co-op runs in lockstep, so both players
-need the same version.
+need the same version. The launcher's message for a refused ROM names the
+version the build wants (`src/ui/ui_launcher.cpp`, #11): a US build given the
+Europe ROM says it needs the NTSC-U version, as upstream's does. A Europe
+build given the US ROM gets librecomp's "not the correct game", since its
+header name is compared over the 12 characters of `BOMBERMAN64E`; the Europe
+build adds that it runs the Europe (PAL) version only. Read from the code and
+compiled, not shown in a run: the harness cannot choose a ROM in the launcher.
 
 ## The pipeline and where the ROM comes in
 
@@ -91,6 +97,37 @@ addresses). `check <image>` tests them on the Europe image, read only:
 
 With US addresses (no shifts) `tables`, `bss` and `patches` fail; without
 the function fixes `functions` fails.
+
+### The patched functions against their Europe originals (#11)
+
+`check` proves that the patches reach the right data, not that the Europe
+originals do what the US code the patches replace does. Read on 2026-10-19
+(the Europe disassembly against the decompilation's C, which builds the US
+ROM byte for byte, and against the patches):
+
+- **Per frame:** `func_80225840` (the main loop), `Gfx_InitGfx`,
+  `Gfx_Render` and `Gfx_EndRender` are the US code instruction for
+  instruction but for the address shifts above (`D_802A5300`/`D_802B36D0`
+  appear as 0x802A52F0/0x802B36C0, `D_802AC5C0` as 0x802AC5B0, the gfx
+  queues and buffer IDs 0x10 lower, `D_802A4840` as 0x802A4830). The
+  Europe game draws the same 320×240 frame: framebuffers 0x25800 bytes
+  apart, scissor 320×240, the motion-blur copy over 240 lines, screen
+  coordinates 8, 6, 304×228 set on the eighth frame, the same four
+  `osViSetSpecialFeatures` calls. `func_80242270` (the HUD) has the patch's
+  constants (8 time digits from 10,000,000, 2 gem digits, digit row 22 to
+  40) and reads the session block at 0x802AC600 (US 0x802AC610).
+- **All 59 patched functions** have the US size in Europe (the Europe bounds
+  differ only for the five boot functions above, none of them patched), and
+  a scan of their immediates found no timing constant (no 50 or 60 frame
+  rate, no PAL line count).
+- `Gfx_Render`'s patch receives the stale message when `validCount >
+  msgCount`, the US and Europe code when `validCount >= msgCount`: upstream's
+  change, the same in both builds.
+
+No difference beyond addresses was found, so no patch changes for Europe.
+PAL in the Europe release is the scheduler's 50 Hz retrace (*Europe speed*)
+and `osTvType`, which `n64main` sets to 0 (PAL); the render path is the US
+one.
 
 The build chooses its version when configuring:
 
@@ -215,7 +252,8 @@ Debug switches, all off unless set (`src/coop/debug.cpp`):
 - `BM64_COOP_LOG_FRAMES=N`: every N game frames, from a hook on
   `func_8023A208`, which the main loop calls once per frame:
   `coop: frame <frames> <ms> <retraces> <audio frames> <audio queue µs> <audio skips>`.
-- `BM64_COOP_PAL60=1`: turn the Europe build's PAL pacing off.
+- `BM64_COOP_PAL60=1`: turn the Europe build's PAL pacing off (and its
+  refresh-rate hint back to 60, *Presenting 50 game frames a second*).
 
 A run's own `general.json` turns background input off, so a controller in
 use elsewhere does not press the test game's buttons; a key or button
@@ -388,8 +426,7 @@ build runs 20 % fast. The fix is a hook that `tools/europe.py` adds to
 `bm64.eu.toml` in `__scMain`, after it receives a message: one retrace
 message (VIDEO_MSG) in six becomes message 0, which the loop ignores
 (`coop_pal_skip_retrace`, `src/coop/debug.cpp`). The game, its scheduler
-clients and the audio then see 50 retraces a second. The screen is still
-presented at 60 Hz (each game frame shows for one or two VIs).
+clients and the audio then see 50 retraces a second.
 
 Measured on 2026-10-18 with `tools/run.sh --version eu --timeout 100 --env
 BM64_COOP_LOG_FRAMES=50`, over the 93 s after the first 10 s (title, attract
@@ -403,3 +440,44 @@ demo and its stages), audio on SDL's dummy driver:
 Game time is game frames at 50 per second. Without the fix the game makes
 17 % more audio than plays, and the host drops samples whenever its queue
 passes 100 ms; with it the queue stays short and nothing is dropped.
+
+### Presenting 50 game frames a second (#11)
+
+Read in `lib/rt64` and `lib/N64ModernRuntime` on 2026-10-19:
+
+- **What is presented when.** The build runs RT64 in its *present early*
+  mode (`src/main/rt64_render_context.cpp`): a frame is presented when the
+  game's display list for it is done, not on the runtime's VI. The runtime's
+  60 Hz VI only paces the game (the PAL pacing above). Without frame
+  generation the Europe build presents 50 frames a second and the display
+  shows each for a whole number of its refreshes: on a 60 Hz display one in
+  five frames stays for two.
+- **The refresh-rate hint.** `gEXSetRefreshRate`, sent every frame from
+  `Gfx_InitGfx`, tells RT64 the rate the game makes frames at
+  (`viOriginalRate`; without it RT64 guesses from the VI history, assuming
+  60 Hz, its "TODO: PAL support"). RT64 compares it with its target rate
+  (the refresh-rate setting: *Original* 0, *Manual* default 60, or
+  *Display*): when the target is higher it generates the frames in between
+  (`rt64_workload_queue.cpp`; untagged transforms are matched automatically,
+  `G_EX_ID_AUTO`), weights them by the two rates, and paces the presents at
+  the target rate (`rt64_present_queue.cpp`). Upstream sent 60. A Europe
+  build now sends 50 (60 with `BM64_COOP_PAL60=1`), from the host
+  (`coop_game_frame_rate`, `src/coop/debug.cpp`, address in
+  `patches/syms.ld`), since the patches are the same compiled code for both
+  versions; it logs `coop: refresh rate <N>` once. The US build sends 60 as
+  before.
+- **What changes for Europe.** With the hint at 60, a 60 Hz target generated
+  nothing (50 presents a second, as above), and a 120 Hz target generated two
+  frames per game frame, 100 a second, weighted as if the game ran at 60.
+  With 50, a 60 Hz target generates 6 frames for every 5 game frames, and
+  120 Hz 12 for 5, at even steps. The *Original* setting generates nothing
+  either way.
+- So presenting at an even 60 (or the display's rate) needs no runtime edit:
+  it is RT64's frame generation, driven by the hint. Whether it looks right,
+  whether scrolling still judders and whether the generated frames show
+  artefacts is a judgement by eye on a real display, which no headless run
+  makes: that is the owner's.
+
+Checked by run: scenarios `europe-rate` (`coop: refresh rate 50`) and
+`europe-rate-pal60` (60 with the PAL pacing off), Europe build only.
+
