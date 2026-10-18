@@ -6,7 +6,8 @@ repository so it survives any worktree path and any tool; per-checkout agent
 memory is not read by a session that starts in another worktree. State goes
 here; stable recipes go into `docs/coop/`; personal data and hardware never.
 
-Last updated 2026-10-18 (spike #4 done in draft PR #15, stacked on #12).
+Last updated 2026-10-18 (spike #4 done in draft PR #15, stacked on #12;
+next: group #19).
 
 ## Repository state
 
@@ -16,8 +17,9 @@ Last updated 2026-10-18 (spike #4 done in draft PR #15, stacked on #12).
 - Merged into `bm64recomp-coop`: #1 (workflow setup), #5 (closes #3, the
   story-mode audit, `docs/coop/design.md`).
 - Open issues: #2 and #6–#10 (closed by PR #12 when merged), #4 (closed by
-  PR #15), #11 (Europe follow-ups), #13 (slot 4's command record), #14
-  (player 2's placement off the entry walk).
+  PR #15), #11 (Europe follow-ups), the group #19 with its members #13
+  (slot 4's command record), #14 (placement off the entry walk), #16
+  (cutscene freeze), #17 (exits for any player), #18 (death and respawn).
 - Local git config of the clone: Claude identity, `upstream` with push
   `DISABLED`, `core.hooksPath .githooks`, `pushguard.romDir` set.
 
@@ -32,6 +34,8 @@ Last updated 2026-10-18 (spike #4 done in draft PR #15, stacked on #12).
   Verify 2026-10-18: Europe `--full --scenarios` 8/8 stages, 43/43 scenario
   checks; US compile only 5/5. Merge #12 first; merged afterwards, #15
   brings only its own commits.
+- **Owner (2026-10-18): review both, merge later**, #12 then #15, when the
+  owner says so in a later session.
 
 ## Owner decisions (2026-10-18)
 
@@ -42,6 +46,10 @@ Last updated 2026-10-18 (spike #4 done in draft PR #15, stacked on #12).
   yet (#13).
 - **Issue groups are allowed** (AGENTS.md, *Workflow*).
 - #4 stacked on #12 instead of waiting for the merge (2026-10-18).
+- **Next: the group #19, "player 2 playable"** (owner, 2026-10-18): #13,
+  #14, #16, #17, #18 in that order, one session, branch
+  `coop/19-player2-playable`, one PR. Scratch analysis folders are kept for
+  it.
 
 ## What the spike found (details: design.md, *The follow-up spike*)
 
@@ -56,12 +64,14 @@ Last updated 2026-10-18 (spike #4 done in draft PR #15, stacked on #12).
 
 ## Next candidates
 
-1. **#13**, slot 4's command record (needed before online input goes
-   through it). First step: compare how `func_8024E088` uses the vector for
-   controlType 1 and 2; scenario `p2-slot4` has the checks to turn around.
-2. **#14**, placement off the entry walk.
-3. **#11**, Europe follow-ups.
-4. Still to file: the **session core** for online co-op (lockstep, host and
+1. **Next: group #19** (owner, 2026-10-18). Branch from `coop/4-player2-spike`
+   (stacked) unless #12 and #15 are merged by then. First step, #13: compare
+   how `func_8024E088` uses the move vector for controlType 1 and 2 (around
+   0x8024E3A0 and 0x8024E860; `scripts/fn.sh main_code func_8024E088` in
+   scratch), and what the rival AI `func_802553D4` writes into the record.
+   Scenario `p2-slot4` holds the checks to turn around.
+2. **#11**, Europe follow-ups.
+3. Still to file: the **session core** for online co-op (lockstep, host and
    client, input transport; design.md proposes the command record, shared
    seed, desync detection). Both players need the same version.
 
@@ -75,9 +85,9 @@ Under `~/dev-scratch/BM64Recomp-coop/`:
   copy); delete freely.
 - `verify/`: verify logs; delete freely.
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/`: the
-  disassembly, cross-references and notes from #3, used again in #4 and
-  useful for #13 and #14 (`scripts/fn.sh <section> <function>` prints one
-  function).
+  disassembly, cross-references and notes from #3, used again in #4; kept
+  for the group #19 (owner, 2026-10-18). `scripts/fn.sh <section>
+  <function>`, run from the scratch folder, prints one function.
 
 ## Working notes (stable, keep short)
 
@@ -102,4 +112,4 @@ Under `~/dev-scratch/BM64Recomp-coop/`:
 - After #12 and #15 are merged: delete `coop/2-europe-build` and
   `coop/4-player2-spike`.
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/` in scratch:
-  proposed to keep until #13 and #14 are done.
+  after the group #19.
