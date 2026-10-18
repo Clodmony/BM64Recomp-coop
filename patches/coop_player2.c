@@ -25,6 +25,7 @@ static s32 coop_p1_free;    // frames player 1 has been free of walks and scenes
 static s32 coop_place_pending;
 static s32 coop_freeze_tile[3]; // player 1's tile when a cutscene froze it
 static s32 coop_down_frames;    // > 0 while player 2 is down, until its respawn
+static s32 coop_p1_dying;       // player 1's story death runs, until the next room init (#23)
 
 static s32 coop_same_tile(const s32* a, const s32* b) {
     return a[0] == b[0] && a[1] == b[1] && a[2] == b[2];
@@ -63,6 +64,7 @@ void coop_stage_init(s32 slot) {
     coop_p1_moved = 0;
     coop_p1_free = 0;
     coop_down_frames = 0;
+    coop_p1_dying = 0;
     if (g_LevelLoader & 0x4) {
         coop_slot = -1;
         return; // battle: the battle setup owns slots 0-3
@@ -143,6 +145,25 @@ s32 coop_partner_death(s32 slot, s32 cause) {
     return 1;
 }
 
+// Hook in func_8023A870 at 0x8023A9AC, on the story death's path (flags 0x92
+// and the death process follow), for the dying slot (#23). Player 1's death
+// animation does not go through the freeze wrappers until just before the
+// room's teardown, so player 2 would play on during it: walk, take exits, be
+// hit. It is frozen here (control lock and damage guard), its trigger tests
+// and its respawn countdown stop, and a release of player 1 does not release
+// it, until the next room's init (the retry's reload) spawns it anew.
+void coop_story_death(s32 slot) {
+    if (slot != 0 || coop_slot < 0) {
+        return;
+    }
+    coop_p1_dying = 1;
+    if (!coop_partner_active()) {
+        return; // not joined yet, or down: nothing to freeze
+    }
+    recomp_printf("coop: freeze partner slot=%d on=1 death\n", coop_slot);
+    func_80245208(coop_slot, 1);
+}
+
 // Hook at the entry of func_8024E088(0), player 1's update, every frame:
 // counts down a downed player 2's respawn (#18) and follows player 1's trail.
 // Only player 1's own steps count, not those of a scripted walk or a scene,
@@ -158,7 +179,7 @@ void coop_partner_tick(s32 slot) {
     if (slot != coop_slot || p1->levelClass == NULL) {
         return;
     }
-    if (coop_down_frames > 0 && --coop_down_frames == 0) {
+    if (coop_down_frames > 0 && !coop_p1_dying && --coop_down_frames == 0) {
         coop_respawn_partner();
     }
     func_802454F8(0, tile);
@@ -172,8 +193,8 @@ void coop_partner_tick(s32 slot) {
         coop_p1_moved = 1;
     }
     coop_copy_tile(coop_p1_tile, tile); // a fall changes only the floor level
-    if (!coop_place_pending || !coop_p1_moved || (coop_joined && !coop_partner_active())) {
-        return; // a downed player 2 waits for its respawn
+    if (!coop_place_pending || !coop_p1_moved || coop_p1_dying || (coop_joined && !coop_partner_active())) {
+        return; // a downed player 2 waits for its respawn, a frozen one for the retry
     }
     if (!coop_joined) {
         // spawned where it will be placed (without an actor func_802511EC sets
@@ -212,6 +233,9 @@ void coop_freeze_partner(s32 on, s32 anim) {
     if (!coop_partner_active() || coop_place_pending) {
         return; // not joined yet, or held frozen for its placement already
     }
+    if (!on && coop_p1_dying) {
+        return; // held frozen through player 1's death until the retry (#23)
+    }
     if (!on && g_Players[0].levelClass != NULL) {
         func_802454F8(0, tile);
         if (!coop_same_tile(tile, coop_freeze_tile)) {
@@ -238,7 +262,7 @@ void coop_freeze_partner(s32 on, s32 anim) {
 static s32 coop_partner_inside(s32 x0, s32 y0, s32 z0, s32 x1, s32 y1, s32 z1) {
     s32* tile;
 
-    if (!coop_partner_active() || coop_place_pending) {
+    if (!coop_partner_active() || coop_place_pending || coop_p1_dying) {
         return 0;
     }
     tile = D_802ACEC8[coop_slot];

@@ -939,6 +939,25 @@ text = """
 }
 """
 
+# coop: the story death's path of func_8023A870 (t0 = the dying slot), just
+# before flags 0x92: player 1's death freezes player 2 until the retry (#23).
+[[patches.hook]]
+func = "func_8023A870"
+before_vram = 0x8023A9AC
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    void coop_story_death(uint8_t* rdram, recomp_context* ctx);
+    if (coop_p2_slot() != 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = ctx->r8;
+        coop_story_death(rdram, &c);
+    }
+}
+"""
+
 # coop: the camera process's follow target (#27; patches/coop_camera.c). v0 is
 # the slot it follows (S, from func_80243DDC) and goes into a0 in the delay
 # slot of the call that gets the slot's actor. A machine whose camera follows
