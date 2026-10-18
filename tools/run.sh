@@ -33,8 +33,8 @@
 #   --window         open the game's window on the desktop (default: headless,
 #                    in gamescope's headless backend, 640x480)
 #
-# The run folder ~/dev-scratch/BM64Recomp-coop/runs/<stamp>-<version>[-<name>]/ holds
-# everything the run writes: portable.txt (so saves and config stay in it),
+# The run folder ~/dev-scratch/BM64Recomp-coop/runs/<stamp>-<version>[-<name>]-<suffix>/
+# holds everything the run writes: portable.txt (so saves and config stay in it),
 # general.json with background input off (controllers in use elsewhere do not
 # reach the game), the
 # stored ROM <game_id>.z64 the launcher would have written, assets/ and the
@@ -103,8 +103,9 @@ if [ -n "$overlay" ]; then
 	overlay="$(printf '0x%02X' "$((overlay))")" || { echo "bad overlay ID" >&2; exit 4; }
 fi
 
-run="$scratch/runs/$(date +%Y%m%d-%H%M%S)-$version${name:+-$name}"
-mkdir -p "$run"
+mkdir -p "$scratch/runs"
+# mktemp's suffix keeps runs that start in the same second apart (parallel runs)
+run="$(mktemp -d "$scratch/runs/$(date +%Y%m%d-%H%M%S)-$version${name:+-$name}-XXXX")"
 touch "$run/portable.txt"
 # no background input: a controller in use elsewhere must not press the test
 # game's buttons (its prompts' too)
