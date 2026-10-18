@@ -254,6 +254,11 @@ void coop::update_session_ui() {
             // press while this same state is shown cancels the session.
             uint32_t serial = status.serial;
             log_shown("Co-op session", status.text);
+            if (pending == Pending::Switches) {
+                // the switches' wait has its timeout and nothing to go back to
+                recompui::open_notification("Co-op session", status.text);
+                break;
+            }
             recompui::open_info_prompt("Co-op session", status.text, "Cancel", [serial] {
                 SessionStatus now = session_status();
                 if (now.serial == serial && now.state == SessionState::Waiting) {

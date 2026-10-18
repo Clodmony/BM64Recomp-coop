@@ -217,6 +217,10 @@ Debug switches, all off unless set (`src/coop/debug.cpp`):
   `coop: frame <frames> <ms> <retraces> <audio frames> <audio queue µs> <audio skips>`.
 - `BM64_COOP_PAL60=1`: turn the Europe build's PAL pacing off.
 
+A run's own `general.json` turns background input off, so a controller in
+use elsewhere does not press the test game's buttons; a key or button
+pressed while a test game has the focus still reaches it.
+
 Captures (screenshots, clips) are fine for debugging but stay in the run
 folder: never in commits, issues or pull requests.
 Capture only the game's window: a capture of the active window takes

@@ -892,8 +892,14 @@ Cancel could not be pressed; the test switch's Cancel came only when the run
 stopped the game.
 
 A session from `BM64_COOP_SESSION` with `tools/run.sh`'s autostart connects
-the same way, with the same prompts, and starts the game whatever comes of
-it, alone if it did not connect (as before; the timeout still applies).
+the same way, with the same prompts except that its wait has no Cancel (its
+timeout still applies), and starts the game whatever comes of it, alone if
+it did not connect (as before). In one full verify run both games of
+`session-save` logged `cancelled` without the test switch, which nothing in
+the code does on its own; a press on the waiting prompt's focused Cancel
+from a controller fits (the game reads controllers in the background by
+default, so both test games got it; inferred, not reproduced). Since then
+`tools/run.sh` turns background input off in its runs.
 Every prompt is also a log line, `coop: session ui: <header>: <text>`, which
 the scenarios check: `session-launcher` (the menu's Host and Join, both in
 lockstep, the same hashes), `session-cancel` (Cancel after 2 s, back to the
