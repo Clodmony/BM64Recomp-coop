@@ -6,7 +6,7 @@ repository so it survives any worktree path and any tool; per-checkout agent
 memory is not read by a session that starts in another worktree. State goes
 here; stable recipes go into `docs/coop/`; personal data and hardware never.
 
-Last updated 2026-10-18 (#33 done, PR #40 open).
+Last updated 2026-10-18 (#33 done, PR #40 merged).
 
 ## Repository state
 
@@ -17,24 +17,20 @@ Last updated 2026-10-18 (#33 done, PR #40 open).
   audit), and on 2026-10-18 the chain #12 (Europe build), #15 (harness,
   player 2 spike), #20 (group #19), #25 (session core), #30 (host's save,
   build check), #34 (camera), #35 (#32, the knocked-out heart), #37 (#36,
-  heart items), #38 (#28, the launcher's Co-op menu). Their branches are
-  deleted. Open: #40 (#33).
+  heart items), #38 (#28, the launcher's Co-op menu), #40 (#33, cameras
+  that turn). Their branches are deleted. No open pull requests.
 - Open issues: #14 and #16 (leftover checks, owner), #19 (their group),
   #11 (Europe follow-ups), #22–#24 (follow-ups of #19), #29 (session
-  follow-ups), #31 (scripted pads on the title), #33 (cameras that turn,
-  the client's C-buttons; PR #40), #39 (`session-launcher` misses the
-  Connecting prompt now and then).
+  follow-ups), #31 (scripted pads on the title), #39 (`session-launcher`
+  misses the Connecting prompt now and then).
 - Local git config of the clone: Claude identity, `upstream` with push
   `DISABLED`, `core.hooksPath .githooks`, `pushguard.romDir` set.
 
 ## Open pull requests
 
-- **#40** (closes #33), draft, branch `coop/33-turning-camera`, worktree
-  `prepare-project-according-a3ceb80a`: waits for the owner's review and
-  merge word. Verify: 7/8 stages, 266/267 checks; the failure is #39 (not
-  this branch's code).
-- #38 (closes #28) merged on the owner's word, 2026-10-18, without a hand
-  try: the menu was never clicked by hand or seen.
+- None. #40 (closes #33) merged on the owner's word, 2026-10-18, on the
+  scenario results (verify 266/267, the failure is #39); not played by
+  hand.
 
 ## Owner decisions (2026-10-18)
 
@@ -89,6 +85,14 @@ Last updated 2026-10-18 (#33 done, PR #40 open).
 - Test runs keep background input off (`run.sh`'s `general.json`).
 - A Cancel or refusal in the Co-op menu goes back to the menu (not: start
   alone).
+
+## Owner decisions, end of #33 (2026-10-18)
+
+- #33 next (chosen at the start of its session). Merge #40 now (done);
+  problems found by hand become new issues.
+- #39: fix the check (the scenario looks for the session's own
+  `coop: session client: connecting to` line); the brief prompt stays.
+- Old verify logs in scratch deleted.
 
 ## What #33 found and did (details: design.md, *Cameras that turn*)
 
@@ -205,8 +209,8 @@ Last updated 2026-10-18 (#33 done, PR #40 open).
    issue.
 2. **Other session follow-ups**: #29 (two machines, Windows/macOS; also
    whether two compilers give the same build identity; whether two games on
-   one machine read the same gamepad); #39 (the flaky launcher check: look
-   for the session's own `connecting to` line instead).
+   one machine read the same gamepad); #39 (the flaky launcher check:
+   check the session's own `connecting to` line instead; owner's choice).
 3. **Rest of #14 and #16** (kept open, owner): a story teleport
    (`func_802512C0` from a room script; find one with `xref/callers.tsv`
    beyond Green Garden stage 1) and a scene with player 2 already in the
@@ -260,8 +264,8 @@ Under `~/dev-scratch/BM64Recomp-coop/`:
 
 ## Cleanup the owner may approve
 
-- The Superset workspace `prepare-project-according-a3ceb80a` (its branch
-  is merged and deleted; its build folder
+- The Superset workspace `prepare-project-according-a3ceb80a` (its branches
+  are merged and deleted; its build folder
   `build/prepare-project-according-a3ceb80a-eu` in scratch): remove it in
   Superset.
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/` in scratch:
