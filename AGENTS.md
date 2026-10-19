@@ -8,14 +8,24 @@ two-player Adventure campaign**, played **online**: two players share one
 campaign over the network. Local split-screen co-op on one machine was part of
 the plan and is on hold (owner, 2026-10-18). The co-op project
 is built entirely with AI: every change after upstream commit `726adc9` is
-written by an AI coding agent directed by the repository owner. Keep that
-disclosure in `README.md` and here.
+written by an AI coding agent directed by the repository owner or a
+collaborator. Keep that disclosure in `README.md` and here.
+
+Two people work on the fork, the **owner** and a **collaborator**, each with
+their own agent sessions on their own machine (#47). Where this file says
+*the owner*, it means the owner; *the person* is whoever runs the session
+(`gh api user --jq .login`: `Clodmony` is the owner).
 
 Read before working:
 
-- **Start here:** [HANDOFF.md](HANDOFF.md), the session handoff note (state,
-  open pull requests, next issue), and the open issues on GitHub (the only
-  task list); work follows the issue loop under *Workflow*.
+- **Start here:** [HANDOFF.md](HANDOFF.md), the shared handoff note (state,
+  who works on which issue, project decisions, next candidates), then your
+  person's own note, `handoff/owner.md` or `handoff/collaborator.md`, and
+  the open issues on GitHub (the only task list); work follows the issue
+  loop under *Workflow*.
+- [docs/coop/contributing.md](docs/coop/contributing.md): two people side by
+  side (claiming issues, reviews and merges, setup on Windows in WSL2,
+  usage limits).
 - [docs/coop/building.md](docs/coop/building.md): the build pipeline, which
   stages need the ROM, `tools/verify.sh`, the toolchain workarounds and how a
   test run keeps away from the owner's saves.
@@ -68,7 +78,8 @@ Read before working:
 - Never push to `upstream` (its push URL is disabled on purpose) and never
   open pull requests against it. Never force-push over existing work.
 - No personal data in commits, docs, issues or pull requests (names, emails,
-  hardware, local paths). Commits are authored as
+  hardware, local paths), the collaborator's neither: the notes say *owner*
+  and *collaborator*. Commits are authored as
   `Claude <noreply@anthropic.com>` (the clone's local git config).
 - **No session links, ever** (owner). Commits and pull requests carry no
   `Claude-Session:` line and no claude.ai session URL, whatever Claude
@@ -78,13 +89,13 @@ Read before working:
   decompressed ROMs, the recompiler's output (`RecompiledFuncs/`,
   `rsp/aspMain.cpp`), saves, or captures of the game (screenshots and clips
   show the game's graphics: keep them local, never in commits, issues or pull
-  requests). The owner's ROM folder is read-only. The pre-commit hook
+  requests). A person's ROM folder is read-only. The pre-commit hook
   (`.githooks/`) and the owner's push guard refuse such files; never bypass
   either.
-- **The owner's data is not test data.** The game keeps saves, config and
+- **A person's own data is not test data.** The game keeps saves, config and
   mods in `~/.config/BM64Recompiled`; test runs use portable mode in a scratch
   folder ([docs/coop/building.md](docs/coop/building.md)) and never stop a
-  game the owner is running.
+  game the person is running.
 - **Keep upstream merges cheap.** New code goes into new files
   (`patches/coop_*.c`, `src/coop/`, `docs/coop/`); edits to upstream files
   stay small hooks, each marked with a `// coop:` comment that says why.
@@ -93,14 +104,17 @@ Read before working:
 
 ## Workflow
 
-- **One issue per session**, following the `issue-loop` skill: orient from
-  `HANDOFF.md`, branch `coop/<N>-<topic>` from `bm64recomp-coop`, reproduce
+- **One issue per session**, following the `issue-loop` skill
+  (`.claude/skills/issue-loop/`, in the repository): orient from
+  `HANDOFF.md` and your person's note, claim the issue (assign yourself on
+  GitHub, a row under *In progress*), branch `coop/<N>-<topic>` from `bm64recomp-coop`, reproduce
   (a failing test or scripted check first), fix, run `tools/verify.sh`,
   update the docs, push and open a draft pull request into `bm64recomp-coop`
-  (`Closes #N` only when the whole issue is done). Then rewrite
-  `HANDOFF.md`, ask the owner about everything still theirs to do or decide
+  (`Closes #N` only when the whole issue is done). Then rewrite your
+  person's note in `handoff/`, update your lines in `HANDOFF.md`, ask the
+  person about everything still theirs to do or decide
   (merges, proposed decisions, wording, cleanup) as choices with options, the
-  recommended one first, record the answers, and stop: the owner starts a
+  recommended one first, record the answers, and stop: the person starts a
   fresh session for the next issue.
 - **Issue groups** (owner, 2026-10-18): a milestone of linked issues may be
   done as one: one session, one branch `coop/<parent N>-<topic>`, one draft
@@ -111,22 +125,29 @@ Read before working:
   pass `-R Clodmony/BM64Recomp-coop` to `gh` (or run `.superset/setup.sh`,
   which sets the default), since the `upstream` remote would otherwise be
   picked.
-- **The handoff lives in the repository.** `HANDOFF.md` is rewritten at the
-  end of every session and committed on the issue's branch. When a session
-  ends without a pull request, or the note must be visible before the owner
-  merges, commit it alone (`handoff: <date>`) and push it to
-  `bm64recomp-coop` directly: it is the one file that may land there without
-  a pull request. Per-checkout agent memory is not read from another
-  worktree, so state goes into this file, not into memory.
+- **The handoff lives in the repository.** `HANDOFF.md` is shared: a
+  session edits only the lines its work changed (its row under *In
+  progress*, a decision, a candidate), never rewrites it whole. Each
+  person's sessions rewrite only their own note, `handoff/owner.md` or
+  `handoff/collaborator.md`. The notes are committed on the issue's branch.
+  When a session ends without a pull request, or a note must be visible
+  before the merge, commit the notes alone (`handoff: <date>`) and push them
+  to `bm64recomp-coop` directly: they are the only files that may land there
+  without a pull request (pull first; on a conflict in `HANDOFF.md` keep both
+  people's lines). Per-checkout agent memory is not read from another
+  worktree or machine, so state goes into these files, not into memory.
 - **Worktrees.** One worktree per issue: a Superset workspace, or
   `git worktree add` under scratch. Superset runs `.superset/setup.sh` when it
   creates a workspace; run it by hand in any other worktree (identity,
   upstream remote, hooks, `gh` default, submodules, tool check). Remove a
   worktree when its pull request is merged.
-- **The owner merges.** A pull request is merged only when the owner says so,
-  locally in a checkout of `bm64recomp-coop` under the Claude identity:
+- **Merging after review** (owner, 2026-10-19). Either person may merge a
+  pull request once the other has approved it in a GitHub review, and only
+  when the person running the session says so. Merge locally in a checkout
+  of `bm64recomp-coop` under the Claude identity:
   `git merge --no-ff <branch> -m "Merge #N: …"`, push, delete the merged
-  branch. Never `gh pr merge` (it authors the merge as the owner).
+  branch. Never `gh pr merge` (it authors the merge as the person's
+  account).
 - **Scratch lives on disk, outside the repository**, under
   `~/dev-scratch/BM64Recomp-coop/`: verify runs, build folders, the N64Recomp
   cache, the decompressed ROM, test-run folders, captures, pull request

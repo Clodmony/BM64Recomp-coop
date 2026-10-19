@@ -35,4 +35,4 @@ rom="${BM64_DECOMP_ROM:-$HOME/dev-scratch/BM64Recomp-coop/rom/bm64.decomp.us.z64
 [ -f "$rom" ] || echo "setup: no decompressed US ROM at $rom; tools/verify.sh compiles without linking (docs/coop/building.md)" >&2
 
 echo "setup: $(git config user.name) <$(git config user.email)>, branch $(git branch --show-current)"
-echo "setup: read HANDOFF.md first, then AGENTS.md"
+echo "setup: read HANDOFF.md first, then your note in handoff/ and AGENTS.md"
