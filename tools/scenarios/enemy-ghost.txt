@@ -1,0 +1,49 @@
+# Enemies aim at the nearest living player, never at a ghost (#49, owner's
+# rule from #22). Room 0x29 played as a game (BM64_COOP_NO_DEMO: with its
+# enemies, docs/coop/building.md). Enemy 8 (type 0x17) aims at player 1, the
+# only player near, as the room starts. Player 1 then dies by its own bomb
+# (p1-ghost) and is down, a ghost: from then on no enemy aims at the ghost,
+# enemy 8 aims at player 2. Player 2 alone then walks towards enemy 8, which
+# was taken out with both players far: it spawns again at player 2's range
+# (#51) and aims at player 2.
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_P2=4
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_SEED=1
+#env BM64_COOP_NO_DEMO=1
+#
+#check log "^coop: enemy spawn rec=8 type=0x17 "
+#check log "^coop: enemy aim rec=8 slot=0 ghost=0 "
+#check after "^coop: death slot=0" "^coop: down slot=0 cause=1 lives=2 ghost$"
+#check field dead 0 ghost = 1
+#check field dead 4 ghost = 0
+#check after "^coop: down slot=0 " "^coop: enemy aim rec=8 slot=4 ghost=0 "
+#check not-after "^coop: down slot=0 " "^coop: enemy aim rec=[0-9]+ slot=0 ghost=1 "
+#check after "^coop: input: player 2 walks to enemy 8$" "^coop: enemy spawn rec=8 .* near=4$"
+#check after "^coop: input: player 2 walks to enemy 8$" "^coop: enemy aim rec=8 slot=4 ghost=0 "
+#check field later 4 ghost = 0
+overlay 0x29
+wait 600
+probe start
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+pad 1 - 1 0.05
+wait 30
+pad 1 -
+wait 10
+probe apart
+pad 0 A
+wait 2
+pad 0 -
+wait 180
+probe dead
+log player 2 walks to enemy 8
+pad 1 - 0.05 -1
+wait 40
+pad 1 -
+wait 60
+probe p2-walked
+wait 100
+probe later
+end
