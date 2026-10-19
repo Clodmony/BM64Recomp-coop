@@ -1,0 +1,44 @@
+# Player 2 joins in an online session without a step of player 1 (#55):
+# p2-join-still with the client's pad as player 2. Room 0x29 entered from room
+# 0x28: once player 1's entry walk is over and it has been free for 60
+# frames, player 2 is spawned next to it in both games; the host's player 1
+# never moves, the client walks player 2, and both games hash the same state
+# on every frame.
+#session
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_LOG_HASH=1
+#
+#check no-log ^coop: session (desync|lost|refused)
+#check-client no-log ^coop: session (desync|lost|refused)
+#check same-hashes
+#check log "^coop: place slot=4 tile=5,1,13 p1 tile=5,1,14$"
+#check-client log "^coop: place slot=4 tile=5,1,13 p1 tile=5,1,14$"
+#check not-after "^coop: probe joined$" "^coop: spawn slot=4$"
+#check-client not-after "^coop: probe joined$" "^coop: spawn slot=4$"
+#check field joined 4 flags = 0
+#check-client field joined 4 flags = 0
+#check still joined walked 0
+#check-client still joined walked 0
+#check moved joined walked 4 100
+#check-client moved joined walked 4 100
+#check no-log ^coop: (hit|down) slot=
+#check-client no-log ^coop: (hit|down) slot=
+#
+# The client's script: the same frames, its pad 0 is player 2's.
+#client overlay 0x29
+#client wait 320
+#client probe joined
+#client pad 0 - 1 0.05
+#client wait 25
+#client pad 0 -
+#client wait 10
+#client probe walked
+#client end
+overlay 0x29
+wait 320
+probe joined
+wait 25
+wait 10
+probe walked
+end

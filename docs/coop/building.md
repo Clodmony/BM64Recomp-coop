@@ -333,8 +333,9 @@ Everything is off unless a switch asks for it:
     the floor level it stands on (`func_802511EC`, as a room entry does), and
     log `coop: tile slot=… from=… to=…`. With player 2 on, a tile step of
     slot 0 is a room entry: player 2 stays frozen and cannot be hurt until
-    player 1's next step places it (#36); walk player 1 instead when player
-    2 must stay where it is;
+    it is placed next to player 1 (#36; at once once player 1 has been free
+    for 60 frames, #55); walk player 1 instead when player 2 must stay where
+    it is;
   - `hearts SLOT N`: set the player's hearts to N (0–9), as a heart pickup
     does, and log `coop: hearts slot=… from=… to=…`;
   - `save FILE`: save the live progress block into file 0–2 and the EEPROM,
