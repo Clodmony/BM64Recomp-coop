@@ -5,43 +5,83 @@ work*). Only the collaborator's sessions rewrite it: session history, what
 each issue found, decisions taken in those sessions, the next step. No
 names, handles or hardware in it.
 
-Last updated 2026-10-20 (#58, the first session).
+Last updated 2026-10-20 (#63, the session stopped early on usage).
 
 ## State
 
-- **#58 done**, branch `coop/58-wsl2-setup`, draft pull request open into
-  `bm64recomp-coop`, waiting for the owner's review. It changes
-  `docs/coop/contributing.md` only (plus the notes).
-- The machine is set up and checked: WSL2 with Ubuntu 24.04, the build
-  dependencies, the fork cloned into the Linux file system, the Europe ROM
-  unpacked into scratch, `gh` logged in with write access to the fork.
-- One issue came out of it, **#63**: `tools/run.sh` wraps its headless runs
-  in gamescope, which Ubuntu 24.04 does not package, so the default run
-  fails and `tools/scenario.py`, which cannot pass `--window`, does not run
-  at all there. The proposal in #63 is to let `run.sh` choose its wrapper,
-  gamescope or Xvfb.
+- **#63 in progress**, branch `coop/63-run-wrapper`, pushed, **no pull
+  request yet**. The fix and the docs are committed (`a8ab437`): one commit,
+  `tools/run.sh`, `docs/coop/building.md`, `docs/coop/contributing.md`.
+- **#58 is done and merged** (pull request #64, merged by the owner
+  2026-10-19 22:42 UTC). Its row is out of `HANDOFF.md`.
+- The session was stopped before the pull request because the person ran out
+  of usage. Nothing is half-written in the tree: `git status` is clean on the
+  branch.
 
-## What #58 found
+## #63: what it found and what the fix is
 
-Run on 2026-10-20, Ubuntu 24.04 in WSL2, clang 18, the Europe version:
+`tools/run.sh` hard-coded `gamescope --backend headless` for every headless
+run. Reproduced on Ubuntu 24.04 in WSL2 (Europe build, `gamescope` off
+`PATH`, no stand-in):
 
-- `tools/verify.sh --quick --version eu`: 5/5 stages, all passed.
-- `tools/verify.sh --full --version eu`: 7/7, so the ROM recompiles and the
-  Europe build links in WSL2.
-- `tools/verify.sh --full --version eu --scenarios`: 8/8 stages,
-  **383/383 checks**, every scenario including the two-game `session-*` ones
-  (two games at once, the lockstep over the loopback network).
-- `tools/run.sh --version eu --window`: the title overlay loads after 0.6 s.
-  Under Xvfb instead of gamescope, after 0.4 s and with nothing on the
-  desktop.
-- Speed: a 100 s run played the attract demo through 14 overlay loads at
-  5200 game frames in 104 s of wall-clock time, so 100 % at PAL 50 — the
-  rate the owner's machine shows. No stutter in the frame log.
-- Two gaps in `docs/coop/contributing.md`, both fixed on the branch: `make`
-  was missing from the dependency list (the `patches` stage then fails with
-  `make: command not found`, and `europe` after it for the missing
-  `patches.elf`), and the WSL2 section still said the runs and scenarios
-  were untried.
+- `tools/run.sh --version eu --until-overlay 0x20` → exit 2,
+  `run eu: game exited (status 127) after 0.2 s`, `game.log`:
+  `env: 'gamescope': No such file or directory`.
+- `tools/scenario.py --version eu tools/scenarios/europe-rate.txt` →
+  `1/3 checks passed`, `RESULT FAILED`, so no scenario could run at all.
+
+The fix: `run.sh` chooses the wrapper of its headless display — `gamescope
+--backend headless` when `gamescope` is on `PATH` (the same command line as
+before, so the owner's machine is unchanged), else `env -u WAYLAND_DISPLAY
+xvfb-run -a -s "-screen 0 640x480x24"`, else exit 4 with a message naming
+both packages. New `--wrapper gamescope|xvfb` forces one (how a machine with
+both can compare them, the open question in the issue), and the run's
+summary line names the display used: `display: gamescope`, `display: xvfb`
+or `display: window`.
+
+`-u WAYLAND_DISPLAY` is needed under Xvfb: with it SDL takes the desktop's
+Wayland display (WSLg's) and opens a window there instead of drawing into
+Xvfb.
+
+After the fix, same machine and conditions: `run.sh` loads overlay 0x20
+after 0.8 s with `display: xvfb`, and `europe-rate` scores `2/2 checks
+passed, RESULT ok`. All six selection paths were run one by one: default
+without gamescope → xvfb; default with a `gamescope` on `PATH` → gamescope;
+`--wrapper xvfb` while gamescope is there → xvfb; `--wrapper gamescope`
+without it → exit 4, `no gamescope on PATH`; neither on `PATH` → exit 4,
+`no headless wrapper on PATH: install gamescope or xvfb (xvfb-run), or pass
+--window`; `--wrapper foo` → exit 4, `--wrapper must be gamescope or xvfb`.
+
+**Not run here:** real gamescope headless. This machine has no such package,
+so the gamescope branch was exercised with a stand-in on `PATH` that proves
+only the selection. Its command line is byte-for-byte the one before this
+change.
+
+Docs on the branch: `building.md` (*Running the game*) gets the wrapper
+choice, `--wrapper`, the `display:` field and the `WAYLAND_DISPLAY` reason;
+`contributing.md` gets `xvfb` in the dependency list with its reason and
+loses the stand-in workaround #63 made unnecessary.
+
+## Next step (fresh session, same branch)
+
+1. `tools/verify.sh --full --version eu --scenarios` was **still running**
+   when the session stopped — 7/8 stages ok (`submodules`, `configs`,
+   `n64recomp`, `patches`, `europe`, `recomp`, `build`), the `scenarios`
+   stage unfinished, log folder
+   `~/dev-scratch/BM64Recomp-coop/verify/20261020-004931/`. Check that
+   folder's `summary.txt` first; if it did not finish, run verify again on
+   the branch. The expected result is the one #58 measured, 8/8 stages and
+   383/383 checks — but now **without** the `gamescope` stand-in on `PATH`,
+   which is the whole point of #63.
+2. Open the draft pull request into `bm64recomp-coop` with `Closes #63`. The
+   body is written and waiting at
+   `~/dev-scratch/BM64Recomp-coop/i63/pr.md`; replace its
+   `VERIFY_SUMMARY` placeholder with the verify summary from step 1.
+3. Ask the owner for a review (`gh` 2.45 here: `gh api -X POST
+   repos/<owner>/<repo>/pulls/<N>/requested_reviewers -f
+   'reviewers[]=<login>'`, see *Machine notes*).
+4. Then `HANDOFF.md`: move #63 out of *In progress* once its pull request is
+   merged, and drop it from the issue list.
 
 ## Machine notes
 
@@ -53,41 +93,37 @@ never the hardware itself. Recipes that hold for everyone go into
 - WSL2 with WSLg supplies `DISPLAY`, `WAYLAND_DISPLAY` and
   `XDG_RUNTIME_DIR` to every shell, so the game's window needs no setup of
   its own and SDL picks its `x11` driver (through Xwayland).
-- gamescope is not packaged for Ubuntu 24.04 (noble), with universe enabled
-  (#63). Xvfb is, and stands in for it well. For `scenario.py`, which cannot
-  pass `--window`, a stand-in named `gamescope` early on `PATH` that drops
-  its own options and runs what follows `--` is enough; it lives outside the
-  repository.
-- Installing WSL on a machine that has none takes two steps with a reboot
-  between them, because the optional components must be active before a
-  distribution registers. `wsl --install -d <distro> --location <path>` puts
-  the distribution on another drive, which the system drive may need: the
-  distribution, the build folders, the N64Recomp cache and the ROM image
-  together took about 5 GB before the first build and more after it.
+- gamescope is not packaged for Ubuntu 24.04 (noble), with universe enabled.
+  Xvfb is, and `run.sh` uses it by itself since #63 — the local stand-in
+  named `gamescope` that #58 needed is no longer required (it still sits in
+  `~/.local/bin/gamescope`; removing it is the honest setup now, and it also
+  makes the default run pick Xvfb).
 - The agent session runs on the Windows side and drives WSL2 through
-  `wsl.exe`. Two things to know if a later session does the same: pass a
-  script file rather than a long `bash -lc '…'`, whose quoting breaks and
-  whose output is sometimes cut short; and `wsl.exe` writes UTF-16 unless
-  `WSL_UTF8=1` is set.
-- Ubuntu 24.04 packages `gh` 2.45, which is old enough that some commands
-  fail on a deprecated GraphQL field: `gh pr edit --add-reviewer` dies with
+  `wsl.exe`. Three things to know if a later session does the same: pass a
+  script on **stdin** (`wsl.exe -- bash -s <<'EOF' … EOF`), not a long
+  `bash -lc '…'`, whose quoting breaks and whose output is sometimes cut
+  short; `wsl.exe` writes UTF-16 unless `WSL_UTF8=1` is set; and a
+  **backslash in a here-document gets mangled** on the way through, so a
+  patch script must not match or write text containing one (edit such lines
+  by line number or with `sed` instead). A non-login `bash -s` also has no
+  `~/.local/bin` on `PATH`, which hides anything installed there.
+- Ubuntu 24.04 packages `gh` 2.45, old enough that some commands fail on a
+  deprecated GraphQL field: `gh pr edit --add-reviewer` dies with
   "Projects (classic) is being deprecated ... (repository.pullRequest.projectCards)"
   and changes nothing. The REST call works:
   `gh api -X POST repos/<owner>/<repo>/pulls/<N>/requested_reviewers -f 'reviewers[]=<login>'`.
   Installing `gh` from GitHub's own apt repository would avoid it.
-- Audio in a headless run logs skips: 91 over the 104 s run above, with the
-  queue between 65 and 82 ms (the last two fields of `coop: frame`). Whether
-  a native Linux run shows the same was not measured, so this is an
-  observation, not a fault. Worth comparing when both machines run the same
-  scenario.
+- Audio in a headless run logs skips: 91 over a 104 s run, with the queue
+  between 65 and 82 ms (the last two fields of `coop: frame`). Whether a
+  native Linux run shows the same was not measured, so this is an
+  observation, not a fault (collaborator, 2026-10-20) — worth comparing when
+  both machines run the same scenario.
 
-## Next step
+## Scratch on this machine
 
-- Ask the owner to review the #58 pull request; either person may merge once
-  the other has approved it (`HANDOFF.md`, *Project decisions*).
-- **Next issue: #63** (collaborator, 2026-10-20), in a fresh session: let
-  `tools/run.sh` choose its headless wrapper, gamescope or Xvfb, which makes
-  this machine able to run `scenario.py` without a stand-in. The other small
-  candidate, #46, belongs to the owner's group #56 and is taken.
-- The audio skips above stay an observation, not an issue (collaborator,
-  2026-10-20): there is no native-Linux measurement to compare them with.
+- `~/dev-scratch/BM64Recomp-coop/i63/`: the pull request body (`pr.md`,
+  still needed) and `bin/` (a directory of symlinks used to test the
+  "neither wrapper on PATH" path; delete freely).
+- `rom/`, `build/BM64Recomp-coop-eu/`, `n64recomp/`: keep.
+- `runs/`, `verify/`: delete freely, except the folder named under *Next
+  step* until its summary has been read.
