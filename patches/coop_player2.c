@@ -307,9 +307,13 @@ void coop_stage_spawned(void) {
 // Hook at the entry of func_80245CDC, the shared player init of a stage room,
 // before its spawn loop. Player 2 is not spawned by the loop: it joins once
 // the room's opening is over (coop_partner_tick), so that it never stands in
-// the way of player 1's entry walk (#14). This sets its stats and its pending
-// placement. Slot 1 reads pad 1 (controlType 1); slot 4 has no pad buffer and
-// reads its command record (controlType 2), filled by coop_feed_command.
+// the way of player 1's entry walk (#14). This sets its hearts and its pending
+// placement. Its bombs, fire and bomb type stay its own (#52): the game resets
+// them for all five slots wherever it resets player 1's (func_80277E1C: a
+// story session's start, the pause menu's retry, func_802967A4 from room
+// scripts) and keeps them across room changes and retries, as player 1's.
+// Slot 1 reads pad 1 (controlType 1); slot 4 has no pad buffer and reads its
+// command record (controlType 2), filled by coop_feed_command.
 void coop_stage_init(s32 slot) {
     CoopPlayer* p1 = &g_Players[0];
     CoopPlayer* p2 = &g_Players[slot];
@@ -331,9 +335,6 @@ void coop_stage_init(s32 slot) {
     p2->levelClass = NULL; // the last room's actor is gone with its room
     p2->heartCount = COOP_P2_HEARTS;
     coop_stage_downs();
-    p2->bombCount = p1->bombCount;
-    p2->firepower = p1->firepower;
-    p2->bombType = 0x200;
     p2->spawnLocation[0] = p1->spawnLocation[0];
     p2->spawnLocation[1] = p1->spawnLocation[1];
     p2->spawnLocation[2] = p1->spawnLocation[2];

@@ -840,12 +840,48 @@ Not covered: `func_802308B8` returns one actor that touches the item, so a
 full player standing on a heart may keep a partner on the same spot from
 getting it (not run).
 
+### Player 2's power-ups (#52)
+
+Until #52 every stage room's init (`coop_stage_init`) set player 2's bombs and
+fire to player 1's and its bomb type to 0x200: in the playtest player 2 lost
+its power-ups at every room change. Read in the Europe disassembly: the
+game's only reset of bombs, fire and bomb type is `func_80277E1C`, which sets
+**all five slots** to bomb type 0x200, 2 bombs and 2 fire. It runs at boot
+(`func_8023DB0C`), at a story session's start (`func_8023DA04`, the file
+select and the harness's warp), at a battle's start (`func_8023CA94`,
+`func_80297ADC`), at the pause menu's retry (`func_802968BC`, which also sets
+player 1's hearts to 1) and in `func_802967A4`, which 63 overlay sites call
+through their own function tables (not traced to a scene; it resets every
+slot, so player 1 and player 2 alike). A story death and the room's reload
+(`func_8023F26C`, `func_8023D0F8`) reset no slot's bombs or fire; player 1
+loses only its remote bombs there (`func_80277DF4`, slot 0 only: #24). The
+continue (`func_8023E1D8`) sets player 1's hearts only. Pickups
+(`func_802797BC`) and `func_80277D20` (a slot's bomb type, from seven
+overlays) work per slot. Only the session start's debug branch (session
+block +0x40 set: player 1 gets 8 more bombs and fire, and no slot is reset)
+treats player 1 alone; nothing sets that flag in normal play (inferred).
+
+So the init no longer touches them: player 2 keeps its own bombs, fire and
+bomb type across room changes and retries, and the game's own resets give it
+the same values as player 1 wherever player 1's are reset, its first join of
+a session included (both get 2 and 2 at the session's start). Its hearts are
+still set to 2 at each room's init (as since #19).
+
+Runs (Europe, seed 3): `p2-power-rooms` (player 2 bombs the block on room
+0x29's tile 7,16, picks up the bomb-up it leaves, 3 bombs, takes the floor
+exit and has 3 bombs in room 0x28; before #52 it had 2 there) and
+`p2-power-retry` (the same bomb-up, then player 2 is downed and player 1's
+death reloads the room: player 2 comes back with 3 bombs; before #52 2). Not
+run: a fire-up (no scripted one found: the block's item is the seed's), a
+stage start from the world map, the pause menu's retry and a continue (read
+only), and a scene inside a room calling `func_802967A4`.
+
 ### Hooks and patches
 
 | Where | Does |
 |---|---|
 | `func_8023D0F8` entry (scene load) | counted: a room change or a stage start (#22) |
-| `func_80245CDC` entry (room player init) | player 2's stats (2 hearts, player 1's bombs and fire, bomb type 0x200); not spawned by the room, placement pending; downed players kept or revived (#22) |
+| `func_80245CDC` entry (room player init) | player 2's hearts (2; its bombs, fire and bomb type stay its own, #52); not spawned by the room, placement pending; downed players kept or revived (#22) |
 | `func_80245CDC` at 0x80245D68 (after its spawn loop) | a downed player 1: ghost flag and look again (#22) |
 | `func_802511EC` entry (put a slot on a tile) | slot 0 placed: player 2's placement pending (held frozen if it is in the room) |
 | `func_8024E088` entry (player update) | slot 0: player 2's pending placement, next to player 1 once the room's opening is over (#55); slot 4: its command record from pad 1 |
