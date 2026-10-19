@@ -1,0 +1,68 @@
+# A downed player in an online session (#22): p1-ghost's first part with the
+# client's pad as player 2. Player 1 (the host's) dies by its own bomb and is
+# down, a ghost, in both games; both players then move, and both games hash
+# the same state on every frame.
+#session
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_LOG_HASH=1
+#
+#check no-log ^coop: session (desync|lost|refused)
+#check-client no-log ^coop: session (desync|lost|refused)
+#check same-hashes
+#check after "^coop: death slot=0" "^coop: down slot=0 cause=1 lives=2 ghost$"
+#check-client after "^coop: death slot=0" "^coop: down slot=0 cause=1 lives=2 ghost$"
+#check not-after "^coop: death slot=0" "^coop: room teardown"
+#check-client not-after "^coop: death slot=0" "^coop: room teardown"
+#check field dead 0 ghost = 1
+#check-client field dead 0 ghost = 1
+#check moved dead p2-walked 4 100
+#check-client moved dead p2-walked 4 100
+#check moved p2-walked p1-walked 0 100
+#check-client moved p2-walked p1-walked 0 100
+#
+# The client's script: the same frames, its pad 0 is player 2's.
+#client overlay 0x29
+#client wait 300
+#client probe start
+#client wait 15
+#client pad 0 - 1 0.05
+#client wait 30
+#client pad 0 -
+#client wait 10
+#client probe apart
+#client wait 2
+#client wait 180
+#client probe dead
+#client pad 0 - -1 0.05
+#client wait 20
+#client pad 0 -
+#client wait 10
+#client probe p2-walked
+#client wait 20
+#client wait 10
+#client probe p1-walked
+#client end
+overlay 0x29
+wait 300
+probe start
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+wait 30
+wait 10
+probe apart
+pad 0 A
+wait 2
+pad 0 -
+wait 180
+probe dead
+wait 20
+wait 10
+probe p2-walked
+pad 0 - 1 0.05
+wait 20
+pad 0 -
+wait 10
+probe p1-walked
+end

@@ -325,7 +325,8 @@ Everything is off unless a switch asks for it:
     camera` line (its eye, its yaw and pitch in tenths of a degree and its
     distance from the point it looks at) and one `coop: player slot=…` line per player in play
     (controlType, hearts, bombs, fire, flags, position in tenths of a world
-    unit) and, with `BM64_COOP_LOG_PLAYERS=1`, a `coop: item from=SLOT
+    unit, `ghost` 1 for the ghost flag, bit 0x200 of +0x68, and the model's
+    `alpha`, 255 for a living player and 128 for a ghost, #22) and, with `BM64_COOP_LOG_PLAYERS=1`, a `coop: item from=SLOT
     type=T pos=…` line for the item a hit knocked out last while it is in
     the room (#36);
   - `tile SLOT X Z`: put the player in that slot on tile X, Z of the room at
@@ -339,6 +340,16 @@ Everything is off unless a switch asks for it:
   - `save FILE`: save the live progress block into file 0–2 and the EEPROM,
     as the pause menu's save does (`func_802947AC`), and log
     `coop: save file=… used=… time=…` (the file's "used" bit and play time);
+  - `drop SLOT`: knock a heart out of the player, as a hit that leaves
+    hearts does (`func_8027B39C`; it flies off in a random direction), and
+    log `coop: drop step slot=…` (#22, `ghost-heart`);
+  - `scene ID [ENTRY]`: go to overlay ID with entry code ENTRY (default
+    0x10, a stage start from the world map) in the running session, as a
+    room's exit does (`func_8023AE6C`), and log `coop: scene overlay=…`
+    (#22, `ghost-rooms`);
+  - `freeze 0|1`: freeze or release the story player as a cutscene does
+    (`func_802452E8`, with the idle animation), and log `coop: freeze step
+    on=…` (#22, `ghost-scene`);
   - `log TEXT`, and `end`, which logs `coop: input end`.
 
   A bad line logs `coop: input error …` and the script does not run. The
@@ -368,12 +379,15 @@ Everything is off unless a switch asks for it:
   then plays.
 - `BM64_COOP_LOG_PLAYERS=1`: one line per room init, spawn (and the model
   asset it gets), placement on a tile, bomb, hit, the heart a hit knocks
-  out (`drop … item=4`), an item picked up (`pickup … item=T`), a heart a
-  full player passes through (`pass … item=4`, #36), death,
-  cutscene freeze and room teardown, from hooks in `bm64.us.toml`.
+  out (`drop … item=4`), an item picked up (`pickup … item=T`), an item a
+  player passes through (`pass … item=T`: a heart for a full player, #36,
+  any item for a ghost, #22), death, a ghost's hit (`ghost hit`), cutscene
+  freeze, scene load, stage clear and room teardown, from hooks in
+  `bm64.us.toml`.
 - `BM64_COOP_P2=1|4`: player 2 in that slot in story rooms, driven by pad 1
   ([design.md](design.md), *Player 2 in a story room*). Its own lines
-  (`coop: place …`, `trigger`, `down`, `respawn`) come from
+  (`coop: place …`, `trigger`, `down … ghost`, `revive … why=…`, `still
+  down`, `stays down`, `heart found`, `ghost fell`) come from
   `patches/coop_player2.c` whenever it is on.
 - `BM64_COOP_CAMERA=SLOT`: the camera follows the player in that slot (0–4)
   while it plays (an actor, controlType 1 or 2), and the game's choice (S)

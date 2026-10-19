@@ -39,6 +39,13 @@
 //                       (patches/coop_harness.c)
 //   save <file>         save the live progress block into file 0-2 and the
 //                       EEPROM, as the pause menu does (patches/coop_harness.c)
+//   drop <slot>         knock a heart out of the player, as a hit does
+//                       (func_8027B39C; patches/coop_harness.c)
+//   scene <ID> [<entry>] go to overlay ID (entry default 0x10, as the world map
+//                       starts a stage) without a new session
+//                       (func_8023AE6C; patches/coop_harness.c)
+//   freeze <0|1>        freeze or release the story player as a cutscene
+//                       does (func_802452E8; patches/coop_harness.c)
 //   log <text>          log "coop: input: <text>"
 //   end                 log "coop: input end"; the pads stay as they are
 #include <array>
@@ -72,10 +79,10 @@ struct Pad {
 };
 
 struct Step {
-    enum class Kind { Overlay, Wait, Pad, Probe, Log, Tile, Hearts, Save, End } kind;
+    enum class Kind { Overlay, Wait, Pad, Probe, Log, Tile, Hearts, Save, Drop, Scene, Freeze, End } kind;
     int line;
     uint32_t value = 0; // overlay ID, frames, pad number, slot, file
-    int32_t tile[2] = {0, 0}; // a tile step's x, z; a hearts step's count in [0]
+    int32_t tile[2] = {0, 0}; // a tile step's x, z; a hearts step's count, a scene step's entry in [0]
     Pad pad;
     std::string text;
 };
@@ -171,6 +178,27 @@ bool parse_script(const char* path, std::vector<Step>& steps) {
         } else if (command == "save") {
             step.kind = Step::Kind::Save;
             ok = (words >> step.value) && step.value < 3;
+        } else if (command == "freeze") {
+            step.kind = Step::Kind::Freeze;
+            ok = (words >> step.value) && step.value < 2;
+        } else if (command == "drop") {
+            step.kind = Step::Kind::Drop;
+            ok = (words >> step.value) && step.value < 5;
+        } else if (command == "scene") {
+            std::vector<std::string> numbers{std::istream_iterator<std::string>(words), {}};
+            char* end = nullptr;
+            step.kind = Step::Kind::Scene;
+            step.tile[0] = 0x10;
+            ok = numbers.size() == 1 || numbers.size() == 2;
+            for (size_t n = 0; ok && n < numbers.size(); n++) {
+                uint32_t number = static_cast<uint32_t>(std::strtoul(numbers[n].c_str(), &end, 0));
+                ok = *end == '\0';
+                if (n == 0) {
+                    step.value = number;
+                } else {
+                    step.tile[0] = static_cast<int32_t>(number);
+                }
+            }
         } else if (command == "probe" || command == "log") {
             step.kind = command == "probe" ? Step::Kind::Probe : Step::Kind::Log;
             std::getline(words >> std::ws, step.text);
@@ -181,7 +209,8 @@ bool parse_script(const char* path, std::vector<Step>& steps) {
         }
         std::string extra;
         if (ok && (step.kind == Step::Kind::Overlay || step.kind == Step::Kind::Wait || step.kind == Step::Kind::Tile ||
-                   step.kind == Step::Kind::Hearts || step.kind == Step::Kind::Save || step.kind == Step::Kind::End)) {
+                   step.kind == Step::Kind::Hearts || step.kind == Step::Kind::Save || step.kind == Step::Kind::Drop || step.kind == Step::Kind::Freeze ||
+                   step.kind == Step::Kind::End)) {
             ok = !(words >> extra);
         }
         if (!ok) {
@@ -211,8 +240,9 @@ void load_script() {
 
 // Runs the script's steps due this frame; returns true when one asks for a
 // probe. A tile step fills tile (slot, x, z), a hearts step hearts (slot, n),
-// a save step *save (the file); each ends the frame's steps.
-bool run_script(int32_t* tile, int32_t* hearts, int32_t* save) {
+// a save step *save (the file), a drop step *drop (the slot), a scene step
+// scene (ID, entry), a freeze step *freeze (on); each ends the frame's steps.
+bool run_script(int32_t* tile, int32_t* hearts, int32_t* save, int32_t* drop, int32_t* scene, int32_t* freeze) {
     bool probe = false;
     while (script.next < script.steps.size()) {
         const Step& step = script.steps[script.next];
@@ -259,6 +289,19 @@ bool run_script(int32_t* tile, int32_t* hearts, int32_t* save) {
                 return probe;
             case Step::Kind::Save:
                 *save = static_cast<int32_t>(step.value);
+                script.next++;
+                return probe;
+            case Step::Kind::Drop:
+                *drop = static_cast<int32_t>(step.value);
+                script.next++;
+                return probe;
+            case Step::Kind::Freeze:
+                *freeze = static_cast<int32_t>(step.value);
+                script.next++;
+                return probe;
+            case Step::Kind::Scene:
+                scene[0] = static_cast<int32_t>(step.value);
+                scene[1] = step.tile[0];
                 script.next++;
                 return probe;
             case Step::Kind::End:
@@ -348,7 +391,9 @@ void coop::note_overlay_load(uint32_t id) {
 // hook should call in the patches this frame: bit 0 coop_warp(args[0],
 // args[1], args[5]), bit 1 coop_probe(), bit 2 coop_harness_tile(args[2],
 // args[3], args[4]), bit 3 coop_harness_save(args[6]), bit 4
-// coop_harness_hearts(args[7], args[8]).
+// coop_harness_hearts(args[7], args[8]), bit 5 coop_harness_scene(args[9],
+// args[10]), bit 6 coop_harness_drop(args[11]), bit 7
+// coop_harness_freeze(args[12]).
 extern "C" uint32_t coop_harness_frame(int32_t* args) {
     static Warp warp = read_warp();
     std::lock_guard lock{mutex};
@@ -365,7 +410,10 @@ extern "C" uint32_t coop_harness_frame(int32_t* args) {
     args[2] = -1;
     args[6] = -1;
     args[7] = -1;
-    if (run_script(&args[2], &args[7], &args[6])) {
+    args[9] = -1;
+    args[11] = -1;
+    args[12] = -1;
+    if (run_script(&args[2], &args[7], &args[6], &args[11], &args[9], &args[12])) {
         requests |= 2;
     }
     if (args[2] >= 0) {
@@ -376,6 +424,15 @@ extern "C" uint32_t coop_harness_frame(int32_t* args) {
     }
     if (args[7] >= 0) {
         requests |= 16;
+    }
+    if (args[9] >= 0) {
+        requests |= 32;
+    }
+    if (args[11] >= 0) {
+        requests |= 64;
+    }
+    if (args[12] >= 0) {
+        requests |= 128;
     }
     return requests;
 }
@@ -467,16 +524,16 @@ extern "C" void coop_note_item_gone(uint32_t item) {
     }
 }
 
-// A full player passing through a heart (#36; the hook in func_80279CA8):
-// "coop: pass slot=<slot> item=4", again only once the player or the item
-// changes (the callback runs every frame they touch).
-extern "C" void coop_log_item_pass(int32_t slot, uint32_t item) {
+// A player passing through an item (#36, #22; the hook in func_80279CA8):
+// "coop: pass slot=<slot> item=<type>", again only once the player or the
+// item changes (the callback runs every frame they touch).
+extern "C" void coop_log_item_pass(int32_t slot, uint32_t item, int32_t type) {
     static int32_t last_slot = -1;
     static uint32_t last_item = 0;
     if (slot != last_slot || item != last_item) {
         last_slot = slot;
         last_item = item;
-        coop_log_player_event("pass", slot, "item", 4, nullptr, 0);
+        coop_log_player_event("pass", slot, "item", type, nullptr, 0);
     }
 }
 

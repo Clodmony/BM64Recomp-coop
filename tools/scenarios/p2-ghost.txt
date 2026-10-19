@@ -1,0 +1,70 @@
+# Player 2 down as a ghost (#22, owner's rule 2026-10-19): p2-slot4's moves
+# up to player 2's second hit, a death while player 1 plays. Player 2 stays
+# a player (controlType 2, its update runs) with the battle ghost flag (bit
+# 0x200 of player +0x68) and the ghost look (alpha 0x80), one heart; there is
+# no timed respawn and no shared life is spent. The ghost moves with pad 1
+# and lays no bomb.
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_P2=4
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_SEED=1
+#
+#check after "^coop: hit slot=4" "^coop: death slot=4 cause="
+#check after "^coop: death slot=4" "^coop: down slot=4 cause=1 lives=2 ghost$"
+#check not-after "^coop: death slot=4" "^coop: room teardown"
+#check no-log ^coop: death slot=0
+#check field down 4 controlType = 2
+#check field down 4 ghost = 1
+#check field down 4 hearts = 1
+#check field down 4 alpha = 128
+#check field down 0 ghost = 0
+# no timed respawn (it came 120 frames after the death before #22)
+#check no-log ^coop: respawn slot=
+#check no-log ^coop: revive slot=
+#check field waited 4 ghost = 1
+#check not-after "^coop: down slot=4" "^coop: state overlay=0x29 .* lives=1$"
+# the ghost walks (pad 1) and lays no bomb (A)
+#check moved waited walked 4 100
+#check not-after "^coop: probe walked$" "^coop: bomb slot=4"
+#check field bombed 4 ghost = 1
+overlay 0x29
+wait 300
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+wait 10
+pad 1 - 1 0.05
+wait 15
+pad 1 -
+wait 10
+pad 1 - -1 0.05
+wait 30
+pad 1 -
+wait 10
+pad 0 - 1 0.05
+wait 15
+pad 0 -
+wait 10
+pad 1 A
+wait 2
+pad 1 -
+wait 400
+probe hit1
+pad 1 A
+wait 2
+pad 1 -
+wait 190
+probe down
+wait 300
+probe waited
+pad 1 - 1 0.05
+wait 30
+pad 1 -
+wait 10
+probe walked
+pad 1 A
+wait 2
+pad 1 -
+wait 200
+probe bombed
+end

@@ -1,0 +1,58 @@
+# A ghost takes no damage (#22, owner's rule 2026-10-19): player 2 is downed
+# as in p2-ghost, then walks +z into the room's pit (where p2-p1-death-freeze's
+# trace fell, a hit of cause 3). The damage handler is skipped for a ghost
+# (coop: ghost hit) and a fall puts the ghost back next to player 1, at
+# player 1's next step, as a room entry places player 2.
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_P2=4
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_SEED=1
+#
+#check after "^coop: death slot=4" "^coop: down slot=4 cause=1 lives=2 ghost$"
+#check after "^coop: down slot=4" "^coop: ghost hit slot=4 cause=3$"
+#check after "^coop: down slot=4" "^coop: ghost fell slot=4$"
+#check after "^coop: ghost fell slot=4" "^coop: place slot=4 tile="
+#check no-log ^coop: down slot=4 cause=3
+#check not-after "^coop: down slot=4" "^coop: death slot=4"
+#check not-after "^coop: down slot=4" "^coop: room teardown"
+#check field placed 4 ghost = 1
+#check field placed 4 controlType = 2
+#check near placed 0 4 300 50
+overlay 0x29
+wait 300
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+wait 10
+pad 1 - 1 0.05
+wait 15
+pad 1 -
+wait 10
+pad 1 - -1 0.05
+wait 30
+pad 1 -
+wait 10
+pad 0 - 1 0.05
+wait 15
+pad 0 -
+wait 10
+probe start
+pad 1 A
+wait 2
+pad 1 -
+wait 400
+pad 1 A
+wait 2
+pad 1 -
+wait 190
+probe down
+pad 1 - -1 0.05
+wait 300
+pad 1 -
+probe fell
+pad 0 - 1 0.05
+wait 15
+pad 0 -
+wait 10
+probe placed
+end

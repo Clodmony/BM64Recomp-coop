@@ -1,0 +1,86 @@
+# Player 1 down as a ghost (#22, owner's rule 2026-10-19): player 1 starts
+# room 0x29 with one heart and its own bomb kills it (p2-p1-death) while
+# player 2 plays. No story death: no retry, no reload, no life spent; S stays
+# player 1, a ghost (controlType 1, the ghost flag, alpha 0x80, one heart)
+# that pad 0 still moves. Player 2 plays on. The ghost then walks into the
+# room's floor exit (x=3, z=4..7, p2-exit): a ghost fires no exit. Player 2
+# walks in: the room changes and player 1 comes along, still a ghost.
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_P2=4
+#env BM64_COOP_LOG_PLAYERS=1
+#check after "^coop: hit slot=0" "^coop: death slot=0 cause="
+#check after "^coop: death slot=0" "^coop: down slot=0 cause=1 lives=2 ghost$"
+#check not-after "^coop: death slot=0" "^coop: freeze partner slot=4 on=1 death$"
+#check field dead 0 controlType = 1
+#check field dead 0 ghost = 1
+#check field dead 0 hearts = 1
+#check field dead 0 alpha = 128
+#check field dead 4 ghost = 0
+#check not-after "^coop: down slot=0" "^coop: state overlay=0x29 .* lives=1$"
+# both still move: player 2 by pad 1, the ghost by pad 0
+#check moved dead p2-walked 4 100
+#check moved p2-walked p1-walked 0 100
+# the ghost stands in the exit (tile 3, 5) for 60 frames: no room change (all
+# later probes are in room 0x28)
+#check field in-exit 0 ghost = 1
+#check after "^coop: probe still-here$" "^coop: state overlay=0x29 "
+# player 2 takes the exit; player 1 is still a ghost in room 0x28
+#check after "^coop: input: player 2 to the exit$" "^coop: trigger slot=4"
+#check after "^coop: input: player 2 to the exit$" "^coop: overlay 0x28$"
+#check field landed 0 ghost = 1
+#check field landed 0 alpha = 128
+#check field next 4 controlType = 2
+#check field next 4 ghost = 0
+#check no-log ^coop: revive slot=
+#check not-after "^coop: down slot=0" "^coop: state overlay=0x.. .* lives=1$"
+overlay 0x29
+wait 300
+probe start
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+pad 1 - 1 0.05
+wait 30
+pad 1 -
+wait 10
+probe apart
+pad 0 A
+wait 2
+pad 0 -
+wait 180
+probe dead
+pad 1 - -1 0.05
+wait 20
+pad 1 -
+wait 10
+probe p2-walked
+pad 0 - 1 0.05
+wait 20
+pad 0 -
+wait 10
+probe p1-walked
+tile 0 5 5
+wait 10
+pad 0 - 0.05 1
+wait 60
+pad 0 -
+wait 30
+probe in-exit
+wait 60
+probe still-here
+log player 2 to the exit
+tile 4 5 6
+wait 10
+pad 1 - 0.05 1
+wait 40
+pad 1 -
+probe exit
+overlay 0x28
+wait 300
+probe landed
+pad 0 - 1 0.05
+wait 15
+pad 0 -
+wait 10
+probe next
+end

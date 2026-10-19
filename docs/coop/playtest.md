@@ -55,6 +55,11 @@ On the first start the launcher asks for the ROM: pick your Europe ROM.
   first step.
 - Each player moves with their own controller. The C-buttons turn and zoom
   your own camera only; each camera follows its own player.
+- A player who dies while the other lives is down: a ghost (as in Battle) that
+  moves along but lays no bombs, takes no exits and takes no damage (#22).
+  The ghost plays again (for one shared life) when the living player finds
+  a heart, after a cutscene, at the next stage, or when the stage is
+  cleared. When both are down, the room starts over.
 - Both games run the same frames: if one PC stalls, both do. If the
   connection is lost, a *Co-op session lost* prompt shows and each game goes
   on alone.
@@ -62,7 +67,7 @@ On the first start the launcher asks for the ROM: pick your Europe ROM.
 ## Known not to work yet
 
 - Player 2's hearts are not shown.
-- When player 1 is downed, player 2 is not handled well (#22, #23).
+- Enemies still chase a downed player 1's ghost (#49).
 - Rooms other than Green Garden stage 1 are untested with two players.
 - No rejoining a lost session; restart both games.
 - Joining needs a keyboard to type the host's address (a controller moves
