@@ -16,9 +16,10 @@ Last updated 2026-10-19 (#47: the history moved here from `HANDOFF.md`).
 - Owner decisions: merge after the other person's approving review (not:
   the owner merges everything); notes split shared + per person (not: one
   note changed only on PR branches).
+- Merged at once (owner): a one-time exception to the review rule, since
+  the collaborator has no access yet. The personal issue-loop skill stays
+  (owner); in this repository the repository's copy applies.
 - Still the owner's: invite the collaborator on GitHub (write access).
-- The owner's personal `~/.claude/skills/issue-loop` still exists next to the
-  repository's copy; the repository's copy is the one adapted to two people.
 
 ## Merged 2026-10-19 (owner's word, scripted Europe runs only)
 

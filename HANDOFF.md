@@ -27,13 +27,13 @@ Last updated 2026-10-19 (#47: notes split for two people).
 - Fork of `RevoSucks/BM64Recomp`. `master` = upstream `master` (`726adc9`).
   Default branch `bm64recomp-coop`. Ruleset "Protected" blocks force-pushes
   and deletion on both.
-- Merged into `bm64recomp-coop` up to #45 (2026-10-19); the history is in
+- Merged into `bm64recomp-coop` up to #48 (2026-10-19); the history is in
   `handoff/owner.md`.
 - Open issues: #11 (Europe follow-ups, the owner's eye check), #14 and #16
   (leftover checks), #19 (their group), #22, #24 (follow-ups of #19), #29
   (two machines, Windows/macOS), #46 (scenario.py and a garbled log line),
-  #47 (this preparation).
-- Open pull requests: #48 (#47, `coop/47-second-developer`).
+  and the owner's last step of #47: inviting the collaborator on GitHub.
+- Open pull requests: none. #48 (#47, two developers) merged 2026-10-19.
 
 ## In progress
 
@@ -42,7 +42,6 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 
 | Issue | Person | Branch | State |
 |-------|--------|--------|-------|
-| #47 | owner | `coop/47-second-developer` | draft PR #48, waits for the owner's word |
 
 ## Project decisions (bind both people)
 
