@@ -165,7 +165,8 @@ tools/verify.sh --scenarios      # also the game's test scenarios (below);
 ```
 
 Stages: `submodules`, `configs` (`tools/europe.py configs`, then the US and
-Europe configs parse), `n64recomp`, `patches`, `europe` (Europe only:
+Europe configs parse), `harness` (`tools/test_scenario.py`, `scenario.py`'s
+checks on fake runs' logs, #46), `n64recomp`, `patches`, `europe` (Europe only:
 `tools/europe.py check` on the image), `recomp`, `build`, and with
 `--scenarios` `scenarios` (*The test harness*, below). Logs and
 `summary.txt` go to `~/dev-scratch/BM64Recomp-coop/verify/<stamp>/`, the
@@ -431,6 +432,14 @@ left, a glob relative to its run folder: `saves/bm64_*.bin`), `contains PATH
 REGEX` (such a file has a matching line). The output is
 one line per check, `N/M checks passed`
 and a RESULT line; exit 0 only if all passed. A scenario takes 15–35 s.
+
+A log line the checks read that does not parse (a probe's `coop: player` or
+`coop: camera eye=` line, a `coop: hash` line), as when two games wrote into
+one `game.log`, is a failed check `log line parses` that names the line; a
+check that raises (a text field compared with a number) or a scenario that
+crashes `scenario.py` is a failed check with the error, and the run goes on
+with the next scenario (#46). `tools/test_scenario.py` tests this on fake
+runs' logs without the game (`tools/verify.sh`'s `harness` stage).
 
 ### Session scenarios: two games on one machine
 

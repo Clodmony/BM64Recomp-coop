@@ -4,7 +4,8 @@
 #
 #   tools/verify.sh [--quick] [--full] [--version us|eu] [--scenarios]
 #
-#   --quick     only the fast gates: submodules, configs, patches, europe
+#   --quick     only the fast gates: submodules, configs, harness, patches,
+#               europe
 #   --full      a decompressed ROM is required; without one the recomp and
 #               link stages fail instead of being skipped
 #   --version   the game version to build (BM64_VERSION, src/coop/version.cmake);
@@ -17,6 +18,8 @@
 #   submodules  every submodule checked out at the commit the branch records
 #   configs     `tools/europe.py configs`, then the US and Europe configs
 #               (bm64/patches/aspMain/data_dump) parse as TOML
+#   harness     tools/test_scenario.py: scenario.py's checks on fake runs'
+#               logs, garbled ones too (#46); no game, no ROM
 #   n64recomp   N64Recomp/RSPRecomp at upstream CI's pinned commit
 #               (tools/n64recomp.sh, cached outside the repository)
 #   patches     patches/*.c compiled for MIPS, then `N64Recomp patches.toml`
@@ -59,7 +62,7 @@ while (( $# )); do
 		--scenarios) scenarios=1 ;;
 		--version) version="${2:-}"; shift ;;
 		--version=*) version="${1#--version=}" ;;
-		-h|--help) sed -n '2,46p' "$0"; exit 0 ;;
+		-h|--help) sed -n '2,49p' "$0"; exit 0 ;;
 		*) echo "unknown option: $1" >&2; exit 2 ;;
 	esac
 	shift
@@ -128,6 +131,8 @@ for path in sys.argv[1:]:
 PY
 }
 stage configs configs
+
+stage harness python3 -I tools/test_scenario.py
 
 stage n64recomp tools/n64recomp.sh
 
