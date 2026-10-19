@@ -44,6 +44,7 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 
 | Issue | Person | Branch | State |
 |-------|--------|--------|-------|
+| #56 (group: #55, #52, #49, #51, #53, #46, #57) | owner | `coop/56-playtest` (lanes `coop/56-a-player2`, `-b-enemies`, `-c-hud`, `-d-harness`) | four lane agents started 2026-10-19, worktrees under scratch `wt/` |
 
 ## Project decisions (bind both people)
 
@@ -64,6 +65,9 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
   next to the living player (owner, 2026-10-19). Built in #50: design.md,
   *Downed players are ghosts (#22)*.
 - The client plays on a copy of the host's save (#26).
+- **Co-op HUD (#53, owner, 2026-10-19):** a corner per player (face,
+  hearts, bomb count, fire), not one panel; player 1 always first (left),
+  player 2 second (right), the same on the host and the client.
 - Test runs are headless and keep background input off (owner).
 - The older decisions with their reasons are in `handoff/owner.md`.
 
@@ -75,7 +79,7 @@ A shared pool: take one by claiming it under *In progress*.
    #22 follow-ups in four parallel lanes, one agent each, merged in the
    order D, A, B, C: lane A #55 (urgent: player 2 cannot walk before
    player 1's first step), then #52, then #54 (needs both `coop.log` files);
-   lane B #49, then #51; lane C #53 (needs the owner's HUD layout first);
+   lane B #49, then #51; lane C #53 (layout decided, *Project decisions*);
    lane D #46, then #57 (the client streams its log to the host). Lanes,
    shared files and the run order are in #56. The host's playtest folder
    is the kit's `linux/` here; start it with `start.sh`, or it writes no
