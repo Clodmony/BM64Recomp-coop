@@ -349,6 +349,10 @@ co-op slot (small patches or post-hooks). Moderate; the main co-op gameplay
 work. Per-player lives would need a second counter and two numbers on the
 cards: possible, not recommended first.
 
+*Done (#18, then #22):* the shared pool, and a dying player is down, a
+battle-style ghost, until a revive event, with no timed respawn: *Downed
+players are ghosts (#22)* under *Player 2 in a story room*.
+
 ### 8. Exits, goals, gold cards, items
 
 - **Exits and room triggers test S only** (read): `func_802457D8` /
@@ -451,7 +455,7 @@ file chosen at the file select and give player 2 another file's parts.)
 | Enemy AI targets S | ~8 main AI functions | nearest living player | moderate |
 | Overlay bosses aim at S | per-frame caches in overlays | player 1 at first; later a director | none / cheap |
 | Rival AI targets slot 0 | AI record `D_800BCFE8` | retarget per frame | cheap |
-| A death is player 1's, room reloads | `func_8023A870`, `func_8023F26C` | shared lives; downed and respawn while the partner lives | moderate |
+| A death is player 1's, room reloads | `func_8023A870`, `func_8023F26C` | shared lives; down as a ghost while the partner lives, revived at set events (#22) | moderate |
 | Slot-0 heart and power resets | `func_8023D0F8`, `func_8023E1D8`, `func_802968BC`, `func_80277DF4`, `func_8023DA04` | apply to every co-op slot | cheap |
 | Camera follows S | `func_80235D7C` | each machine follows its own player | cheap |
 | Split-screen (dropped for now) | one camera state, one render | second camera and render per frame | expensive |
@@ -622,7 +626,7 @@ frozen and places it again 3 frames later; afterwards (a teleport, a respawn)
 it moves the actor and releases it.
 
 Checked: room 0x29 after its entry walk and after a retry (`p2-entry-walk`,
-`p2-p1-death`), room 0x28 after its opening dialogue (`p2-room28`) and when
+`p2-p1-death-freeze`), room 0x28 after its opening dialogue (`p2-room28`) and when
 entered through room 0x29's floor exit, where player 1 falls in (`p2-exit`).
 Not checked: a story teleport by `func_802512C0` from a room script (none was
 found in these rooms); the same hook covers it. Cost: player 2 appears only
@@ -639,7 +643,7 @@ joins player 1 at its next step). Scripted walks (`func_802506B8`) and facing
 (`func_80245F74`) stay player 1's. Seen in the runs: room 0x28's opening
 dialogue and room 0x29's entry walk freeze player 1 before player 2 has
 joined; with player 2 in the room, the exit (`p2-exit`) and player 1's death
-freeze it just before the room changes (`p2-p1-death`). No longer scene with
+freeze it just before the room changes (`p2-p1-death-freeze`). No longer scene with
 player 2 in the room was found in rooms 0x28 and 0x29, so "pad 1 does not
 move a frozen player 2" is not checked by a cutscene.
 
@@ -647,15 +651,16 @@ move a frozen player 2" is not checked by a cutscene.
 
 Player 1's death animation does not use the wrappers: before #23 player 2
 played on during it (walked, could take an exit or be hit; seen in a probe of
-`p2-p1-death`, where player 2 walked into room 0x29's floor exit). A hook in
+the former `p2-p1-death`, where player 2 walked into room 0x29's floor exit). A hook in
 `func_8023A870` at 0x8023A9AC, on the story death's path just before flags
 0x92 (t0 the dying slot; the battle path and the early returns do not get
 there), calls `coop_story_death`: when player 1 dies it freezes player 2
 (`func_80245208`, control lock and damage guard; log `coop: freeze partner
 slot=4 on=1 death`). Until the next room init (the retry's reload, which
 spawns player 2 anew and places it) a release of player 1 does not release
-player 2, its trigger tests stay off, its placement waits and a downed
-player 2's respawn countdown stops. `p2-p1-death-freeze` holds pad 1's stick
+player 2, its trigger tests stay off and its placement waits. Since #22
+player 1's death runs the story death only when player 2 is down already
+(a ghost), so `p2-p1-death-freeze` downs player 2 first; it holds pad 1's stick
 for 150 frames, from 180 frames after player 1's bomb (the death comes about
 155 frames after it) to before the teardown, and checks that player 2 stays
 where it is, takes no hit and no trigger, and plays again after the retry.
@@ -677,18 +682,99 @@ closed once the entry walk is over (no event for player 2 there).
 
 ### Death: downed and respawn with shared lives (#18)
 
-A hook at the entry of `func_8023A870` takes player 2's death while player 1
-plays (controlType 1, hearts > 0): no 0x92, no death process, no retry.
-It returns 1 as the function would, and the damage handler puts the slot out
-(controlType 3), as in battle. After 120 frames player 2 respawns with 2
-hearts for one shared life (`D_802AC624`, 2 → 1) and joins player 1 at its
-next step. With no life left it stays out until the next room. A death of
-player 1, or of player 2 while player 1 is out, runs the story death as
-before: the retry reloads the room and player 2 comes back with it
-(`p2-slot4`, `p2-p1-death`). Not done: player 1 downed while player 2 plays
-(S would have to change), the slot-0 resets of section 7, step 5, for player
-2 (remote bombs, continue), and what a downed player 2 looks like (it stays
-where it fell; not looked at on screen).
+The first rule (#18): a hook at the entry of `func_8023A870` took player 2's
+death while player 1 played, put the slot out (controlType 3, as in battle)
+and respawned it after 120 frames for one shared life (`D_802AC624`). #22
+replaced it, for both players (below).
+
+### Downed players are ghosts (#22)
+
+**Rule (owner, 2026-10-19):** the same for both players, S stays player 1.
+A player who dies while the partner lives is **down**, a ghost as in battle:
+it moves along, lays no bombs, fires no exits or triggers, takes no damage
+(enemies ignoring it is #49). No timed respawn: it is **revived** at a stage
+start, a stage clear, a cutscene, or when the living player finds a heart
+(the heart is used up for it); not at a room change, a warp or a scripted
+walk. Every revive costs one shared life; with none left it stays down. When
+the last living player dies, the story death runs as before (the room's
+retry brings both back).
+
+**The ghost** is the battle one, all main code: bit 0x200 of player +0x68
+(`func_80243E90` sets it, `func_80243EF0` tests it). The player stays in play
+(controlType 1 or 2, its update runs), so the scene and warp waits on S
+(stage clear `func_8023AB90`, scripted walks, warps) finish as usual. What the
+flag already does in the game's code: speed ×0.8, no bomb or lift on A (the
+update's test at 0x8024E570 skips both), no pickup (`func_802797BC`), no
+player contact exchange, rivals do not target it. The look is
+`g_SpawnPlayer`'s for a flagged slot (0x80245AF0–0x80245B64): variants 4 and 5
+of model parts 4 and 5, actor bit 0x80000 (a draw mode), alpha 0x80 at model
++0x36, model +0xC bit 0x1000. A living player's alpha is 255 (probe).
+
+How it is done (`patches/coop_player2.c`):
+
+- **Downing:** the hook at `func_8023A870`'s entry (`coop_partner_death`)
+  now takes either player's death while the partner lives (player 2 only
+  once it has joined the room). It sets the flag and the look on the
+  existing actor, and the hook returns **0** instead of running the
+  function: the damage handler then takes its "lives on" branch (hearts 1,
+  0x802483B0), so the slot is never out. Log `coop: down slot=S cause=C
+  lives=L ghost`.
+- **No damage:** a hook at `func_80248148`'s entry skips the handler for a
+  ghost (`coop: ghost hit`). A fall (cause 3, the update's pit) puts the
+  ghost back next to the living player (`coop: ghost fell`, `ghost-fall`).
+- **Exits and triggers:** the three rectangle tests skip a downed S and a
+  downed player 2 (`p1-ghost`: player 1's ghost stands in room 0x29's floor
+  exit, no room change; player 2 takes it).
+- **Items:** a ghost passes through every item (`coop: pass`): the pickup
+  gives a ghost nothing, but the collision callback would still remove the
+  item. A heart the living player touches while the partner is down revives
+  it and is removed (`func_802790E0`) without the pickup (`coop: heart
+  found`, `ghost-heart`).
+- **Room changes:** `func_8023D0F8` (every scene load) clears +0x68 of slots
+  0–3, and `func_80245CDC`'s spawn loop clears it again for each slot it
+  spawns. A room init (`coop_stage_downs`) sets player 2's flag again (its
+  own spawn at its join gives the look), and a hook after the spawn loop
+  (0x80245D68, `coop_stage_spawned`) puts player 1's flag and look back on
+  its new actor (`coop: still down`, `p1-ghost`, `ghost-rooms`).
+- **Stage start:** a hook at `func_8023D0F8`'s entry counts scene loads. A
+  stage room's init is a stage start when its world and stage (US
+  0x802AC5E8, 0x802AC5EC) differ from the last stage room's, or when another
+  scene load came in between (the world map, a cutscene scene). It revives a
+  downed player for a life (`coop: revive … why=stage`, `ghost-rooms`: room
+  0x29 → 0x28 keeps player 2 down, → 0x2D, stage 3, revives it). A retry
+  after a story death clears both (no revive of its own).
+- **Stage clear:** a hook at `func_8023E8AC`'s entry (a stage won: the goal,
+  a boss, the last rival) revives in place (`why=clear`). **Not run:** no
+  scenario reaches a goal.
+- **Cutscene:** a freeze of S (`func_802452E8`, `func_80245280`) that began
+  once player 1 had been free of walks and freezes for 60 frames (not a
+  room's entry walk or opening) and is released in the same room (an exit
+  or a death is never released before the teardown) revives at the
+  release (`why=scene`). At the release, not at the start: the revived
+  player is placed next to the living one, which a scene's own placement
+  would otherwise undo. **Not run with a real cutscene:** none was found in
+  rooms 0x28, 0x29 and 0x2D; `ghost-scene` freezes and releases S with the
+  harness's `freeze` step (the same wrapper) instead.
+- **Placement at a revive:** player 2 by its pending placement (held
+  frozen until player 1's next own step, as at a room entry); player 1 on
+  the tile player 2 left last (a trail kept in player 1's update hook, as
+  player 1's is), with the placement hook told to leave player 2 alone.
+- **Player 2's story death** (player 1 down) plays on player 1's actor
+  (section 7): `coop_story_death` freezes player 1's ghost for it.
+
+Runs (Europe, scenarios): `p2-ghost`, `p1-ghost`, `ghost-heart`,
+`ghost-rooms`, `ghost-scene`, `ghost-fall`, `ghost-retry`,
+`p2-p1-death-freeze`, and `session-ghost` (an online session on one machine:
+player 1 downed, the same hashes on every frame in both games).
+
+Not done or not run: a stage clear and a real cutscene with a downed player;
+a revive with no life left (`coop: stays down`); rival stages (flag 0x8;
+read: rivals skip a ghost as a target, and the win test only refuses
+controlType 3, which a ghost is not); a ghost carried by, or carrying, the
+partner at its death (the handler releases carry links only in battle);
+stale hit bits at a revive; what a ghost looks like on screen (only the
+fields were probed); enemies still aim at a ghost S (#49); the host's
+camera follows S, a downed player 1 too.
 
 ### The knocked-out heart (#36)
 
@@ -718,15 +804,19 @@ getting it (not run).
 
 | Where | Does |
 |---|---|
-| `func_80245CDC` entry (room player init) | player 2's stats (2 hearts, player 1's bombs and fire, bomb type 0x200); not spawned by the room, placement pending |
+| `func_8023D0F8` entry (scene load) | counted: a room change or a stage start (#22) |
+| `func_80245CDC` entry (room player init) | player 2's stats (2 hearts, player 1's bombs and fire, bomb type 0x200); not spawned by the room, placement pending; downed players kept or revived (#22) |
+| `func_80245CDC` at 0x80245D68 (after its spawn loop) | a downed player 1: ghost flag and look again (#22) |
 | `func_802511EC` entry (put a slot on a tile) | slot 0 placed: player 2's placement pending (held frozen if it is in the room) |
-| `func_8024E088` entry (player update) | slot 0: respawn countdown, player 1's trail, player 2's placement; slot 4: its command record from pad 1 |
-| `func_802452E8` at 0x80245300, `func_80245280` at 0x80245294 | S = 0: freeze or release player 2 with player 1 |
-| `func_8023A870` entry (death) | player 2 while player 1 plays: downed, the function skipped |
-| `func_8023A870` at 0x8023A9AC (story death) | player 1: player 2 frozen until the next room init (#23) |
-| `func_802457D8`, `func_802456FC`, `func_802455A8` (`RECOMP_PATCH`) | rectangle tests for S or player 2 |
+| `func_8024E088` entry (player update) | slot 0: both players' trails, player 2's placement; slot 4: its command record from pad 1 |
+| `func_802452E8` at 0x80245300, `func_80245280` at 0x80245294 | S = 0: freeze or release player 2 with player 1; a scene's release revives (#22) |
+| `func_8023A870` entry (death) | either player while the other lives: down, a ghost; the function skipped, 0 returned (#22) |
+| `func_80248148` entry (damage) | a ghost: skipped; a fall puts it next to the living player (#22) |
+| `func_8023E8AC` entry (stage won) | downed players revived (#22) |
+| `func_8023A870` at 0x8023A9AC (story death) | player 1: player 2 frozen until the next room init (#23); player 2: player 1's ghost frozen (#22) |
+| `func_802457D8`, `func_802456FC`, `func_802455A8` (`RECOMP_PATCH`) | rectangle tests for S or player 2, not for a ghost |
 | `g_SpawnPlayer` at 0x80245BC0 | slot 4: model asset 0x4B |
-| `func_80279CA8` at 0x80279CFC (item collision) | a heart passes through a full player while player 2 plays (#36) |
+| `func_80279CA8` at 0x80279CFC (item collision) | a heart passes through a full player while player 2 plays (#36); a ghost passes through every item, a heart found revives the downed partner (#22) |
 
 ## The session core
 

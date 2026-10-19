@@ -73,9 +73,11 @@ void coop_probe(u8* item, s32 item_slot) {
             continue;
         }
         pos = (f32*)(*(u8**)(p->levelClass + 0x40) + 0x10);
-        recomp_printf("coop: player slot=%d controlType=%d hearts=%d bombs=%d fire=%d flags=0x%X pos=%d,%d,%d\n", slot,
-                      p->controlType, p->heartCount, p->bombCount, p->firepower, p->flags, coop_mm(pos[0]),
-                      coop_mm(pos[1]), coop_mm(pos[2]));
+        recomp_printf("coop: player slot=%d controlType=%d hearts=%d bombs=%d fire=%d flags=0x%X pos=%d,%d,%d "
+                      "ghost=%d alpha=%d\n",
+                      slot, p->controlType, p->heartCount, p->bombCount, p->firepower, p->flags, coop_mm(pos[0]),
+                      coop_mm(pos[1]), coop_mm(pos[2]), (p->states & COOP_STATE_GHOST) != 0,
+                      *(s16*)(*(u8**)(p->levelClass + 0x40) + 0x36));
         if (p->controlType == 2) {
             CoopCommand* cmd = &g_ComputerPlayerMovement[slot];
             recomp_printf("coop: command slot=%d move=%d,%d,%d held=0x%04X pressed=0x%04X\n", slot, coop_mm(cmd->move[0]),
@@ -103,6 +105,33 @@ void coop_harness_tile(s32 slot, s32 x, s32 z) {
     func_802454F8(slot, tile);
     recomp_printf("coop: tile slot=%d from=%d,%d,%d to=%d,%d,%d\n", slot, tile[0], tile[1], tile[2], x, tile[1], z);
     func_802511EC(slot, x, tile[1], z);
+}
+
+// From the per-frame hook: a scene step of the input script. Asks for the
+// scene the way a room's exit or the world map does, in the running session.
+void coop_harness_scene(s32 overlay, s32 entry) {
+    recomp_printf("coop: scene overlay=0x%02X entry=0x%02X\n", overlay, entry);
+    func_8023AE6C(overlay, entry, 0);
+}
+
+// From the per-frame hook: a freeze step of the input script. Freezes or
+// releases the story player S as a cutscene does (func_802452E8, with the idle
+// animation), so that the co-op hooks on it run as for a scene.
+void coop_harness_freeze(s32 on) {
+    recomp_printf("coop: freeze step on=%d\n", on);
+    func_802452E8(on);
+}
+
+// From the per-frame hook: a drop step of the input script. Knocks a heart
+// out of the player, as a hit that leaves hearts does (func_80248148); it
+// flies off in a random direction.
+void coop_harness_drop(s32 slot) {
+    if (g_Players[slot].levelClass == NULL) {
+        recomp_printf("coop: drop step slot=%d: no actor\n", slot);
+        return;
+    }
+    recomp_printf("coop: drop step slot=%d\n", slot);
+    func_8027B39C(4, slot);
 }
 
 // From the per-frame hook: a hearts step of the input script. Sets the

@@ -575,7 +575,7 @@ text = """
 # coop: count game frames (the main loop calls this once per frame) for speed
 # measurements (src/coop/debug.cpp; only with BM64_COOP_LOG_FRAMES=N).
 # The same hook runs the test harness (src/coop/harness.cpp): the input script,
-# and the warp, probes, tile, hearts and save steps it asks for, which run in
+# and the warp, probes, tile, hearts, save, scene, drop and freeze steps it asks for, which run in
 # patches/coop_harness.c on a copy of the registers with the stack pointer
 # moved down. Last, in an online session (or with BM64_COOP_LOG_HASH), the
 # hash of the frame's state (patches/coop_session.c) and the session's
@@ -595,11 +595,14 @@ text = """
     void coop_harness_tile(uint8_t* rdram, recomp_context* ctx);
     void coop_harness_save(uint8_t* rdram, recomp_context* ctx);
     void coop_harness_hearts(uint8_t* rdram, recomp_context* ctx);
+    void coop_harness_scene(uint8_t* rdram, recomp_context* ctx);
+    void coop_harness_drop(uint8_t* rdram, recomp_context* ctx);
+    void coop_harness_freeze(uint8_t* rdram, recomp_context* ctx);
     extern uint32_t coop_session_hashing(void);
     extern void coop_session_frame(uint32_t hash, uint32_t yaw, uint32_t pitch);
     void coop_state_hash(uint8_t* rdram, recomp_context* ctx);
     void coop_camera_angles(uint8_t* rdram, recomp_context* ctx);
-    int32_t args[9];
+    int32_t args[13];
     uint32_t requests;
     coop_log_frame(rdram);
     requests = coop_harness_frame(args);
@@ -645,6 +648,28 @@ text = """
         c.r5 = (int64_t)args[8];
         coop_harness_hearts(rdram, &c);
     }
+    if (requests & 32) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = (int64_t)args[9];
+        c.r5 = (int64_t)args[10];
+        coop_harness_scene(rdram, &c);
+    }
+    if (requests & 64) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = (int64_t)args[11];
+        coop_harness_drop(rdram, &c);
+    }
+    if (requests & 128) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = (int64_t)args[12];
+        coop_harness_freeze(rdram, &c);
+    }
     if (coop_session_hashing()) {
         recomp_context c = *ctx;
         c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
@@ -689,6 +714,65 @@ text = """
         c.r29 -= 0x40;
         c.r4 = coop_p2_slot();
         coop_stage_init(rdram, &c);
+    }
+}
+"""
+
+# coop: the same init after its spawn loop, which cleared +0x68 (the ghost
+# flag) of every slot it spawned: a downed player 1 is a ghost again (#22;
+# coop_stage_spawned).
+[[patches.hook]]
+func = "func_80245CDC"
+before_vram = 0x80245D68
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    void coop_stage_spawned(uint8_t* rdram, recomp_context* ctx);
+    if (coop_p2_slot() != 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        coop_stage_spawned(rdram, &c);
+    }
+}
+"""
+
+# coop: every scene load's setup, counted so that a stage room's init tells a
+# room change from a stage start (#22; coop_scene_load).
+[[patches.hook]]
+func = "func_8023D0F8"
+before_vram = 0x8023D0F8
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    void coop_scene_load(uint8_t* rdram, recomp_context* ctx);
+    coop_log_player_event("scene load", -1, NULL, 0, NULL, 0);
+    if (coop_p2_slot() != 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        coop_scene_load(rdram, &c);
+    }
+}
+"""
+
+# coop: a stage won (the goal, a boss, the last rival): a downed player is
+# revived (#22; coop_stage_clear).
+[[patches.hook]]
+func = "func_8023E8AC"
+before_vram = 0x8023E8AC
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    void coop_stage_clear(uint8_t* rdram, recomp_context* ctx);
+    coop_log_player_event("stage clear", -1, NULL, 0, NULL, 0);
+    if (coop_p2_slot() != 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        coop_stage_clear(rdram, &c);
     }
 }
 """
@@ -826,13 +910,27 @@ text = """
 """
 
 # coop: damage to a slot (a0 slot, a1 cause), a death (same), a room teardown.
+# A downed player, a ghost, takes no damage: the function is skipped (#22;
+# patches/coop_player2.c, coop_ghost_hit).
 [[patches.hook]]
 func = "func_80248148"
 before_vram = 0x80248148
 text = """
 {
+    extern int32_t coop_p2_slot(void);
     extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
+    void coop_ghost_hit(uint8_t* rdram, recomp_context* ctx);
     coop_log_player_event("hit", (int32_t)ctx->r4, "cause", (int32_t)ctx->r5, NULL, 0);
+    if (coop_p2_slot() != 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        coop_ghost_hit(rdram, &c);
+        if ((int32_t)c.r2 != 0) {
+            coop_log_player_event("ghost hit", (int32_t)ctx->r4, "cause", (int32_t)ctx->r5, NULL, 0);
+            return;
+        }
+    }
 }
 """
 
@@ -864,15 +962,16 @@ text = """
 # coop: the item collision callback, with the actor that touches the item in
 # v0 (0 for none; the branch skips the pickup and the item's removal) and the
 # item in s0. A full player passes through a heart while player 2 plays
-# (#36; patches/coop_player2.c, coop_item_passes): the callback then sees no
-# toucher and the heart stays.
+# (#36; patches/coop_player2.c, coop_item_passes), a ghost through every item,
+# and a heart that revives a downed player is used up there (#22): the
+# callback then sees no toucher.
 [[patches.hook]]
 func = "func_80279CA8"
 before_vram = 0x80279CFC
 text = """
 {
     void coop_item_passes(uint8_t* rdram, recomp_context* ctx);
-    extern void coop_log_item_pass(int32_t slot, uint32_t item);
+    extern void coop_log_item_pass(int32_t slot, uint32_t item, int32_t type);
     if (ctx->r2 != 0) {
         recomp_context c = *ctx;
         c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
@@ -881,7 +980,9 @@ text = """
         c.r5 = ctx->r16;
         coop_item_passes(rdram, &c);
         if ((int32_t)c.r2 >= 0) {
-            coop_log_item_pass((int32_t)c.r2, (uint32_t)ctx->r16);
+            if ((int32_t)c.r2 < 0x10) {
+                coop_log_item_pass((int32_t)c.r2, (uint32_t)ctx->r16, (int16_t)MEM_H(0x20, ctx->r16));
+            }
             ctx->r2 = 0;
         }
     }
@@ -902,9 +1003,10 @@ text = """
 }
 """
 
-# A death of player 2 while player 1 plays: player 2 is down and respawns
-# (patches/coop_player2.c, coop_partner_death), and the function is skipped,
-# returning 1 as for a death it ran.
+# A death of either player while the other lives: it is down, a ghost
+# (#22; patches/coop_player2.c, coop_partner_death), and the function is
+# skipped, returning 0 as when the game lets a player live on: the damage
+# handler then keeps the slot in play with one heart.
 [[patches.hook]]
 func = "func_8023A870"
 before_vram = 0x8023A870
@@ -914,13 +1016,13 @@ text = """
     extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
     void coop_partner_death(uint8_t* rdram, recomp_context* ctx);
     coop_log_player_event("death", (int32_t)ctx->r4, "cause", (int32_t)ctx->r5, NULL, 0);
-    if (coop_p2_slot() != 0 && (int32_t)ctx->r4 == coop_p2_slot()) {
+    if (coop_p2_slot() != 0 && ((int32_t)ctx->r4 == 0 || (int32_t)ctx->r4 == coop_p2_slot())) {
         recomp_context c = *ctx;
         c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
         c.r29 -= 0x40;
         coop_partner_death(rdram, &c);
         if ((int32_t)c.r2 != 0) {
-            ctx->r2 = 1;
+            ctx->r2 = 0;
             return;
         }
     }

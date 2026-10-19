@@ -45,25 +45,17 @@
 #check no-log ^coop: pickup slot=4 item=4$
 #check field hit1 4 hearts = 1
 #check no-log ^coop: hit slot=0
-# the second hit is a death: player 2 is down while player 1 plays on (no
-# retry, no reload), then respawns next to player 1 with full hearts for one
-# of the shared lives (#18), at player 1's next step
+# the second hit is a death: player 2 is down, a ghost, while player 1 plays
+# on (no retry, no reload, no life spent; #22, p2-ghost)
 #check after "^coop: hit slot=4" "^coop: death slot=4 cause="
-#check after "^coop: death slot=4" "^coop: down slot=4 cause=1 lives=2$"
-#check after "^coop: down slot=4" "^coop: respawn slot=4 hearts=2 lives=1$"
-#check after "^coop: respawn slot=4" "^coop: place slot=4 tile="
+#check after "^coop: death slot=4" "^coop: down slot=4 cause=1 lives=2 ghost$"
 #check not-after "^coop: death slot=4" "^coop: room teardown"
 #check no-log ^coop: death slot=0
-#check field down 4 controlType = 3
+#check field down 4 controlType = 2
+#check field down 4 ghost = 1
 #check field down 0 flags = 0
-#check field respawn 4 controlType = 2
-#check field respawn 4 hearts = 2
-#check field respawn 4 flags = 0
-# (player 1 goes on walking after the step that places player 2)
-#check near respawn 0 4 300 50
 #check log "^coop: state overlay=0x29 .* lives=2$"
-#check after "^coop: respawn slot=4" "^coop: state overlay=0x29 .* lives=1$"
-#check moved respawn respawn-1 4
+#check no-log "^coop: state overlay=0x29 .* lives=1$"
 overlay 0x29
 wait 300
 probe walked
@@ -100,15 +92,4 @@ wait 2
 pad 1 -
 wait 190
 probe down
-wait 210
-pad 0 - 1 0.05
-wait 15
-pad 0 -
-wait 10
-probe respawn
-pad 1 - 1 0.05
-wait 15
-pad 1 -
-wait 10
-probe respawn-1
 end

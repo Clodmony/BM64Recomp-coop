@@ -1,0 +1,68 @@
+# A heart the living player finds revives the downed partner (#22, owner's
+# rule 2026-10-19): the heart is used up for it (the finder does not get it)
+# and one shared life is spent. Player 2 is downed as in p2-ghost; then a
+# drop step knocks a heart out of player 1; it lands at about tile 3, 15 (seed
+# 1, 70 frames later) and player 1 walks there. Player 2 plays again with full
+# hearts and its own look, placed next to player 1 at player 1's next step.
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_P2=4
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_SEED=1
+#
+#check after "^coop: death slot=4" "^coop: down slot=4 cause=1 lives=2 ghost$"
+#check after "^coop: drop step slot=0" "^coop: heart found slot=0$"
+#check after "^coop: heart found" "^coop: revive slot=4 why=heart hearts=2 lives=1$"
+#check no-log ^coop: pickup slot=0 item=4
+#check field down 0 hearts = 1
+#check field revived 0 hearts = 1
+#check field revived 4 ghost = 0
+#check field revived 4 hearts = 2
+#check field revived 4 controlType = 2
+#check field revived 4 alpha = 255
+#check after "^coop: revive slot=4" "^coop: place slot=4 tile="
+#check near revived 0 4 200 50
+#check moved revived walked 4 100
+overlay 0x29
+wait 300
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+wait 10
+pad 1 - 1 0.05
+wait 15
+pad 1 -
+wait 10
+pad 1 - -1 0.05
+wait 30
+pad 1 -
+wait 10
+pad 0 - 1 0.05
+wait 15
+pad 0 -
+wait 10
+probe start
+pad 1 A
+wait 2
+pad 1 -
+wait 400
+pad 1 A
+wait 2
+pad 1 -
+wait 190
+probe down
+drop 0
+wait 20
+pad 0 - 0.05 1
+wait 45
+pad 0 -
+pad 0 - -1 0.05
+wait 30
+pad 0 -
+wait 10
+probe revived
+pad 1 - 1 0.05
+wait 30
+pad 1 -
+wait 10
+probe walked
+end

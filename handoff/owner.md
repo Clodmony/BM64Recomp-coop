@@ -6,7 +6,37 @@ each issue found, the decisions taken in those sessions and the cleanup still
 to approve. Decisions that bind both people are also listed in `HANDOFF.md`,
 *Project decisions*.
 
-Last updated 2026-10-19 (#47: the history moved here from `HANDOFF.md`).
+Last updated 2026-10-19 (#22: downed players are ghosts).
+
+## #22: downed players are ghosts (2026-10-19)
+
+- PR #50 (closed #22), merged 2026-10-19. Details and the hook list
+  in design.md, *Downed players are ghosts (#22)*.
+- Either player's death while the partner lives: down, a ghost (battle flag
+  0x200 of +0x68, `g_SpawnPlayer`'s look on the existing actor); the death
+  hook returns 0 so the damage handler's "lives on" branch keeps the slot in
+  play with one heart. Found in the run: `func_80245CDC`'s spawn loop clears
+  +0x68 of each slot it spawns, so player 1's flag and look go back on after
+  the loop (hook at 0x80245D68). The game's ghost test at 0x8024E570 already
+  stops bombs and lifting on A.
+- Revives (one shared life each): stage start (world/stage change or another
+  scene load in between), stage clear (`func_8023E8AC`, not run), a scene's
+  release (only a freeze that began once player 1 had been free for 60
+  frames; tested with a harness `freeze` step, no real mid-room cutscene in
+  rooms 0x28, 0x29, 0x2D), a heart the living player touches (used up).
+- Harness steps `drop SLOT`, `scene ID [ENTRY]`, `freeze 0|1`; probe fields
+  `ghost`, `alpha`. `p2-p1-death` removed (its case, player 1's story death
+  while player 2 plays, no longer exists); `p2-p1-death-freeze` downs player
+  2 first.
+- Verify `--full --version eu --scenarios`: 8/8 stages, 383/383 checks.
+  Europe only, scripted; not played by hand, US not run.
+- Owner decisions (end of #22): merge #50 at once, a one-off exception to
+  the review rule (done); a cutscene revives at its **end** (the release),
+  placed next to the living player (not at its start); a revive at a stage
+  start costs a life too; scratch `i22/` (notes.md, enemy.md) kept until
+  #49.
+- The PR body's first version held a local scratch path for about a
+  minute (fixed by an edit; GitHub keeps the edit history).
 
 ## #47: a second developer (2026-10-19)
 
@@ -264,4 +294,4 @@ main checkout. The issue worktrees and their build folders are removed.
   `build/prepare-project-according-a3ceb80a-eu` in scratch): remove it in
   Superset.
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/` in scratch:
-  when the player 2 follow-ups are done.
+  when the player 2 follow-ups are done; `i22/` with #49.
