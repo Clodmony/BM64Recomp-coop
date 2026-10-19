@@ -32,7 +32,7 @@ Last updated 2026-10-19 (#47: notes split for two people).
 - Open issues: #11 (Europe follow-ups, the owner's eye check), #14 and #16
   (leftover checks), #19 (their group), #24 (follow-ups of #19), #29
   (two machines, Windows/macOS), #46 (scenario.py and a garbled log line), #49 (enemy targeting),
-  #51–#55 (playtest findings; #55 urgent), #56 (their group),
+  #51–#55 (playtest findings; #55 urgent), #56 (their group), #57 (live client log),
   and the owner's last step of #47: inviting the collaborator on GitHub.
 - Open pull requests: none. #50 (#22, downed players are ghosts) merged
   2026-10-19 without a review (owner's one-off exception).
@@ -76,7 +76,10 @@ A shared pool: take one by claiming it under *In progress*.
    order D, A, B, C: lane A #55 (urgent: player 2 cannot walk before
    player 1's first step), then #52, then #54 (needs both `coop.log` files);
    lane B #49, then #51; lane C #53 (needs the owner's HUD layout first);
-   lane D #46. Lanes, shared files and the run order are in #56. The owner
+   lane D #46, then #57 (the client streams its log to the host). Lanes,
+   shared files and the run order are in #56. The host's playtest folder
+   is the kit's `linux/` here; start it with `start.sh`, or it writes no
+   `coop.log` (until #57). The owner
    starts the multi-agent run ("use a workflow" / "fan out agents").
 1. **The playtest** (both people, two PCs: one Linux, one Windows): the kit
    from `tools/playtest-kit.sh`, guide in `docs/coop/playtest.md`;
