@@ -15,7 +15,8 @@
 # Windows build: the generated build.ninja is pointed at the wrapper, so the
 # submodule stays untouched. RelWithDebInfo as upstream's Windows CI, so a
 # crash's backtrace names functions (BM64Recompiled.pdb). Output:
-# ~/dev-scratch/BM64Recomp-coop/build/win-<version>/.
+# ~/dev-scratch/BM64Recomp-coop/build/win-<version>/, or $WIN_BUILD (a
+# worktree's own folder: the CMake folder belongs to one checkout).
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -34,7 +35,7 @@ if [ "$(cat "$root/RecompiledFuncs/bm64_version.txt" 2>/dev/null)" != "$version"
 fi
 
 export XWIN_SDK="${XWIN_SDK:-$scratch/win/sdk}"
-build="$scratch/build/win-$version"
+build="${WIN_BUILD:-$scratch/build/win-$version}"
 # Windows finds headers and libraries whatever their case; Linux needs the
 # spellings the sources use (xwin links only those the SDK itself uses)
 for link in include/um/Shlobj.h:ShlObj.h include/um/ShellScalingAPI.h:ShellScalingApi.h \

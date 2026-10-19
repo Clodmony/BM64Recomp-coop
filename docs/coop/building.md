@@ -165,7 +165,8 @@ tools/verify.sh --scenarios      # also the game's test scenarios (below);
 ```
 
 Stages: `submodules`, `configs` (`tools/europe.py configs`, then the US and
-Europe configs parse), `n64recomp`, `patches`, `europe` (Europe only:
+Europe configs parse), `harness` (`tools/test_scenario.py`, `scenario.py`'s
+checks on fake runs' logs, #46), `n64recomp`, `patches`, `europe` (Europe only:
 `tools/europe.py check` on the image), `recomp`, `build`, and with
 `--scenarios` `scenarios` (*The test harness*, below). Logs and
 `summary.txt` go to `~/dev-scratch/BM64Recomp-coop/verify/<stamp>/`, the
@@ -236,9 +237,13 @@ together (`tools/windows-cross.cmake`):
 (`~/dev-scratch/BM64Recomp-coop/win/prefix`, never the owner's), and
 `tools/scenario.py --exe-client <…>.exe` makes it a session's client
 (`--exe` the host): the Linux and Windows builds against each other on one
-machine. Its log lines end in CR LF; `run.sh` and `scenario.py` take both. A
-Windows build started without a console (from Explorer) writes its log to
-`coop.log` in its app folder.
+machine. Its log lines end in CR LF; `run.sh` and `scenario.py` take both.
+Every build writes its log to `coop.log` in its app folder as well (#57,
+[design.md](design.md), *The playtest's logs*): a Windows build started
+without a console (from Explorer) there alone, one with a redirect (the
+harness in Wine) to both. `WIN_BUILD=<folder>` builds into another folder
+than `build/win-<version>/`, which belongs to the checkout that configured it
+first (a worktree of its own needs its own).
 
 `tools/playtest-kit.sh` makes portable folders of both builds for a playtest
 on two PCs (`docs/coop/playtest.md`): builds of the game, copied by hand,
@@ -261,7 +266,8 @@ that holds everything it writes: an empty `portable.txt` (so
 and mods there), the stored ROM `bm64_<version>.z64` (what the launcher writes
 after a ROM is chosen; taken from `bm64.<version>.z64` in scratch), links to
 `assets/` and `recompcontrollerdb.txt` in the checkout, `game.log` (stdout and
-stderr) and `summary.txt`. The script stops only the process it started
+stderr, gamescope's and Wine's lines among them), the game's own `coop.log`
+(its lines only, #57) and `summary.txt`. The script stops only the process it started
 (TERM, then KILL) and afterwards checks that nothing under
 `~/.config/BM64Recompiled` was created or changed.
 
@@ -431,6 +437,14 @@ left, a glob relative to its run folder: `saves/bm64_*.bin`), `contains PATH
 REGEX` (such a file has a matching line). The output is
 one line per check, `N/M checks passed`
 and a RESULT line; exit 0 only if all passed. A scenario takes 15–35 s.
+
+A log line the checks read that does not parse (a probe's `coop: player` or
+`coop: camera eye=` line, a `coop: hash` line), as when two games wrote into
+one `game.log`, is a failed check `log line parses` that names the line; a
+check that raises (a text field compared with a number) or a scenario that
+crashes `scenario.py` is a failed check with the error, and the run goes on
+with the next scenario (#46). `tools/test_scenario.py` tests this on fake
+runs' logs without the game (`tools/verify.sh`'s `harness` stage).
 
 ### Session scenarios: two games on one machine
 
