@@ -1,0 +1,44 @@
+# A solo game keeps the game's own HUD only (#53): hud-corners' way into room
+# 0x29 through the menus, without player 2. The scene load registers the
+# story HUD (coop: story hud), but no co-op HUD (no coop: hud line).
+#saves-host save-file
+#env BM64_COOP_LOG_PLAYERS=1
+#
+#check log ^coop: story hud slot=-1$
+#check no-log ^coop: hud
+#check field start 0 hearts = 1
+overlay 0x20
+overlay 0x1B
+wait 60
+pad 0 START
+wait 4
+pad 0 -
+overlay 0x20
+wait 60
+pad 0 START
+wait 4
+pad 0 -
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+overlay 0x1F
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+overlay 0x21
+wait 60
+scene 0x29 0x13
+overlay 0x29
+wait 300
+probe start
+end
