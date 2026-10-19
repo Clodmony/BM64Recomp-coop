@@ -1118,6 +1118,261 @@ text = """
 }
 """
 
+# coop: lane B, enemies and the two players (#49, #51).
+# The main-code enemy code asks for S (func_80243DDC) and aims at, or measures
+# its ranges from, S's position (func_80250338). Where it has just asked, these
+# hooks put in a co-op player (patches/coop_enemy.c; docs/coop/design.md,
+# *Enemies and two players*), only while player 2 is on and S is player 1.
+
+# coop: chase on the same floor; S in v0, the enemy (its actor first) in s3.
+[[patches.hook]]
+func = "func_80283CF0"
+before_vram = 0x80283D00
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    void coop_enemy_aim(uint8_t* rdram, recomp_context* ctx);
+    if (coop_p2_slot() != 0 && (int32_t)ctx->r2 == 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = ctx->r19;
+        c.r5 = ctx->r2;
+        c.r6 = coop_p2_slot();
+        coop_enemy_aim(rdram, &c);
+        ctx->r2 = c.r2;
+    }
+}
+"""
+
+# coop: line-up test; S in v0, the enemy (its actor first) in s0.
+[[patches.hook]]
+func = "func_8028854C"
+before_vram = 0x8028855C
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    void coop_enemy_aim(uint8_t* rdram, recomp_context* ctx);
+    if (coop_p2_slot() != 0 && (int32_t)ctx->r2 == 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = ctx->r16;
+        c.r5 = ctx->r2;
+        c.r6 = coop_p2_slot();
+        coop_enemy_aim(rdram, &c);
+        ctx->r2 = c.r2;
+    }
+}
+"""
+
+# coop: line-up test by direction; S in v0, the enemy (its actor first) in a0.
+[[patches.hook]]
+func = "func_80288654"
+before_vram = 0x8028869C
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    void coop_enemy_aim(uint8_t* rdram, recomp_context* ctx);
+    if (coop_p2_slot() != 0 && (int32_t)ctx->r2 == 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = ctx->r4;
+        c.r5 = ctx->r2;
+        c.r6 = coop_p2_slot();
+        coop_enemy_aim(rdram, &c);
+        ctx->r2 = c.r2;
+    }
+}
+"""
+
+# coop: aimed move; S in v0, the enemy (its actor first) in s0.
+[[patches.hook]]
+func = "func_80289F04"
+before_vram = 0x80289F18
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    void coop_enemy_aim(uint8_t* rdram, recomp_context* ctx);
+    if (coop_p2_slot() != 0 && (int32_t)ctx->r2 == 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = ctx->r16;
+        c.r5 = ctx->r2;
+        c.r6 = coop_p2_slot();
+        coop_enemy_aim(rdram, &c);
+        ctx->r2 = c.r2;
+    }
+}
+"""
+
+# coop: aimed move; S in v0, the enemy (its actor first) in s0.
+[[patches.hook]]
+func = "func_80289DB8"
+before_vram = 0x80289DCC
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    void coop_enemy_aim(uint8_t* rdram, recomp_context* ctx);
+    if (coop_p2_slot() != 0 && (int32_t)ctx->r2 == 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = ctx->r16;
+        c.r5 = ctx->r2;
+        c.r6 = coop_p2_slot();
+        coop_enemy_aim(rdram, &c);
+        ctx->r2 = c.r2;
+    }
+}
+"""
+
+# coop: aimed move on the same floor; S in v0, the enemy (its actor first) in s0.
+[[patches.hook]]
+func = "func_802881A0"
+before_vram = 0x802881E4
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    void coop_enemy_aim(uint8_t* rdram, recomp_context* ctx);
+    if (coop_p2_slot() != 0 && (int32_t)ctx->r2 == 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = ctx->r16;
+        c.r5 = ctx->r2;
+        c.r6 = coop_p2_slot();
+        coop_enemy_aim(rdram, &c);
+        ctx->r2 = c.r2;
+    }
+}
+"""
+
+# coop: the enemy process tests whether the enemy is still within 1300 units
+# of S (else it is taken out of the room); S in v0, the enemy in s7. The
+# nearest co-op player along the larger axis is tested instead
+# (coop_enemy_range), so enemies stay while either player is near.
+[[patches.hook]]
+func = "func_80285F8C"
+before_vram = 0x80286074
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    void coop_enemy_range(uint8_t* rdram, recomp_context* ctx);
+    if (coop_p2_slot() != 0 && (int32_t)ctx->r2 == 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = ctx->r23;
+        c.r5 = ctx->r2;
+        c.r6 = coop_p2_slot();
+        coop_enemy_range(rdram, &c);
+        ctx->r2 = c.r2;
+    }
+}
+"""
+
+# coop: the top of func_80285A9C's loop over the enemy records (s0), which
+# tests S's position (read before the loop, sp+0xA8) against the spawn band of
+# each record waiting to spawn (state 2): the nearest co-op player's position
+# is put in for such a record (coop_enemy_band).
+[[patches.hook]]
+func = "func_80285A9C"
+before_vram = 0x80285AD8
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    void coop_enemy_band(uint8_t* rdram, recomp_context* ctx);
+    if (coop_p2_slot() != 0 && MEM_W(0, ctx->r16) == 2) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = ctx->r16;
+        c.r5 = ctx->r29 + 0xA8;
+        c.r6 = coop_p2_slot();
+        coop_enemy_band(rdram, &c);
+    }
+}
+"""
+
+# coop: a record waiting to spawn (state 2) spawns its enemy again: v0 is the
+# record (logged, coop_enemy_spawned).
+[[patches.hook]]
+func = "func_80285A9C"
+before_vram = 0x80285D54
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    void coop_enemy_spawned(uint8_t* rdram, recomp_context* ctx);
+    if (coop_p2_slot() != 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = ctx->r2;
+        coop_enemy_spawned(rdram, &c);
+    }
+}
+"""
+
+# coop: an enemy too far from S is taken out of the room (func_80282598, s3 0):
+# s7 is the enemy (logged, coop_enemy_despawned).
+[[patches.hook]]
+func = "func_80285F8C"
+before_vram = 0x80286140
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    void coop_enemy_despawned(uint8_t* rdram, recomp_context* ctx);
+    if (coop_p2_slot() != 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = ctx->r23;
+        coop_enemy_despawned(rdram, &c);
+    }
+}
+"""
+
+# coop: the end of func_80282934, which took out the enemies within 200 units
+# of S (before a cutscene, after a warp move): the same around player 2 while
+# it plays and is not a ghost (coop_enemy_clear).
+[[patches.hook]]
+func = "func_80282934"
+before_vram = 0x80282968
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    void coop_enemy_clear(uint8_t* rdram, recomp_context* ctx);
+    if (coop_p2_slot() != 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = coop_p2_slot();
+        coop_enemy_clear(rdram, &c);
+    }
+}
+"""
+
+# coop: the attract demo's setup, which the title runs as it is left, also
+# when a test warp leaves it (story flag 0x4: the room's enemy tiles become
+# start points, no timer). BM64_COOP_NO_DEMO=1 skips it, so that a warped room
+# plays with its enemies (src/coop/harness.cpp, coop_harness_no_demo).
+[[patches.hook]]
+func = "func_80297ADC"
+before_vram = 0x80297ADC
+text = """
+{
+    extern int32_t coop_harness_no_demo(void);
+    if (coop_harness_no_demo()) {
+        return;
+    }
+}
+"""
+
+# coop: end of lane B's hooks (#49, #51)
+
 # When osAiGetLength returns a number that exceeds the target amount of samples per frame, the calculation (target samples per frame - osAiGetLength()) will result in a negative number.
 # When the clamping takes place to prevent a number of bytes that is too small, it doesn't take into account the negative number that resulted from the calculation.
 # Not doing this results in a negative number being given to osAiSetNextBuffer causing a massive memory leak and crash (because a signed negative number is being read as unsigned).

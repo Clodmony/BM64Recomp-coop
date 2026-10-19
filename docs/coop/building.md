@@ -384,6 +384,20 @@ Everything is off unless a switch asks for it:
   0x28 opens with the tutorial's dialogue, which waits for A; room 0x29 with
   entry 0x13 (room 0x28's exit) starts with player 1's short entry walk and
   then plays.
+  The title, as the warp leaves it, starts the attract demo
+  (`func_80297ADC`, #49, #51): the warped room runs as the demo, story flag
+  0x4 set, so the map's enemy tiles become start points for slots 1–3
+  (`func_8026F5E8`: no enemies), the timer is off and START goes back to
+  the title.
+- `BM64_COOP_NO_DEMO=1`: the attract demo's setup is skipped (a hook at
+  `func_80297ADC`), so a warped room plays as a game's does: its enemies
+  spawn, and player 1 is held longer at the start (room 0x29: still frozen
+  345 frames after the load, free at 600; as the demo, 300 were enough).
+  The enemy scenarios use it (`enemy-ghost`,
+  `enemy-range`, `session-enemy-range`); the older ones run without enemies.
+  The enemy lines (`coop: enemy aim|spawn|despawn|clear …`) come from
+  `patches/coop_enemy.c` whenever player 2 is on ([design.md](design.md),
+  *Enemies and two players*).
 - `BM64_COOP_LOG_PLAYERS=1`: one line per room init, spawn (and the model
   asset it gets), placement on a tile, bomb, hit, the heart a hit knocks
   out (`drop … item=4`), an item picked up (`pickup … item=T`), an item a

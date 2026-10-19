@@ -1,0 +1,36 @@
+# Enemies stay while either player is near (#51). Room 0x29 played as a game
+# (BM64_COOP_NO_DEMO). Enemy 7 (type 0) spawns as player 1 walks in. Player 1
+# is then put on a tile far away (28, 23), more than 1300 units from enemy 7
+# along x; player 2 stays at the start, within range (held there by its
+# placement, which waits for player 1's next step). The game takes an enemy
+# out when S, player 1, is that far: enemy 7 stays now. Player 2 is then put
+# next to player 1: with both far, enemy 7 is taken out, tested against
+# player 2, the nearer one. On the way, enemy 8 aims at player 2 while player
+# 2 is the nearer living player (#49).
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_P2=4
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_SEED=1
+#env BM64_COOP_NO_DEMO=1
+#
+#check log "^coop: enemy spawn rec=7 type=0x0 "
+#check near far 0 4 3000 2000
+#check field far 4 controlType = 2
+#check not-after "^coop: tile slot=0 " "^coop: enemy despawn rec=7 .* near=0$"
+#check after "^coop: tile slot=4 " "^coop: enemy despawn rec=7 .* near=4$"
+#check near both 0 4 150
+#check log "^coop: enemy aim rec=8 slot=4 ghost=0 "
+overlay 0x29
+wait 600
+pad 0 - 0 -1
+wait 15
+pad 0 -
+wait 30
+probe joined
+tile 0 28 23
+wait 300
+probe far
+tile 4 27 23
+wait 200
+probe both
+end
