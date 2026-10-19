@@ -623,8 +623,10 @@ less than 60 apart overlap. Player 1 just past the edge of the tile it left is
 about 50 from that tile's centre: player 2 put there overlapped it and went
 back to its last position, which for a new actor is the origin
 (`g_InitLevelClass` zeroes it; `g_SpawnPlayer` sets only the model's
-position). Room 0x28's origin is inside the wall under the map, where player
-2 fell. The same explains the old "put back at the origin on its first frames".
+position). Room 0x28's origin is inside a wall (tile 0,0,0 is 0x1F): in the
+playtest player 2 fell (cause 3) right after such a placement; in the scripted
+runs it stayed at the origin. The same explains the old "put back at the
+origin on its first frames".
 
 The rule now (#55): the room's init does **not** spawn player 2, and player 1's
 placement (`func_802511EC(0, …)`: room entries, story teleports) makes player
