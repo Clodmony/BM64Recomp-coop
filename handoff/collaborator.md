@@ -69,6 +69,12 @@ never the hardware itself. Recipes that hold for everyone go into
   script file rather than a long `bash -lc '…'`, whose quoting breaks and
   whose output is sometimes cut short; and `wsl.exe` writes UTF-16 unless
   `WSL_UTF8=1` is set.
+- Ubuntu 24.04 packages `gh` 2.45, which is old enough that some commands
+  fail on a deprecated GraphQL field: `gh pr edit --add-reviewer` dies with
+  "Projects (classic) is being deprecated ... (repository.pullRequest.projectCards)"
+  and changes nothing. The REST call works:
+  `gh api -X POST repos/<owner>/<repo>/pulls/<N>/requested_reviewers -f 'reviewers[]=<login>'`.
+  Installing `gh` from GitHub's own apt repository would avoid it.
 - Audio in a headless run logs skips: 91 over the 104 s run above, with the
   queue between 65 and 82 ms (the last two fields of `coop: frame`). Whether
   a native Linux run shows the same was not measured, so this is an
