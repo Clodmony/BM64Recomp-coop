@@ -32,7 +32,7 @@ Last updated 2026-10-19 (#47: notes split for two people).
 - Open issues: #11 (Europe follow-ups, the owner's eye check), #14 and #16
   (leftover checks), #19 (their group), #24 (follow-ups of #19), #29
   (two machines, Windows/macOS), #46 (scenario.py and a garbled log line), #49 (enemy targeting),
-  #51–#55 (playtest findings; #55 urgent),
+  #51–#55 (playtest findings; #55 urgent), #56 (their group),
   and the owner's last step of #47: inviting the collaborator on GitHub.
 - Open pull requests: none. #50 (#22, downed players are ghosts) merged
   2026-10-19 without a review (owner's one-off exception).
@@ -71,16 +71,13 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 
 A shared pool: take one by claiming it under *In progress*.
 
-00. **#55, urgent (owner, 2026-10-19), next:** player 2 cannot walk before
-   player 1's first step (the #14 join rule). Approach and the failed
-   placements in the issue; start with a scenario where player 1 never
-   moves in room 0x29.
-0. **From the first two-PC playtest (owner, 2026-10-19):** #54 player 1
-   softlocked walking left (needs both `coop.log` files and the room
-   first), #52 player 2 loses its power-ups at every room change (cause
-   read: `coop_stage_init` copies player 1's), #51 enemies despawn when
-   player 1 is far from player 2 (with #49), #53 a HUD for both players'
-   power-ups and hearts.
+0. **Group #56, next (owner, 2026-10-19):** the playtest findings and the
+   #22 follow-ups in four parallel lanes, one agent each, merged in the
+   order D, A, B, C: lane A #55 (urgent: player 2 cannot walk before
+   player 1's first step), then #52, then #54 (needs both `coop.log` files);
+   lane B #49, then #51; lane C #53 (needs the owner's HUD layout first);
+   lane D #46. Lanes, shared files and the run order are in #56. The owner
+   starts the multi-agent run ("use a workflow" / "fan out agents").
 1. **The playtest** (both people, two PCs: one Linux, one Windows): the kit
    from `tools/playtest-kit.sh`, guide in `docs/coop/playtest.md`;
    afterwards both `coop.log` files. What breaks becomes an issue (a desync
