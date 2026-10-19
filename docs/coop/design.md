@@ -934,7 +934,7 @@ recompiler config `bm64.<version>.toml`, which holds the hooks, taken when
 CMake configures (`src/coop/version.cmake`). Either side refuses another
 identity: `coop: session refused: another build (the other's 0x…)`, and
 both play alone (`session-build`, with `BM64_COOP_BUILD_ID` faking the
-client's). The protocol was 2 then (3 since #33's frame message); the first 8 bytes of the hello (magic,
+client's). The protocol was 2 then (3 since #33's frame message, 4 since #29's logs, 5 since #57's log stream); the first 8 bytes of the hello (magic,
 protocol, role, game) stay the same in every version, so an older peer is
 refused for its protocol rather than misread. Not covered by the identity:
 host code (`src/`), librecomp, and mods; a difference there still shows
@@ -1086,26 +1086,94 @@ Start there). A game that reaches its first pad read more than 10 s after
 the other's would lose the session at its first step (inferred from the
 lockstep's 10 s wait; not seen in the runs).
 
-### The playtest's logs (#29)
+### The playtest's logs (#29, #57)
 
-A playtest on two PCs needs the logs of both, the crashed one's most. Each
-game keeps its log in `coop.log` in its app folder (a Windows build without a
-console redirects its stdout and stderr there, `coop::start_log`; the Linux
-kit's `start.sh` tees it) and the run before's in `coop.prev.log`. A Windows
-crash writes its exception, place and stack to the log first, as
+A playtest on two PCs needs the logs of both, the crashed one's most.
+
+**The game's own log** (#57). Every game writes its stdout and stderr to
+`coop.log` in its app folder, on every platform, and keeps the run before's
+as `coop.prev.log` (`coop::start_log`, `src/coop/debug.cpp`, called early in
+`main`). On Linux and macOS a child process of the game copies the pipe both
+now write into to `coop.log` and to where stdout went before (the terminal,
+`run.sh`'s `game.log`): a process of its own, so a crash or a kill of the game
+loses no line, since the child reads the pipe to its end; it ignores the
+terminal's and the run's stop signals for that reason, and exits with the
+pipe. The game ignores SIGPIPE, so a child killed by hand does not end it.
+stdout is line-buffered, so the patches' lines and the host's stay in
+order. The kit's `start.sh` only starts the game now (it used to tee into
+`coop.log` itself, which would double every line). A Windows build started
+from Explorer has no console: both go straight to `coop.log`, as since #29;
+with somewhere to go (a redirect, the harness in Wine) a thread copies them
+to both, and a crash or the exit waits for it to write what the pipe holds.
+A Windows crash writes its exception, place and stack to the log first, as
 `BM64Recompiled.exe+0x…`, which the kit's `.pdb` resolves
 (`llvm-symbolizer --obj=BM64Recompiled.exe 0x140000000+offset`); an invalid
-parameter to the C runtime and an abort too. Right after the hellos, before
+parameter to the C runtime and an abort too. The lines `main` prints before
+`start_log` (on Linux "Failed to preload executable!") are not in the file.
+
+**The run before's log, at connect** (#29). Right after the hellos, before
 the save, each side sends its `coop.prev.log` (its last 256 KiB; the host
 first, so neither waits on a full socket buffer), and the other keeps it in
-`coop-logs/<time>-<host|client>.log`. A crash, a restart and a join so bring
-the crashed run's log to the other PC (`session-logs`; protocol 4).
+`coop-logs/<time>-<host|client>.prev.log` (`.log` before #57). A crash, a
+restart and a join so bring the crashed run's last lines to the other PC
+(`session-logs`).
 
-Run (Europe, 2026-10-18): `session-logs` passes; the Windows build crashed on
-purpose (`BM64_COOP_CRASH`) logs the exception, `BM64Recompiled.exe+0x74EE5`
-and 12 frames, which the `.pdb` names (`coop_log_overlay_load`,
-`func_8022691C`, …). Not run: the redirect on a real Windows PC (in Wine a
-game started from a terminal has a console).
+**This run's log, live** (#57). During the session each side streams its
+`coop.log` to the other, which appends it to
+`coop-logs/<time>-client.log` (the host) or `<time>-host.log` (the client)
+as it comes, flushed after each piece: the text is there when the other
+crashes or the session is lost later, and the host has both logs of the
+session that just ended. Both directions, since the code is the same on
+both sides (#57's option 3, at no extra cost). In the stream:
+
+- What the log held before the lockstep (the run so far, from the game's
+  start) goes at the lockstep's start, before frame 0.
+- Then each frame message is followed, in the same packet, by at most 512
+  bytes of whole lines (25 KiB/s at 50 frames a second; more only for one
+  longer line, in pieces). A frame so waits behind no more than that, and
+  the stream needs no thread or lock of its own: it is read from the file
+  in the lockstep's step, which owns the socket.
+- Nothing is sent when a game stops: what the other has came while the
+  session was live. Lines a game logs in the frame it crashes in (its crash
+  line among them) come with the next connect's `.prev.log`.
+
+The messages after the save now carry a kind and a size (frame or log;
+`session.cpp`), so the **protocol is 5**: a protocol 4 peer would read a log
+message as a frame. The build identity does not cover host code (`src/`), so
+without the bump an older build of the same patches would connect and then
+misread the stream; with it, either side refuses the other ("another
+protocol version (4, this 5)").
+
+Run (Europe, 2026-10-19, Linux, two games on one machine):
+
+| Scenario or probe | What it showed |
+|---|---|
+| `game-log` | a run's `coop.log` holds the overlay, input and probe lines |
+| `session-log-stream` | both games write `coop.log`; the host's `coop-logs/<time>-client.log` holds the client's lines from its start (its connect line, two markers) and the client's `<time>-host.log` the host's marker; no desync. The host's copy was the client's `coop.log` byte for byte |
+| `session-log-lost` | the client's game is stopped at frame 200 (as `session-lost`); the host's copy holds its marker logged 20 frames before, and the host plays on alone |
+| `session-logs` | the run before's log as `<time>-client.prev.log` (#29) |
+| client crashed on purpose (`BM64_COOP_CRASH` at its first title load, by hand) | the client's own `coop.log` ends with its crash line; the host's copy holds the client's lines up to the step before it (`coop: seed …`), and the host loses the session at frame 2 and plays on |
+| the kit's `start.sh`, run twice (by hand, headless) | `coop.log` holds the game's lines once, in the terminal's order; the second run kept the first's as `coop.prev.log`; no tee process left |
+| the tee child killed (by hand) | the game runs on |
+
+Red on the build before (the same scenarios): 17 of 29 checks failed (no
+`coop.log` on Linux, no stream, the `.prev.log` name).
+
+The Windows build (cross-compiled, in Wine on the same machine, where it
+always has somewhere to write, so through the thread): `game-log` alone;
+`session-log-stream`, `session-log-lost` and `session-logs` with it as the
+client of the Linux build, and `session-log-stream` with it as the host;
+all pass, and the Linux host's copy was the Windows client's `coop.log`
+byte for byte. Crashed on purpose as a client, its `coop.log` has all 16
+crash lines (the exception, the place and the stack), as the run's
+`game.log` does; the host's copy ends at the client's `coop: seed` line, as
+on Linux (Wine kept the crashed game open, so the host lost the session
+after 10 s without data).
+
+Not run: two PCs (a LAN, the internet), where the 512 bytes a frame meet a
+real link; a real Windows PC, and so the build without a console, which
+writes straight to `coop.log` as since #29; macOS (the POSIX code of Linux,
+not compiled).
 
 ### Not done
 

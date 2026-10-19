@@ -21,7 +21,8 @@ share or upload them.
 ## Set up each PC
 
 **Linux:** copy the `linux` folder and start the game with `./start.sh` from
-a terminal in it. The terminal shows the log, and `coop.log` keeps it.
+a terminal in it. The terminal shows the log, and the game keeps it in
+`coop.log` (also when started another way).
 
 **Windows:** unzip `windows.zip` and double-click
 `windows\BM64Recompiled.exe`. If Windows warns about an unknown app
@@ -81,14 +82,21 @@ Each game keeps its log in `coop.log` in its folder, and the one of the run
 before in `coop.prev.log`. A Windows game that crashes writes the crash
 (its exception and where it happened) into its log first.
 
-**The logs travel by themselves:** when the two games connect, each sends
-the other its `coop.prev.log`, the log of its run before, and the other keeps
-it in `coop-logs/` in its folder. So after a crash, start the game again and
-join once more: the crashed run's log lands in the host's `coop-logs/`.
-Nothing else is sent, and only to the PC you connect to.
+**The logs travel by themselves**, into `coop-logs/` in the other PC's
+folder:
 
-Otherwise keep **both** `coop.log` files (one from each PC). Note what you
-did when something went wrong, and the time. In the logs, look for:
+- While you play, each game sends its log to the other as it goes: the host
+  keeps the other player's in `coop-logs/<time>-client.log`, the other
+  player the host's in `coop-logs/<time>-host.log`. So after a session the
+  host has both logs, also when the other game crashed or the connection
+  was lost (up to that moment).
+- The last lines before a crash come at the next connect: each game sends
+  its `coop.prev.log`, the log of its run before, kept as
+  `coop-logs/<time>-client.prev.log` (or `-host.prev.log`). So after a
+  crash, start the game again and join once more.
+
+Nothing else is sent, and only to the PC you connect to. Note what you did
+when something went wrong, and the time. In the logs, look for:
 
 - `coop: session desync frame=…`: the two games no longer agree (the most
   important line).

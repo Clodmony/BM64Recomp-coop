@@ -13,6 +13,16 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <fcntl.h>
+#include <io.h>
+#include <thread>
+#else
+#include <cerrno>
+#include <fcntl.h>
+#include <unistd.h>
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
 #endif
 
 #include "recomp.h"
@@ -31,10 +41,65 @@ bool env_flag(const char* name) {
     const char* value = std::getenv(name);
     return value != nullptr && value[0] != '\0' && value[0] != '0';
 }
+
+std::filesystem::path log_file; // coop.log, once start_log made it
 }
 
 #ifdef _WIN32
 namespace {
+// The tee of a game whose stdout and stderr go somewhere (a redirect, the
+// harness in Wine): a thread copies the pipe they now write into to coop.log
+// and to where they went before.
+HANDLE tee_pipe = nullptr; // the pipe's read end
+std::atomic<bool> tee_busy{false};
+
+bool tee_to(const std::filesystem::path& path) {
+    int file = _wopen(path.c_str(), _O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY, _S_IREAD | _S_IWRITE);
+    int fds[2];
+    if (file < 0 || _pipe(fds, 64 * 1024, _O_BINARY) != 0) {
+        if (file >= 0) {
+            _close(file);
+        }
+        return false;
+    }
+    int out = _dup(_fileno(stdout)); // where both went (run.sh sends them to one file)
+    _dup2(fds[1], _fileno(stdout));
+    _dup2(fds[1], _fileno(stderr));
+    _close(fds[1]);
+    SetStdHandle(STD_OUTPUT_HANDLE, reinterpret_cast<HANDLE>(_get_osfhandle(_fileno(stdout))));
+    SetStdHandle(STD_ERROR_HANDLE, reinterpret_cast<HANDLE>(_get_osfhandle(_fileno(stderr))));
+    tee_pipe = reinterpret_cast<HANDLE>(_get_osfhandle(fds[0]));
+    std::thread([pipe = fds[0], file, out] {
+        char buffer[4096];
+        int got;
+        while ((got = _read(pipe, buffer, sizeof(buffer))) > 0) {
+            tee_busy = true;
+            _write(file, buffer, static_cast<unsigned>(got));
+            if (out >= 0) {
+                _write(out, buffer, static_cast<unsigned>(got));
+            }
+            tee_busy = false;
+        }
+    }).detach();
+    return true;
+}
+
+// Waits (up to a second) until the tee has written what the pipe holds: on a
+// crash and at the exit, which would otherwise end the thread first.
+void drain_tee() {
+    if (tee_pipe == nullptr) {
+        return;
+    }
+    for (int i = 0, idle = 0; i < 200 && idle < 2; i++) {
+        DWORD queued = 0;
+        if (!PeekNamedPipe(tee_pipe, nullptr, 0, nullptr, &queued, nullptr)) {
+            return;
+        }
+        idle = queued == 0 && !tee_busy ? idle + 1 : 0;
+        Sleep(5);
+    }
+}
+
 // "module+0xoffset" for a code address, which the build's .pdb resolves
 // (llvm-symbolizer --obj=BM64Recompiled.exe 0x140000000+offset).
 void print_where(const char* what, DWORD64 address) {
@@ -68,6 +133,7 @@ void print_stack(CONTEXT context) {
         RtlVirtualUnwind(UNW_FLAG_NHANDLER, base, context.Rip, function, &context, &handler_data, &frame, nullptr);
     }
     std::fflush(stderr);
+    drain_tee();
 }
 
 LONG WINAPI on_crash(EXCEPTION_POINTERS* info) {
@@ -95,39 +161,147 @@ void on_abort(int) {
 } // namespace
 #endif
 
-// The log of a playtest (#29). A Windows build started from Explorer has no
-// console: its stdout and stderr go nowhere, and with them the co-op lines.
-// Without them, both go to coop.log in the app folder (the portable folder
-// with portable.txt); the log of the run before is kept as coop.prev.log,
-// which a session sends to the other side when it connects (session.cpp).
-// On Linux the kit's start.sh does the same. A crash on Windows writes its
-// exception, place and stack to the log first. Elsewhere, and with a console
-// or a redirect, the output is left as it is.
+#ifndef _WIN32
+namespace {
+void write_all(int fd, const char* data, ssize_t size) {
+    while (size > 0) {
+        ssize_t done = write(fd, data, static_cast<size_t>(size));
+        if (done < 0 && errno == EINTR) {
+            continue;
+        }
+        if (done <= 0) {
+            return; // e.g. the terminal is gone: the file still gets it
+        }
+        data += done;
+        size -= done;
+    }
+}
+
+// The tee (#57): a child process copies the pipe stdout and stderr now write
+// into to coop.log and to where stdout went before (the terminal, run.sh's
+// game.log). A process of its own, so a crash or a kill of the game loses no
+// line: the child reads the pipe to its end, then exits. It ignores the
+// terminal's and run.sh's stop signals for that reason.
+bool tee_to(const std::filesystem::path& path) {
+    int file = open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    int fds[2];
+    if (file < 0 || pipe(fds) != 0) {
+        if (file >= 0) {
+            close(file);
+        }
+        return false;
+    }
+    std::fflush(stdout);
+    std::fflush(stderr);
+    pid_t child = fork();
+    if (child < 0) {
+        close(fds[0]);
+        close(fds[1]);
+        close(file);
+        return false;
+    }
+    if (child == 0) { // async-signal-safe calls only: other threads may hold locks
+        close(fds[1]);
+#ifdef __linux__
+        prctl(PR_SET_NAME, "coop-log");
+#endif
+        for (int sig : {SIGINT, SIGTERM, SIGHUP, SIGPIPE, SIGQUIT}) {
+            signal(sig, SIG_IGN);
+        }
+        char buffer[4096];
+        for (;;) {
+            ssize_t got = read(fds[0], buffer, sizeof(buffer));
+            if (got < 0 && errno == EINTR) {
+                continue;
+            }
+            if (got <= 0) {
+                break;
+            }
+            write_all(file, buffer, got);
+            write_all(STDOUT_FILENO, buffer, got);
+        }
+        _exit(0);
+    }
+    close(fds[0]);
+    close(file);
+    dup2(fds[1], STDOUT_FILENO);
+    dup2(fds[1], STDERR_FILENO);
+    close(fds[1]);
+    // should the child be gone (killed by hand), a line written to the pipe
+    // fails instead of ending the game
+    signal(SIGPIPE, SIG_IGN);
+    return true;
+}
+} // namespace
+#endif
+
+// The game's own log (#29, #57): stdout and stderr, together, in coop.log in
+// the app folder (the portable folder with portable.txt), on every platform;
+// the log of the run before is kept as coop.prev.log, which a session sends
+// to the other side when it connects, and a session streams coop.log to the
+// other side while it is live (session.cpp).
+// - Linux and macOS: a child process copies both to coop.log and to where
+//   stdout went (tee_to above); the kit's start.sh only starts the game.
+// - Windows started from Explorer has no console: stdout and stderr went
+//   nowhere and now go straight to coop.log. With somewhere to go (a
+//   redirect, the harness in Wine) a thread copies them to both.
+// A crash on Windows writes its exception, place and stack to the log first.
 void coop::start_log() {
 #ifdef _WIN32
     SetUnhandledExceptionFilter(on_crash);
     _set_invalid_parameter_handler(on_invalid_parameter);
     std::signal(SIGABRT, on_abort);
-    HANDLE err = GetStdHandle(STD_ERROR_HANDLE);
-    if (err != nullptr && err != INVALID_HANDLE_VALUE) {
-        return;
-    }
+#endif
     std::error_code ec;
     std::filesystem::path folder = zelda64::get_app_folder_path();
     std::filesystem::create_directories(folder, ec);
     std::filesystem::rename(folder / "coop.log", folder / "coop.prev.log", ec);
-    std::string path = (folder / "coop.log").string();
-    if (FILE* empty = std::fopen(path.c_str(), "w")) {
-        std::fclose(empty);
+    std::filesystem::path path = folder / "coop.log";
+    bool ok = false;
+#ifdef _WIN32
+    // the log survives a crash and keeps both in order (Windows has no line
+    // buffering); never on a stream without a file, which is an invalid
+    // parameter that ends the program
+    auto unbuffered = [](FILE* stream) { std::setvbuf(stream, nullptr, _IONBF, 0); };
+    auto goes_somewhere = [](DWORD which, FILE* stream) {
+        HANDLE handle = GetStdHandle(which);
+        return handle != nullptr && handle != INVALID_HANDLE_VALUE && _fileno(stream) >= 0;
+    };
+    if (goes_somewhere(STD_OUTPUT_HANDLE, stdout) && goes_somewhere(STD_ERROR_HANDLE, stderr)) {
+        ok = tee_to(path);
+        unbuffered(stdout);
+        unbuffered(stderr);
+        std::atexit(drain_tee);
+        std::at_quick_exit(drain_tee);
+    } else {
+        std::string name = path.string();
+        if (FILE* empty = std::fopen(name.c_str(), "w")) {
+            std::fclose(empty);
+        }
+        // both appending, so their lines interleave instead of overwriting
+        ok = std::freopen(name.c_str(), "a", stdout) != nullptr;
+        if (ok) {
+            unbuffered(stdout);
+        }
+        if (std::freopen(name.c_str(), "a", stderr) != nullptr) {
+            unbuffered(stderr);
+        } else {
+            ok = false;
+        }
     }
-    // both appending, so their lines interleave instead of overwriting
-    if (std::freopen(path.c_str(), "a", stdout) != nullptr) {
-        std::setvbuf(stdout, nullptr, _IONBF, 0); // the log survives a crash (Windows has no line buffering)
-    }
-    if (std::freopen(path.c_str(), "a", stderr) != nullptr) {
-        std::setvbuf(stderr, nullptr, _IONBF, 0);
-    }
+#else
+    ok = tee_to(path);
+    std::setvbuf(stdout, nullptr, _IOLBF, 0); // whole lines, in order with stderr's
 #endif
+    if (ok) {
+        log_file = path;
+    } else {
+        std::fprintf(stderr, "coop: no log file: cannot write %s\n", path.string().c_str());
+    }
+}
+
+std::filesystem::path coop::log_path() {
+    return log_file;
 }
 
 // The last limit bytes of the log of the run before (coop.prev.log in the app

@@ -1,0 +1,36 @@
+# The game's own log and its stream (#57, docs/coop/design.md, *The
+# playtest's logs*): each game writes coop.log in its folder, and during the
+# session each streams it to the other, which appends it to
+# coop-logs/<time>-client.log (the host) or <time>-host.log (the client) as
+# it comes. A game that stops sends nothing more, so the lines in the other's
+# file came while the session was live. Marker lines from both scripts.
+#session
+#env BM64_COOP_WARP=0x29:0x13
+#
+# each game writes its own log
+#check contains coop.log "^coop: input: host marker$"
+#check-client contains coop.log "^coop: input: client marker 2$"
+# the client's log on the host, from the start of the client's run
+#check log "^coop: session: the other side's log streams to coop-logs/\d{8}-\d{6}-client\.log$"
+#check contains coop-logs/*-client.log "^coop: session client: connected, seed=0x[0-9A-F]{8} delay=2$"
+#check contains coop-logs/*-client.log "^coop: input: client marker 1$"
+#check contains coop-logs/*-client.log "^coop: input: client marker 2$"
+#check no-file coop-logs/*.prev.log
+# and the host's on the client (#57's option 3)
+#check-client log "^coop: session: the other side's log streams to coop-logs/\d{8}-\d{6}-host\.log$"
+#check-client contains coop-logs/*-host.log "^coop: input: host marker$"
+#check no-log ^coop: session (desync|lost|refused)
+#check-client no-log ^coop: session (desync|lost|refused)
+#
+#client overlay 0x29
+#client wait 30
+#client log client marker 1
+#client wait 30
+#client log client marker 2
+#client wait 120
+#client end
+overlay 0x29
+wait 45
+log host marker
+wait 135
+end
