@@ -33,10 +33,13 @@ Last updated 2026-10-19 (#47: notes split for two people).
   (leftover checks), #19 (their group), #24 (follow-ups of #19), #29
   (two machines, Windows/macOS), #46 (scenario.py and a garbled log line), #49 (enemy targeting),
   #51–#55 (playtest findings; #55 urgent), #56 (their group), #57 (live client log), #58 (the collaborator's
-  setup, first),
-  and the owner's last step of #47: inviting the collaborator on GitHub.
-- Open pull requests: none. #50 (#22, downed players are ghosts) merged
-  2026-10-19 without a review (owner's one-off exception).
+  setup, first, in progress), #63 (`run.sh`'s headless default needs
+  gamescope, which Ubuntu 24.04 does not package; found by #58).
+  The owner's last step of #47 is done: the collaborator has write access on
+  the fork (checked 2026-10-20).
+- Open pull requests: the #58 setup check (collaborator), waiting for the
+  owner's review. #50 (#22, downed players are ghosts) merged 2026-10-19
+  without a review (owner's one-off exception).
 
 ## In progress
 
@@ -46,6 +49,7 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 | Issue | Person | Branch | State |
 |-------|--------|--------|-------|
 | #56 (group: #55, #52, #49, #51, #53, #46, #57) | owner | `coop/56-playtest` (lanes `coop/56-a-player2`, `-b-enemies`, `-c-hud`, `-d-harness`) | four lane agents started 2026-10-19, worktrees under scratch `wt/` |
+| #58 | collaborator | `coop/58-wsl2-setup` | WSL2 set up and checked 2026-10-20, draft pull request open, waiting for the owner's review |
 
 ## Project decisions (bind both people)
 
@@ -92,10 +96,12 @@ A shared pool: take one by claiming it under *In progress*.
    line first). This is also the real-PC part of #29.
 2. **#46** (scenario.py and a garbled log line): a small harness fix, a good
    first issue for a session with a smaller plan.
-3. **#58, the collaborator's first issue** (owner, 2026-10-19: before any
-   other): the WSL2 setup of `docs/coop/contributing.md`, the quick and full
-   verify, `run.sh`, the scenarios and the window in WSL2; what does not
-   work becomes an issue. Needs the owner's GitHub invitation first.
+3. **#63** (`run.sh`'s headless default needs gamescope, which Ubuntu 24.04
+   does not package): found by #58, which took candidate 3. Small and well
+   bounded: let `run.sh` choose its headless wrapper, gamescope or Xvfb,
+   which also lets `scenario.py` run on a Windows machine. Until then a
+   Windows machine runs the scenarios under Xvfb with a local stand-in
+   (`docs/coop/contributing.md`, *Setting up on Windows: WSL2*).
 4. **A hand try of the Co-op menu**: two games on one machine, Host 7777 in
    one, Join 127.0.0.1 7777 in the other, then turn each camera with the
    C-buttons (#33).
