@@ -23,7 +23,7 @@ void func_8028275C(f32 x, f32 y, f32 z);  // take out the enemies within 200 uni
 
 // How coop_enemy_nearest measures and whom it counts.
 #define COOP_NEAR_LIVING 1 // leave a ghost out (a target, #49)
-#define COOP_NEAR_BOX 2    // the larger of |dx| and |dz|, as the enemy code's ranges (#51); else dx² + dz²
+#define COOP_NEAR_BOX 2    // the larger of |dx| and |dz|, as the enemy code's ranges (#51); else dx*dx + dz*dz
 #define COOP_NEAR_FLOOR 4  // a player on the enemy's floor level first
 
 static s8 coop_enemy_logged[COOP_ENEMY_RECORDS]; // slot * 2 + ghost logged last, + 1; 0 none

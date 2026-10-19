@@ -403,7 +403,8 @@ Moderate. Rivals: rewrite their target fields every frame (cheap, inferred to
 work). Overlay bosses stay on player 1 at first. A later option is a director
 that switches S to the other player outside cutscenes (for instance when
 player 1 is down), cheap but only safe where no overlay keeps S-derived
-pointers across frames.
+pointers across frames. Done for the main-code enemies, their targets and
+their ranges (#49, #51): *Enemies and two players*, below.
 
 ### 10. Cutscenes and warps
 
@@ -773,8 +774,9 @@ read: rivals skip a ghost as a target, and the win test only refuses
 controlType 3, which a ghost is not); a ghost carried by, or carrying, the
 partner at its death (the handler releases carry links only in battle);
 stale hit bits at a revive; what a ghost looks like on screen (only the
-fields were probed); enemies still aim at a ghost S (#49); the host's
-camera follows S, a downed player 1 too.
+fields were probed); overlay enemies and bosses still aim at a ghost S
+(the main-code enemies no longer do: *Enemies and two players*, #49); the
+host's camera follows S, a downed player 1 too.
 
 ### The knocked-out heart (#36)
 
@@ -799,6 +801,123 @@ the stage drops; alone, player 1 picks hearts up as before.
 Not covered: `func_802308B8` returns one actor that touches the item, so a
 full player standing on a heart may keep a partner on the same spot from
 getting it (not run).
+
+### Enemies and two players (#49, #51)
+
+Read in the Europe disassembly and run on the Europe build (2026-10-20,
+scenarios `enemy-ghost`, `enemy-range`, `session-enemy-range`). The code is
+`patches/coop_enemy.c`, the hooks are lane B's block in `bm64.us.toml`.
+
+**The rooms' enemies.** A story room's ordinary enemies are main code: the
+room fills `g_EnemySlots` (`g_EnemyAllocate`), and the map loader turns the
+map's enemy tiles into 16 records at 0x800BA900 (US and Europe, 0xA4 bytes
+each; `func_80286CA8`, `func_80286400`), each run by an enemy process
+`func_80285F8C`. All of it asks for S (`func_80243DDC`) and reads S's position
+(`func_80250338`):
+
+- **Spawn** (`func_80285A9C`, the scan of an idle enemy process): a record
+  waiting to spawn (state 2) brings its enemy in when S is 1050–1150 units
+  from it along x (and within 1100 along z) or along z: enemies appear at the
+  edge of the view, not in front of the player. A record's countdown (+0x4;
+  1200 frames after its enemy was defeated, inferred) runs only while S is
+  outside the 1100-unit square around it.
+- **Range** (`func_80285F8C`, an enemy in play): an enemy more than 1300
+  units from S along x or z is taken out of the room (`func_80282598`: state
+  2, countdown 0), not killed; it spawns again where it was once S comes back
+  to its band. Types 0x19 and 0x1C stay. **This is #51**: with player 1 far
+  away, the enemies around player 2 went, and came back only with player 1
+  (`enemy-range` before the fix: enemy 7 taken out right after player 1 was
+  put 2300 units away, `coop: enemy despawn rec=7 type=0x0 x=1400 z=1049
+  near=0`). The test reads S's position, game state, not a camera: before
+  the fix too, both games of a session hashed the same frames and logged the
+  same enemy lines (`session-enemy-range`, no desync).
+- **Targets:** the chase on the same floor (`func_80283CF0`), the line-up
+  tests (`func_8028854C`, `func_80288654`) and the aimed moves
+  (`func_80289F04`, `func_80289DB8`, `func_802881A0`) aim at S's position,
+  with no ghost or controlType test (**#49**: `enemy-ghost` before the fix,
+  `coop: enemy aim rec=8 slot=0 ghost=1` once player 1 was down).
+- **Clear** (`func_80282934`): takes out the enemies within 200 units of S,
+  with a puff; rooms call it as a cutscene starts (16 overlay calls), S's
+  update every 4 frames of a warp move (`func_8024D8C4`).
+
+**The rules now** (hooks where each function has just asked for S, only
+while player 2 is on and S is player 1):
+
+| Where | Before | Now |
+|---|---|---|
+| chase, line-up tests, aimed moves | S | the nearest living co-op player (along the floor, x and z), one on the enemy's floor level (`func_8026EE18`) first; never a ghost (owner, #22) |
+| range (1300) | S | the co-op player nearest along the larger axis, ghosts included: an enemy stays while either player is within range |
+| spawn band, countdown | S | per record, the same nearest player: an enemy spawns when the nearer player reaches its band, so never in front of the other, and counts down while both are outside |
+| clear (200) | around S | around S, then around player 2 if it plays and is not a ghost |
+
+Why per function:
+
+- **Targets, nearest living, own floor first:** the chase and the aimed move
+  act only on a target on their floor level; aimed at a nearer player on
+  another floor they would wander while the other player is in reach.
+- **Ranges, the larger axis:** the game's tests compare |dx| and |dz| with the
+  range separately, so the player nearest by the larger of the two is exactly
+  the one that decides: an enemy is taken out only when both players are out
+  of range, and spawns only at the edge of the nearer one's view.
+- **Ghosts count for ranges** (a choice, open for the owner): each machine's
+  camera follows its own player, a ghost too, so the room around a ghost is
+  on its player's screen; enemies there stay, and aim at the living player.
+- **Clear around both:** player 2 is frozen with player 1 for a scene and
+  released with it; enemies next to it would hit it as the scene ends. A
+  ghost takes no damage.
+- Ties go to player 1. Player 2 counts once it has joined the room
+  (controlType 2 and an actor), also while held frozen for its placement.
+
+**Determinism.** The choice reads positions and flags from RDRAM in a fixed
+order, nothing of a machine's own (camera, pads before the lockstep). In
+`session-enemy-range` (two games on one machine, Linux) both games hashed the
+same 1215 frames, logged no desync and the same seven `coop: enemy` lines.
+
+**Runs** (Europe, seed 1, room 0x29, `BM64_COOP_NO_DEMO`): before the fix
+17 of 28 checks passed, after it 28 of 28.
+
+- `enemy-ghost` (#49): enemy 8 (type 0x17) aims at player 1 as the room
+  starts; once player 1 is down, it aims at player 2 (`coop: enemy aim rec=8
+  slot=4 ghost=0`) and no enemy aims at the ghost. With both players far it
+  is taken out; player 2 walking towards it brings it back (`coop: enemy
+  spawn rec=8 … near=4`), aimed at player 2. Before the fix the ghost stayed
+  the target and the enemy came back only with player 1.
+- `enemy-range` (#51): player 1 put 2300 units away, player 2 at the start:
+  enemy 7 (type 0) stays; with player 2 put next to player 1, it is taken out,
+  tested against player 2, the nearer one (`near=4`). On the way enemy 8 aims
+  at player 2 while player 2 is the nearer (#49).
+- `session-enemy-range`: the same online, both sides' tile steps on the same
+  frames.
+
+**Logs**, whenever player 2 is on: `coop: enemy aim rec=R slot=S ghost=G x=…
+z=…` (an enemy record's target, when it or its ghost flag changes, and after
+a spawn), `coop: enemy spawn|despawn rec=R type=T x=… z=… near=S` (the player
+whose range decided), `coop: enemy clear slot=4 … taken=N`.
+
+**Not changed:** S when it is not player 1 (rival code switches it briefly)
+and battle; rivals (`func_80251708`, slots 0–2); the main functions that read
+S's position for a boss's reward drop and the camera (`func_80233830`,
+`func_80233E3C`, `func_80237664`, `func_80240F34`); and every overlay enemy and
+boss that keeps its own copy of S's position (about 112 call sites, section
+2): they still aim at player 1, a ghost too, and their own ranges, if any,
+still count player 1 alone. By need, later.
+
+**Not run:** the US build; two PCs and a Windows client (the session ran two
+Linux games on one machine); hand play; the clear around player 2 taking an
+enemy out (no run had an enemy within 200 units of player 2 at a clear; a
+run through room 0x2D's warp move called it without one); a ghost keeping
+enemies in range; the floor-level preference deciding a target (both players
+stood on one floor level in the runs); rooms other than 0x29 in a scenario
+(0x2D, 0x28 and others only in exploration runs).
+
+| Hook (lane B's block) | Does |
+|---|---|
+| `func_80283CF0` at 0x80283D00, `func_8028854C` at 0x8028855C, `func_80288654` at 0x8028869C, `func_80289F04` at 0x80289F18, `func_80289DB8` at 0x80289DCC, `func_802881A0` at 0x802881E4 | v0 = S, after `func_80243DDC`: the target slot (`coop_enemy_aim`) |
+| `func_80285F8C` at 0x80286074 | v0 = S for the range test: the nearest player (`coop_enemy_range`) |
+| `func_80285A9C` at 0x80285AD8 (top of its loop) | a record in state 2: the nearest player's position into the tested one at sp+0xA8 (`coop_enemy_band`) |
+| `func_80285A9C` at 0x80285D54, `func_80285F8C` at 0x80286140 | spawn and take-out logged |
+| `func_80282934` at 0x80282968 (its end) | the clear around player 2 (`coop_enemy_clear`) |
+| `func_80297ADC` entry | the attract demo's setup skipped with `BM64_COOP_NO_DEMO=1` ([building.md](building.md)) |
 
 ### Hooks and patches
 
