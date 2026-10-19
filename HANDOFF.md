@@ -32,7 +32,8 @@ Last updated 2026-10-19 (#47: notes split for two people).
 - Open issues: #11 (Europe follow-ups, the owner's eye check), #14 and #16
   (leftover checks), #19 (their group), #24 (follow-ups of #19), #29
   (two machines, Windows/macOS), #46 (scenario.py and a garbled log line), #49 (enemy targeting),
-  #51–#55 (playtest findings; #55 urgent), #56 (their group), #57 (live client log),
+  #51–#55 (playtest findings; #55 urgent), #56 (their group), #57 (live client log), #58 (the collaborator's
+  setup, first),
   and the owner's last step of #47: inviting the collaborator on GitHub.
 - Open pull requests: none. #50 (#22, downed players are ghosts) merged
   2026-10-19 without a review (owner's one-off exception).
@@ -91,9 +92,10 @@ A shared pool: take one by claiming it under *In progress*.
    line first). This is also the real-PC part of #29.
 2. **#46** (scenario.py and a garbled log line): a small harness fix, a good
    first issue for a session with a smaller plan.
-3. **The collaborator's setup check** (collaborator): the setup in
-   `docs/coop/contributing.md` on WSL2, then `tools/verify.sh --quick` and a
-   full verify; what does not work in WSL2 becomes an issue.
+3. **#58, the collaborator's first issue** (owner, 2026-10-19: before any
+   other): the WSL2 setup of `docs/coop/contributing.md`, the quick and full
+   verify, `run.sh`, the scenarios and the window in WSL2; what does not
+   work becomes an issue. Needs the owner's GitHub invitation first.
 4. **A hand try of the Co-op menu**: two games on one machine, Host 7777 in
    one, Join 127.0.0.1 7777 in the other, then turn each camera with the
    C-buttons (#33).
