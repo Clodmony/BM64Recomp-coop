@@ -1,0 +1,49 @@
+# A ghost that falls before player 2 has joined the room (#22, #55; found by
+# lane B of #56). Room 0x2D (stage 3), with a pit two tiles from player 1's
+# start (along +z). Player 2 joins, walks off, and player 1's own bomb downs
+# player 1 (a ghost). A scene step loads room 0x2D again: a room change, so
+# player 1 is still down, and player 2 is not in the room until player 1 has
+# been free for 60 frames. Player 1's ghost walks into the pit before that.
+# A fallen ghost goes back next to the living player, but there is none yet:
+# before the fix it stayed in the pit and fell again every frame, and player 2
+# never found a free tile next to it to join on (a softlock). Now it goes back
+# on the last free floor tile it stood on, and player 2 joins next to it.
+#env BM64_COOP_WARP=0x2D
+#env BM64_COOP_P2=4
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_SEED=1
+#
+#check after "^coop: death slot=0" "^coop: down slot=0 cause=1 lives=2 ghost$"
+#check after "^coop: scene overlay=0x2D" "^coop: still down slot=0 lives=2$"
+#check after "^coop: probe room$" "^coop: ghost fell slot=0$"
+#check after "^coop: ghost fell slot=0" "^coop: place slot=0 tile=15,0,2[0-9] last floor$"
+#check after "^coop: ghost fell slot=0" "^coop: spawn slot=4$"
+#check field late 0 ghost = 1
+#check field late 4 controlType = 2
+#check near late 0 4 200 50
+#check not-after "^coop: probe late$" "^coop: ghost fell"
+#check no-log ^coop: down slot=4
+overlay 0x2D
+wait 90
+probe joined
+pad 1 - 0.05 1
+wait 40
+pad 1 -
+wait 5
+probe apart
+pad 0 A
+wait 2
+pad 0 -
+wait 200
+probe dead
+scene 0x2D 0x10
+overlay 0x2D
+wait 5
+probe room
+pad 0 - 0.05 -1
+wait 80
+pad 0 -
+wait 150
+probe late
+wait 20
+end

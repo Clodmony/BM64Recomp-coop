@@ -1,0 +1,45 @@
+# Player 2 joins once the room's opening is over, without a step of player 1
+# (#55). Room 0x29 entered from room 0x28 (entry 0x13): player 1 is put on
+# tile 1,14 and walks in to 5,14 (flag 0x400) while the room holds it frozen
+# (0x2010000); the room then closes 4,14 behind it. Once player 1 has been
+# free of walks and freezes for 60 frames, player 2 is spawned on a free floor
+# tile next to it (5,13: the room's map has floor there, 4,14 is a wall now)
+# and plays: pad 1 walks it, while player 1 never moves. Before #55 player 2
+# waited for player 1's first own step, so pad 1 moved nothing here.
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_P2=4
+#env BM64_COOP_LOG_PLAYERS=1
+#check log ^coop: place pending slot=4 p1 tile=1,1,14$
+#check field t60 0 flags = 0x2010420
+#check not-after "^coop: spawn slot=4$" "^coop: probe t60$"
+#check log "^coop: place slot=4 tile=5,1,13 p1 tile=5,1,14$"
+#check after "^coop: probe t60$" "^coop: spawn slot=4$"
+#check not-after "^coop: probe joined$" "^coop: spawn slot=4$"
+#check field joined 4 controlType = 2
+#check field joined 4 flags = 0
+#check near joined 0 4 120 80
+# player 1 never moves; pad 1 walks player 2 right (-z) and back
+#check still t300 late 0
+#check moved joined right 4 100
+#check delta joined right 4 z < -100
+#check moved right late 4 100
+#check no-log ^coop: hit slot=
+#check no-log ^coop: down slot=
+overlay 0x29
+wait 60
+probe t60
+wait 240
+probe t300
+wait 20
+probe joined
+pad 1 - 1 0.05
+wait 25
+pad 1 -
+wait 10
+probe right
+pad 1 - -1 0.05
+wait 25
+pad 1 -
+wait 10
+probe late
+end
