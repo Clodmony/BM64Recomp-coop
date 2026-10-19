@@ -8,6 +8,18 @@ to approve. Decisions that bind both people are also listed in `HANDOFF.md`,
 
 Last updated 2026-10-19 (#47: the history moved here from `HANDOFF.md`).
 
+## #47: a second developer (2026-10-19)
+
+- PR #48 (draft): shared `HANDOFF.md` plus one note per person, the
+  issue-loop skill in `.claude/skills/`, the merge rule, the contributor
+  guide `docs/coop/contributing.md`. Verify `--quick` 5/5; docs only.
+- Owner decisions: merge after the other person's approving review (not:
+  the owner merges everything); notes split shared + per person (not: one
+  note changed only on PR branches).
+- Still the owner's: invite the collaborator on GitHub (write access).
+- The owner's personal `~/.claude/skills/issue-loop` still exists next to the
+  repository's copy; the repository's copy is the one adapted to two people.
+
 ## Merged 2026-10-19 (owner's word, scripted Europe runs only)
 
 Order #41 → #42 → #44 → #45 → #43 (one building.md conflict, resolved).

@@ -33,7 +33,7 @@ Last updated 2026-10-19 (#47: notes split for two people).
   (leftover checks), #19 (their group), #22, #24 (follow-ups of #19), #29
   (two machines, Windows/macOS), #46 (scenario.py and a garbled log line),
   #47 (this preparation).
-- Open pull requests: the one for #47 (`coop/47-second-developer`).
+- Open pull requests: #48 (#47, `coop/47-second-developer`).
 
 ## In progress
 
@@ -42,7 +42,7 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 
 | Issue | Person | Branch | State |
 |-------|--------|--------|-------|
-| #47 | owner | `coop/47-second-developer` | draft PR, waits for review |
+| #47 | owner | `coop/47-second-developer` | draft PR #48, waits for the owner's word |
 
 ## Project decisions (bind both people)
 
