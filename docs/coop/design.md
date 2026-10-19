@@ -595,7 +595,7 @@ path reads it plus buttons, no camera state needed on the sender's side
 (inferred: the receiver adds its own camera's yaw, the same on both sides
 while the camera follows player 1).
 
-### Placement: player 2 joins at player 1's first step (#14)
+### Placement: player 2 joins once the room's opening is over (#14, #55)
 
 Placements of player 2 around player 1's entry walk that failed (room 0x29,
 entry 0x13, `p2-entry-walk`):
@@ -604,7 +604,7 @@ entry 0x13, `p2-entry-walk`):
 - held frozen at the room's spawn point (the origin in room 0x29) and placed
   when the walk is over: after about 6 s its placement no longer holds, and
   released it takes a hit of cause 3 and dies (the update deals cause 3 for
-  player flag 0x40000000);
+  bit 0x40000000 of the actor's +0x10);
 - on the tile player 1 left last during the walk (4,14): blocked once the
   walk is over (the game pushes player 2 to 5,15), and placed just before
   that, player 2 dies there (cause 3);
@@ -612,25 +612,66 @@ entry 0x13, `p2-entry-walk`):
   origin on its first frames, whatever was placed; spawned at the origin and
   placed a few frames later, it died (cause 3) after player 1's retry.
 
-The rule now: the room's init does **not** spawn player 2. Player 1's
-placement (`func_802511EC(0, …)`: room entries, story teleports) makes player
-2's placement pending. Only player 1's **own steps** count: a step along x or
-z (a fall to a lower floor is not one) taken once player 1 has been free of
-walks (flag 0x400) and freezes (0x2010000) for 60 frames (room 0x29 still
-changes the tiles behind its walk right after it). At such a step player 2 is
-put on the tile player 1 just left: player 1 stood there, so it is floor, and
-it is next to player 1. The first time in a room this spawns player 2 there
-(the spawn point set by `func_802511EC` without an actor, then
-`g_SpawnPlayer`, as the battle respawn `func_8023EB28` spawns), holds it
-frozen and places it again 3 frames later; afterwards (a teleport, a respawn)
-it moves the actor and releases it.
+From #14 to #55 player 2 joined at player 1's first own step, on the tile
+player 1 had just left. That kept player 2 out of the room until player 1
+moved (#55), and in the first two-PC playtest player 2 fell (cause 3) right
+after its placement in room 0x28, twice. The cause (run, #55): the
+collision pass (`func_80232FF8`) keeps each actor's position of the frame
+before at actor +0x58..+0x60 and puts an actor whose move ends inside another
+back there. A player's body has radius 30 (`g_SpawnPlayer`), so two players
+less than 60 apart overlap. Player 1 just past the edge of the tile it left is
+about 50 from that tile's centre: player 2 put there overlapped it and went
+back to its last position, which for a new actor is the origin
+(`g_InitLevelClass` zeroes it; `g_SpawnPlayer` sets only the model's
+position). Room 0x28's origin is inside a wall (tile 0,0,0 is 0x1F): in the
+playtest player 2 fell (cause 3) right after such a placement; in the scripted
+runs it stayed at the origin. The same explains the old "put back at the
+origin on its first frames".
 
-Checked: room 0x29 after its entry walk and after a retry (`p2-entry-walk`,
-`p2-p1-death-freeze`), room 0x28 after its opening dialogue (`p2-room28`) and when
-entered through room 0x29's floor exit, where player 1 falls in (`p2-exit`).
+The rule now (#55): the room's init does **not** spawn player 2, and player 1's
+placement (`func_802511EC(0, …)`: room entries, story teleports) makes player
+2's placement pending, as before. Once player 1 has been free of walks (flag
+0x400) and freezes (0x2010000) for 60 frames (the room's opening is over:
+an entry walk, a dialogue; room 0x29 still changes the tiles behind its walk
+right after it), player 2 is placed at once, whether player 1 moves or not:
+
+- **on a free floor tile next to player 1** (`coop_find_tile`): one of the
+  four tiles beside player 1's on its floor level, read from the room's tile
+  map (`func_8026D7D8(x, y, z)`, a 16-bit cell per tile and level): the
+  cell's low nibble is 1, a plain floor at that level (0 is air, F a wall or
+  block, 2, 9, A and B event and damage tiles, the others ramps and doors),
+  and bits 0x20 and 0x40 are clear (something stands on it; the battle
+  respawn's random spot, `func_8023E8FC`, refuses them too). Room 0x29 turns
+  the tile behind its entry walk (4,14) into a wall (0x1F) when it closes it,
+  so that tile is not free. The tile's centre must be 80 or more from player
+  1's actor, so the bodies cannot overlap; of the tiles left the one
+  farthest from player 1 (on a tie the first along −z, +z, −x, +x), else a
+  tile two away along a free one. While there is none, player 2 waits (player
+  1 moves on sooner or later).
+- The placement also sets the actor's last position (+0x58) to the tile, so
+  that a blocked move puts it back there, not at the origin.
+
+The first time in a room this spawns player 2 there (the spawn point set by
+`func_802511EC` without an actor, then `g_SpawnPlayer`, as the battle respawn
+`func_8023EB28` spawns); afterwards (a room entry, a teleport, a revive) it
+moves the actor and releases it. No hold of a few frames is needed any more.
+A scene's release leaves a player 2 that joined during the scene alone (room
+0x28 releases player 1 twice after its dialogue; before, the second release
+made player 2's placement pending again).
+
+Checked (Europe, scenarios): room 0x29 after its entry walk with player 1
+standing still, and player 2 walking (`p2-join-still`; before #55 player 2
+never joined there), the same in an online session (`session-join`), room 0x28
+after its opening dialogue with player 1 standing still, then stepping just
+past its tile's edge as in the playtest (`p2-join-room28`; before #55 player 2
+joined at that step and ended at the origin, 1608 from player 1), room 0x28
+entered through room 0x29's floor exit, where player 1 falls in and slides
+down a slope (`p2-exit`: player 2 joins on the slope behind it), after a retry
+(`p2-p1-death-freeze`, `ghost-retry`) and at revives (`p2-ghost`, `ghost-*`).
 Not checked: a story teleport by `func_802512C0` from a room script (none was
-found in these rooms); the same hook covers it. Cost: player 2 appears only
-once player 1 moves.
+found in these rooms; the same hook covers it), enemies (not in the tile map:
+a tile next to player 1 may hold one), and rooms other than 0x28, 0x29 and
+0x2D.
 
 ### Cutscenes (#16)
 
@@ -638,8 +679,8 @@ The freeze and release wrappers of S (`func_802452E8`, with the idle
 animation, and `func_80245280`) apply to player 2 too when S is player 1,
 the way `func_8023C170` freezes every player: hooks after they load S call
 `coop_freeze_partner` (log `coop: freeze partner`). A release when player 1
-was moved during the scene makes player 2's placement pending again (it
-joins player 1 at its next step). Scripted walks (`func_802506B8`) and facing
+was moved during the scene makes player 2's placement pending again (it is
+placed next to player 1 once player 1 has settled, #55). Scripted walks (`func_802506B8`) and facing
 (`func_80245F74`) stay player 1's. Seen in the runs: room 0x28's opening
 dialogue and room 0x29's entry walk freeze player 1 before player 2 has
 joined; with player 2 in the room, the exit (`p2-exit`) and player 1's death
@@ -756,9 +797,10 @@ How it is done (`patches/coop_player2.c`):
   rooms 0x28, 0x29 and 0x2D; `ghost-scene` freezes and releases S with the
   harness's `freeze` step (the same wrapper) instead.
 - **Placement at a revive:** player 2 by its pending placement (held
-  frozen until player 1's next own step, as at a room entry); player 1 on
-  the tile player 2 left last (a trail kept in player 1's update hook, as
-  player 1's is), with the placement hook told to leave player 2 alone.
+  frozen until it is placed next to player 1, as at a room entry); player 1
+  on a free floor tile next to player 2 found the same way (#55; with none,
+  player 2's own tile), with the placement hook told to leave player 2
+  alone.
 - **Player 2's story death** (player 1 down) plays on player 1's actor
   (section 7): `coop_story_death` freezes player 1's ghost for it.
 
@@ -800,15 +842,51 @@ Not covered: `func_802308B8` returns one actor that touches the item, so a
 full player standing on a heart may keep a partner on the same spot from
 getting it (not run).
 
+### Player 2's power-ups (#52)
+
+Until #52 every stage room's init (`coop_stage_init`) set player 2's bombs and
+fire to player 1's and its bomb type to 0x200: in the playtest player 2 lost
+its power-ups at every room change. Read in the Europe disassembly: the
+game's only reset of bombs, fire and bomb type is `func_80277E1C`, which sets
+**all five slots** to bomb type 0x200, 2 bombs and 2 fire. It runs at boot
+(`func_8023DB0C`), at a story session's start (`func_8023DA04`, the file
+select and the harness's warp), at a battle's start (`func_8023CA94`,
+`func_80297ADC`), at the pause menu's retry (`func_802968BC`, which also sets
+player 1's hearts to 1) and in `func_802967A4`, which 63 overlay sites call
+through their own function tables (not traced to a scene; it resets every
+slot, so player 1 and player 2 alike). A story death and the room's reload
+(`func_8023F26C`, `func_8023D0F8`) reset no slot's bombs or fire; player 1
+loses only its remote bombs there (`func_80277DF4`, slot 0 only: #24). The
+continue (`func_8023E1D8`) sets player 1's hearts only. Pickups
+(`func_802797BC`) and `func_80277D20` (a slot's bomb type, from seven
+overlays) work per slot. Only the session start's debug branch (session
+block +0x40 set: player 1 gets 8 more bombs and fire, and no slot is reset)
+treats player 1 alone; nothing sets that flag in normal play (inferred).
+
+So the init no longer touches them: player 2 keeps its own bombs, fire and
+bomb type across room changes and retries, and the game's own resets give it
+the same values as player 1 wherever player 1's are reset, its first join of
+a session included (both get 2 and 2 at the session's start). Its hearts are
+still set to 2 at each room's init (as since #19).
+
+Runs (Europe, seed 3): `p2-power-rooms` (player 2 bombs the block on room
+0x29's tile 7,16, picks up the bomb-up it leaves, 3 bombs, takes the floor
+exit and has 3 bombs in room 0x28; before #52 it had 2 there) and
+`p2-power-retry` (the same bomb-up, then player 2 is downed and player 1's
+death reloads the room: player 2 comes back with 3 bombs; before #52 2). Not
+run: a fire-up (no scripted one found: the block's item is the seed's), a
+stage start from the world map, the pause menu's retry and a continue (read
+only), and a scene inside a room calling `func_802967A4`.
+
 ### Hooks and patches
 
 | Where | Does |
 |---|---|
 | `func_8023D0F8` entry (scene load) | counted: a room change or a stage start (#22) |
-| `func_80245CDC` entry (room player init) | player 2's stats (2 hearts, player 1's bombs and fire, bomb type 0x200); not spawned by the room, placement pending; downed players kept or revived (#22) |
+| `func_80245CDC` entry (room player init) | player 2's hearts (2; its bombs, fire and bomb type stay its own, #52); not spawned by the room, placement pending; downed players kept or revived (#22) |
 | `func_80245CDC` at 0x80245D68 (after its spawn loop) | a downed player 1: ghost flag and look again (#22) |
 | `func_802511EC` entry (put a slot on a tile) | slot 0 placed: player 2's placement pending (held frozen if it is in the room) |
-| `func_8024E088` entry (player update) | slot 0: both players' trails, player 2's placement; slot 4: its command record from pad 1 |
+| `func_8024E088` entry (player update) | slot 0: player 2's pending placement, next to player 1 once the room's opening is over (#55); slot 4: its command record from pad 1 |
 | `func_802452E8` at 0x80245300, `func_80245280` at 0x80245294 | S = 0: freeze or release player 2 with player 1; a scene's release revives (#22) |
 | `func_8023A870` entry (death) | either player while the other lives: down, a ghost; the function skipped, 0 returned (#22) |
 | `func_80248148` entry (damage) | a ghost: skipped; a fall puts it next to the living player (#22) |

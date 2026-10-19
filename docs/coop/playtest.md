@@ -52,8 +52,9 @@ On the first start the launcher asks for the ROM: pick your Europe ROM.
 - The host drives the title, the file select and the menus; the other
   player's game follows. The client plays on a copy of the host's save; its
   own saves are not touched.
-- In a story stage, player 2 (the client) appears when player 1 takes their
-  first step.
+- In a story room, player 2 (the client) appears next to player 1 about a
+  second after the room's opening (an entry walk, a dialogue) is over, and
+  can play at once (#55).
 - Each player moves with their own controller. The C-buttons turn and zoom
   your own camera only; each camera follows its own player.
 - A player who dies while the other lives is down: a ghost (as in Battle) that

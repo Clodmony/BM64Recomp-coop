@@ -42,7 +42,7 @@ wait 15
 pad 0 -
 wait 10
 # player 1 to tile 8, 15, out of the blast's reach (a tile step would be a
-# room entry, which holds player 2 until player 1's next step)
+# room entry, which moves player 2 next to player 1 again)
 pad 0 - -1 0.05
 wait 29
 pad 0 -
@@ -57,9 +57,10 @@ wait 2
 pad 1 -
 wait 400
 probe caught
-# player 2 to about 610, 1715, out of player 1's blast
+# player 2 to about 610, 1715, out of player 1's blast (from 5, 14.3 since
+# #55: it joins on 5, 13)
 pad 1 - -1 0.05
-wait 22
+wait 34
 pad 1 -
 wait 5
 pad 1 - 0.05 -1
