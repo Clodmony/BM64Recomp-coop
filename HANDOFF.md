@@ -27,14 +27,14 @@ Last updated 2026-10-19 (#47: notes split for two people).
 - Fork of `RevoSucks/BM64Recomp`. `master` = upstream `master` (`726adc9`).
   Default branch `bm64recomp-coop`. Ruleset "Protected" blocks force-pushes
   and deletion on both.
-- Merged into `bm64recomp-coop` up to #48 (2026-10-19); the history is in
+- Merged into `bm64recomp-coop` up to #50 (2026-10-19); the history is in
   `handoff/owner.md`.
 - Open issues: #11 (Europe follow-ups, the owner's eye check), #14 and #16
-  (leftover checks), #19 (their group), #22, #24 (follow-ups of #19), #29
+  (leftover checks), #19 (their group), #24 (follow-ups of #19), #29
   (two machines, Windows/macOS), #46 (scenario.py and a garbled log line), #49 (enemy targeting),
   and the owner's last step of #47: inviting the collaborator on GitHub.
-- Open pull requests: the #22 draft (downed players are ghosts, 2026-10-19).
-  #48 (#47, two developers) merged 2026-10-19.
+- Open pull requests: none. #50 (#22, downed players are ghosts) merged
+  2026-10-19 without a review (owner's one-off exception).
 
 ## In progress
 
@@ -43,7 +43,6 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 
 | Issue | Person | Branch | State |
 |-------|--------|--------|-------|
-| #22 | owner | `coop/22-ghosts` | draft PR open, needs the collaborator's review |
 
 ## Project decisions (bind both people)
 
@@ -59,8 +58,10 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
   battle-style ghost (moves along, no bombs, no triggers, enemies ignore it,
   no damage); no timed respawn; revived only at stage start, stage clear, a cutscene, or when the
   living player finds a heart (the heart is used up for it); not at a room
-  change, warp or scripted walk. Each revive costs one shared life. Details
-  and the research in #22's two comments.
+  change, warp or scripted walk. Each revive costs one shared life, the one
+  at a stage start too. A cutscene revives at its end (the release), placed
+  next to the living player (owner, 2026-10-19). Built in #50: design.md,
+  *Downed players are ghosts (#22)*.
 - The client plays on a copy of the host's save (#26).
 - Test runs are headless and keep background input off (owner).
 - The older decisions with their reasons are in `handoff/owner.md`.

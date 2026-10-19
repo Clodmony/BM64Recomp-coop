@@ -10,7 +10,7 @@ Last updated 2026-10-19 (#22: downed players are ghosts).
 
 ## #22: downed players are ghosts (2026-10-19)
 
-- Branch `coop/22-ghosts`, draft PR (closes #22). Details and the hook list
+- PR #50 (closed #22), merged 2026-10-19. Details and the hook list
   in design.md, *Downed players are ghosts (#22)*.
 - Either player's death while the partner lives: down, a ghost (battle flag
   0x200 of +0x68, `g_SpawnPlayer`'s look on the existing actor); the death
@@ -30,9 +30,13 @@ Last updated 2026-10-19 (#22: downed players are ghosts).
   2 first.
 - Verify `--full --version eu --scenarios`: 8/8 stages, 383/383 checks.
   Europe only, scripted; not played by hand, US not run.
-- Proposed to the owner: revive at a scene's **release**, not its start (the
-  rule says "when a cutscene starts"); a revive at a stage start costs a
-  life too (the rule's "every revive").
+- Owner decisions (end of #22): merge #50 at once, a one-off exception to
+  the review rule (done); a cutscene revives at its **end** (the release),
+  placed next to the living player (not at its start); a revive at a stage
+  start costs a life too; scratch `i22/` (notes.md, enemy.md) kept until
+  #49.
+- The PR body's first version held a local scratch path for about a
+  minute (fixed by an edit; GitHub keeps the edit history).
 
 ## #47: a second developer (2026-10-19)
 
@@ -290,4 +294,4 @@ main checkout. The issue worktrees and their build folders are removed.
   `build/prepare-project-according-a3ceb80a-eu` in scratch): remove it in
   Superset.
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/` in scratch:
-  when the player 2 follow-ups are done.
+  when the player 2 follow-ups are done; `i22/` with #49.
