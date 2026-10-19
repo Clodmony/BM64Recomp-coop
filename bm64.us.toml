@@ -1250,6 +1250,53 @@ text = """
 }
 """
 
+# coop: the enemy process tests whether the enemy is still within 1300 units
+# of S (else it is taken out of the room); S in v0, the enemy in s7. The
+# nearest co-op player along the larger axis is tested instead
+# (coop_enemy_range), so enemies stay while either player is near.
+[[patches.hook]]
+func = "func_80285F8C"
+before_vram = 0x80286074
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    void coop_enemy_range(uint8_t* rdram, recomp_context* ctx);
+    if (coop_p2_slot() != 0 && (int32_t)ctx->r2 == 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = ctx->r23;
+        c.r5 = ctx->r2;
+        c.r6 = coop_p2_slot();
+        coop_enemy_range(rdram, &c);
+        ctx->r2 = c.r2;
+    }
+}
+"""
+
+# coop: the top of func_80285A9C's loop over the enemy records (s0), which
+# tests S's position (read before the loop, sp+0xA8) against the spawn band of
+# each record waiting to spawn (state 2): the nearest co-op player's position
+# is put in for such a record (coop_enemy_band).
+[[patches.hook]]
+func = "func_80285A9C"
+before_vram = 0x80285AD8
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    void coop_enemy_band(uint8_t* rdram, recomp_context* ctx);
+    if (coop_p2_slot() != 0 && MEM_W(0, ctx->r16) == 2) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = ctx->r16;
+        c.r5 = ctx->r29 + 0xA8;
+        c.r6 = coop_p2_slot();
+        coop_enemy_band(rdram, &c);
+    }
+}
+"""
+
 # coop: a record waiting to spawn (state 2) spawns its enemy again: v0 is the
 # record (logged, coop_enemy_spawned).
 [[patches.hook]]
@@ -1284,6 +1331,26 @@ text = """
         c.r29 -= 0x40;
         c.r4 = ctx->r23;
         coop_enemy_despawned(rdram, &c);
+    }
+}
+"""
+
+# coop: the end of func_80282934, which took out the enemies within 200 units
+# of S (before a cutscene, after a warp move): the same around player 2 while
+# it plays and is not a ghost (coop_enemy_clear).
+[[patches.hook]]
+func = "func_80282934"
+before_vram = 0x80282968
+text = """
+{
+    extern int32_t coop_p2_slot(void);
+    void coop_enemy_clear(uint8_t* rdram, recomp_context* ctx);
+    if (coop_p2_slot() != 0) {
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        c.r4 = coop_p2_slot();
+        coop_enemy_clear(rdram, &c);
     }
 }
 """
