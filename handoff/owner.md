@@ -6,7 +6,33 @@ each issue found, the decisions taken in those sessions and the cleanup still
 to approve. Decisions that bind both people are also listed in `HANDOFF.md`,
 *Project decisions*.
 
-Last updated 2026-10-19 (#47: the history moved here from `HANDOFF.md`).
+Last updated 2026-10-19 (#22: downed players are ghosts).
+
+## #22: downed players are ghosts (2026-10-19)
+
+- Branch `coop/22-ghosts`, draft PR (closes #22). Details and the hook list
+  in design.md, *Downed players are ghosts (#22)*.
+- Either player's death while the partner lives: down, a ghost (battle flag
+  0x200 of +0x68, `g_SpawnPlayer`'s look on the existing actor); the death
+  hook returns 0 so the damage handler's "lives on" branch keeps the slot in
+  play with one heart. Found in the run: `func_80245CDC`'s spawn loop clears
+  +0x68 of each slot it spawns, so player 1's flag and look go back on after
+  the loop (hook at 0x80245D68). The game's ghost test at 0x8024E570 already
+  stops bombs and lifting on A.
+- Revives (one shared life each): stage start (world/stage change or another
+  scene load in between), stage clear (`func_8023E8AC`, not run), a scene's
+  release (only a freeze that began once player 1 had been free for 60
+  frames; tested with a harness `freeze` step, no real mid-room cutscene in
+  rooms 0x28, 0x29, 0x2D), a heart the living player touches (used up).
+- Harness steps `drop SLOT`, `scene ID [ENTRY]`, `freeze 0|1`; probe fields
+  `ghost`, `alpha`. `p2-p1-death` removed (its case, player 1's story death
+  while player 2 plays, no longer exists); `p2-p1-death-freeze` downs player
+  2 first.
+- Verify `--full --version eu --scenarios`: 8/8 stages, 383/383 checks.
+  Europe only, scripted; not played by hand, US not run.
+- Proposed to the owner: revive at a scene's **release**, not its start (the
+  rule says "when a cutscene starts"); a revive at a stage start costs a
+  life too (the rule's "every revive").
 
 ## #47: a second developer (2026-10-19)
 

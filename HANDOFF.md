@@ -33,7 +33,8 @@ Last updated 2026-10-19 (#47: notes split for two people).
   (leftover checks), #19 (their group), #22, #24 (follow-ups of #19), #29
   (two machines, Windows/macOS), #46 (scenario.py and a garbled log line), #49 (enemy targeting),
   and the owner's last step of #47: inviting the collaborator on GitHub.
-- Open pull requests: none. #48 (#47, two developers) merged 2026-10-19.
+- Open pull requests: the #22 draft (downed players are ghosts, 2026-10-19).
+  #48 (#47, two developers) merged 2026-10-19.
 
 ## In progress
 
@@ -42,6 +43,7 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 
 | Issue | Person | Branch | State |
 |-------|--------|--------|-------|
+| #22 | owner | `coop/22-ghosts` | draft PR open, needs the collaborator's review |
 
 ## Project decisions (bind both people)
 
@@ -85,9 +87,8 @@ A shared pool: take one by claiming it under *In progress*.
 6. **Rest of #14 and #16**: a story teleport (`func_802512C0` from a room
    script, beyond Green Garden stage 1) and a scene with player 2 already in
    the room, then a check that pad 1 does not move a frozen player 2.
-7. **#22** (downed players, rule decided, see *Project decisions*; the
-   research is in its comment, notes in the owner's scratch `i22/`), then
-   **#49** (enemies target the nearest living player); **#24** overlaps
+7. **#49** (enemies target the nearest living player, ghosts left out;
+   #22's PR has `coop_is_down` and the ghost flag to test); **#24** overlaps
    #44's file and needs a US ROM for its US run.
 8. With #45: scenarios through the file select, Custom screen and pause
    menu (the `title-menu` recipe in building.md).
