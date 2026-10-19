@@ -18,6 +18,8 @@ static s32 coop_place_pending;
 static s32 coop_freeze_tile[3]; // player 1's tile when a cutscene froze it
 static s32 coop_scene_frozen;   // player 2 frozen with player 1 by that cutscene
 static s32 coop_p1_dying;       // player 1's story death runs, until the next room init (#23)
+static s32 coop_p1_floor[3];    // the last free floor tile player 1 stood on in this room
+static s32 coop_p1_floor_set;
 
 // Downed players (#22): a player who dies while the partner lives is down, a
 // ghost, until a revive. Index 0 is player 1 (slot 0), 1 player 2 (coop_slot).
@@ -201,7 +203,11 @@ static void coop_ghost_look(s32 i, s32 on) {
 // Puts a downed or revived player next to the living one: player 2 by the
 // pending placement (held frozen until coop_partner_tick places it, as at a
 // room entry), player 1 on a free tile next to player 2 (coop_find_tile; with
-// none, player 2's own tile).
+// none, player 2's own tile). Before player 2 has been placed in the room (a
+// ghost player 1 that came through a room change can fall into a pit before
+// player 2 joins) there is no partner to go next to: player 1 goes back on
+// the last free floor tile it stood on in the room. Left in the pit, it fell
+// again every frame and player 2 never found a tile next to it to join on.
 static void coop_place_down(s32 i) {
     s32 tile[3];
 
@@ -211,6 +217,14 @@ static void coop_place_down(s32 i) {
         return;
     }
     if (!coop_partner_active()) {
+        if (!coop_p1_floor_set) {
+            return;
+        }
+        recomp_printf("coop: place slot=0 tile=%d,%d,%d last floor\n", coop_p1_floor[0], coop_p1_floor[1],
+                      coop_p1_floor[2]);
+        coop_placing = 1;
+        coop_put(0, coop_p1_floor);
+        coop_placing = 0;
         return;
     }
     if (!coop_find_tile(coop_slot, tile)) {
@@ -324,6 +338,7 @@ void coop_stage_init(s32 slot) {
     coop_scene_on = 0;
     coop_scene_frozen = 0;
     coop_p1_dying = 0;
+    coop_p1_floor_set = 0;
     if (g_LevelLoader & 0x4) {
         coop_slot = -1;
         coop_down[0] = coop_down[1] = 0;
@@ -452,7 +467,8 @@ void coop_story_death(s32 slot) {
 // there is none it waits. The first time in a room this spawns player 2 there
 // (the spawn point set by func_802511EC without an actor, then g_SpawnPlayer,
 // as the battle respawn func_8023EB28 spawns); afterwards (a room entry, a
-// teleport, a revive) it moves the actor and releases it.
+// teleport, a revive) it moves the actor and releases it. It also keeps the
+// last free floor tile player 1 stood on, for coop_place_down.
 void coop_partner_tick(s32 slot) {
     CoopPlayer* p1 = &g_Players[0];
     s32 tile[3];
@@ -460,6 +476,13 @@ void coop_partner_tick(s32 slot) {
 
     if (slot != coop_slot || p1->levelClass == NULL) {
         return;
+    }
+    func_802454F8(0, at);
+    if (coop_free_floor(at[0], at[1], at[2])) {
+        coop_p1_floor[0] = at[0];
+        coop_p1_floor[1] = at[1];
+        coop_p1_floor[2] = at[2];
+        coop_p1_floor_set = 1;
     }
     if (p1->flags & (COOP_FLAG_WALK | COOP_FLAG_FROZEN)) {
         coop_p1_free = 0;
@@ -474,7 +497,6 @@ void coop_partner_tick(s32 slot) {
         return; // no free tile next to player 1 yet
     }
     coop_place_pending = 0;
-    func_802454F8(0, at);
     recomp_printf("coop: place slot=%d tile=%d,%d,%d p1 tile=%d,%d,%d\n", slot, tile[0], tile[1], tile[2], at[0],
                   at[1], at[2]);
     if (!coop_joined) {

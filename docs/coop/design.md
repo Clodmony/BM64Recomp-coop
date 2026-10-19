@@ -763,6 +763,12 @@ How it is done (`patches/coop_player2.c`):
 - **No damage:** a hook at `func_80248148`'s entry skips the handler for a
   ghost (`coop: ghost hit`). A fall (cause 3, the update's pit) puts the
   ghost back next to the living player (`coop: ghost fell`, `ghost-fall`).
+  A ghost player 1 can come through a room change and fall before player 2
+  has joined the new room: there is no partner to go next to, so it goes
+  back on the last free floor tile it stood on in the room (`place slot=0
+  … last floor`, `ghost-pit-join`, room 0x2D, #55). Before, it stayed in the
+  pit, fell again every frame, and player 2 never found a tile next to it
+  to join on.
 - **Exits and triggers:** the three rectangle tests skip a downed S and a
   downed player 2 (`p1-ghost`: player 1's ghost stands in room 0x29's floor
   exit, no room change; player 2 takes it).
