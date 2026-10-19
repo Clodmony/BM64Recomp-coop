@@ -5,7 +5,7 @@
 > that adds a cooperative two-player Adventure campaign, played online. It is
 > work in progress on the `bm64recomp-coop` branch; `master`
 > is an unchanged copy of upstream. The co-op work is written entirely by an AI
-> coding agent (Claude) directed by the repository owner. The fork publishes no
+> coding agent (Claude) directed by the repository owner or a collaborator. The fork publishes no
 > builds. Please report issues with the co-op features here, not upstream.
 > A session is hosted or joined from the launcher's **Co-op** menu
 > ([docs/coop/design.md](docs/coop/design.md), *Hosting and joining*).
