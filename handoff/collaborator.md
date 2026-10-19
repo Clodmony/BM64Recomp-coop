@@ -79,6 +79,9 @@ never the hardware itself. Recipes that hold for everyone go into
 
 - Ask the owner to review the #58 pull request; either person may merge once
   the other has approved it (`HANDOFF.md`, *Project decisions*).
-- Then take the next unclaimed candidate from `HANDOFF.md`, *Next
-  candidates*. #63 is this machine's own itch and well bounded; #46 is the
-  other small one, but it belongs to the owner's group #56.
+- **Next issue: #63** (collaborator, 2026-10-20), in a fresh session: let
+  `tools/run.sh` choose its headless wrapper, gamescope or Xvfb, which makes
+  this machine able to run `scenario.py` without a stand-in. The other small
+  candidate, #46, belongs to the owner's group #56 and is taken.
+- The audio skips above stay an observation, not an issue (collaborator,
+  2026-10-20): there is no native-Linux measurement to compare them with.
