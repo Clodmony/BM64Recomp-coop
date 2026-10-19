@@ -53,11 +53,12 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
   played online.
 - Heart items (#36): shared, but a full player does not take one.
 - **Downed players (#22, owner, 2026-10-19):** approach B, S stays player 1.
-  The same rule for both players: down while the partner lives, no timed
-  respawn; revived only at stage start, stage clear, a cutscene, or when the
+  The same rule for both players: down while the partner lives, as a
+  battle-style ghost (moves along, no bombs, no triggers, enemies ignore it,
+  no damage); no timed respawn; revived only at stage start, stage clear, a cutscene, or when the
   living player finds a heart (the heart is used up for it); not at a room
   change, warp or scripted walk. Each revive costs one shared life. Details
-  and the research in #22's comment.
+  and the research in #22's two comments.
 - The client plays on a copy of the host's save (#26).
 - Test runs are headless and keep background input off (owner).
 - The older decisions with their reasons are in `handoff/owner.md`.
