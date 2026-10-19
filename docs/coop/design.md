@@ -305,7 +305,8 @@ same icon sheet (asset 0x130, "dead" variant at +8).
 per-player panel (face, hearts) as a **second draw object** registered next to
 the story HUD in `func_8023D0F8` (`func_8022A328`, the same call the game
 uses), using the battle faces. Upstream already patches `func_80242270`
-(widescreen), so co-op does not edit it. Cheap to moderate.
+(widescreen), so co-op does not edit it. Cheap to moderate. (Done in #53:
+*The co-op HUD*, below.)
 
 ### 7. Hearts, lives, credits, game over
 
@@ -1118,6 +1119,109 @@ game started from a terminal has a console).
 - (#33) The other readers of the camera's angles and eye (*Cameras that
   turn*).
 - A fixed delay: a slow or lost message stalls both games, with no rollback.
+
+## The co-op HUD (#53)
+
+**Rule (owner, 2026-10-19):** a corner per player, not one shared panel,
+with the player's face, hearts, bomb count and fire; the same on both
+machines, player 1 first (top left) and player 2 second (top right), on the
+host and the client alike; a downed player (#22) shows the "dead" face. A
+solo game keeps the game's own HUD only. Run on the **Europe** build
+(2026-10-19); the code is `patches/coop_hud.c`.
+
+**What the game has** (read from a dump of the two sheets the scene load
+loads, in a run; the dump code is not kept). Both sheets start with `64`,
+a count and 12-byte entries {format, width << 16 | height, offset}; image n
+is entry n and its palette entry n + 1:
+
+| Sheet | Images |
+|---|---|
+| 0x130 (`D_802A0758`) | 0, 2, 4, 6: the battle faces, white, black, red, blue (16×16, 4-bit); 8–14 the same faces with crossed eyes ("dead"); 16 a gold card (24×24, 8-bit); 18 the blue gem; 20 the clock; 22 the red gem |
+| 0x131 (`D_802A075C`) | 0–18: the digits 0–9 (10×18), the clock's palette at entry 1; 20 a colon, 22 a dash, 24 a red 0 |
+
+No sheet has a heart, a bomb or a flame, so the co-op HUD brings its own:
+16×16 pixel art made for this fork (heart, bomb, red bomb, flame, remote),
+written as characters in `coop_hud.c` and turned into RGBA 5551 textures at
+the first registration. Faces and digits are the game's.
+
+**How it is drawn.** The scene load (`func_8023D0F8`) registers the story HUD
+(`func_8022A328(func_80242270, 0x3F, 1, 0, 0)`, flags |= 0x210) only when the
+story session block's flags (+0, US 0x802AC610) have neither 0x2 nor 0x4. A
+hook right after that call (0x8023D694) registers, in a co-op game
+(`coop_p2_slot()`), a second draw object the same way with
+`coop_hud_draw`; the stage teardown (`func_8023D8A0`) frees it with
+`func_8022A1E8` at 0x8023D9C0, where it frees the story HUD. Draw objects
+come from the game's pool of 160 (0x50 bytes each, `D_800A0D00`); one of kind
+1 is called as `draw(object, &gfx)` once a frame. Each frame the callback
+reads the two players' records and draws, on a row at y 44–62 (the clock and
+gems row is 22–40):
+
+- player 1's corner from x 28 (under the clock), anchored to the left edge,
+  player 2's ending at x 292 (under the gem count), anchored to the right
+  edge, as upstream's widescreen patch of `func_80242270` anchors the clock
+  and the gems;
+- the face: white (0) for player 1, black (2) for player 2, who wears slot
+  1's model (0x4B); + 8, the crossed eyes, for a slot that is out
+  (controlType 3) or a ghost (bit 0x200 of +0x68), as the battle HUD
+  `func_80241BB0` tells them;
+- a heart and the hearts (+0x14), a bomb and the bombs (+0x1C), a flame and
+  the fire (+0x20), each count in the clock's digits, two digits from 10 (99
+  at most); the bomb red with red bombs (bit 0x1 of the bomb type, +0x18, as
+  upstream's cheats name it), and a remote icon at the end with remote bombs
+  (0x2).
+
+A corner shows while its slot is a player (controlType not 0; player 2's from
+the room's init, before it has joined); nothing draws while the story HUD
+object is hidden (its flag 0x1). The callback only reads game state; the
+draw object comes from the game's pool, the same on both machines, so the
+lockstep's hash is not touched. Nothing in it depends on which machine it
+runs on. It logs what a corner shows whenever that changes: `coop: hud on
+p2=4` at the registration, `coop: hud slot=S corner=left|right x=… y=44
+face=F hearts=H bombs=B fire=F type=0x…` (x in the 320-wide screen before
+the anchoring), `coop: hud slot=S hidden`, `coop: hud off` at the teardown;
+with `BM64_COOP_LOG_PLAYERS=1` the hook also logs `coop: story hud` for every
+registration of the story HUD, co-op or not.
+
+**The warp has no HUD.** `BM64_COOP_WARP` starts its session while the
+title is in its logos phase. Leaving that phase, the title's event handler
+calls `func_80297ADC`, the attract demo's start, which sets 0x4 and 0x8 of
+the session block's flags and starts the demo's process (read). In a warp
+run the flags were 0xC at the scene load (logged at 0x8023D650 in a test
+build), so no story HUD is registered; read, not seen: the stage title card
+is skipped too (`func_8023C374` tests the same 0x2 and 0x4). The HUD scenarios therefore go in through the menus, as
+`title-menu` does, into file 0 of `save-file`'s save and the world map
+(flags 0), then a `scene` step to room 0x29 (entry 0x13). A scene step from
+the world map leaves the world map's own sprites on the screen (its *World
+Select* box, the play time and the world's name, seen in a capture over room
+0x29); pressing A on the world map, the game's way, does not.
+
+Runs (Europe, scenarios):
+
+- `hud-corners`: player 1's corner (face 0, hearts 1, bombs 2, fire 2,
+  x 28) and player 2's (face 2, x 188); a `hearts` step to 1 shows in its
+  corner; player 2 downed by its own bomb shows face 10; a stage start (room
+  0x2D) frees and registers the HUD again, and the revive brings face 2 back.
+- `hud-solo`: the same way in without player 2: the story HUD is
+  registered, no `coop: hud` line.
+- `session-hud`: the menus and the scene step in both games of an online
+  session on one machine: both show the same corners (player 1 left, player 2
+  right), player 1 downed shows face 8 in both, the same hashes on all 2018
+  frames, no desync.
+
+Looked at (headless gamescope screenshots of runs, kept in their run
+folders): at 640×480 (4:3) and at 854×480 with the game's aspect ratio set
+to *Expand* the two corners sit under the clock and the gems, at the screen's
+edges at 16:9; player 2's dead face; the red bomb and the remote icon with
+upstream's red- and remote-bomb cheats on; room 0x28's tutorial dialogue box
+sits at the bottom of the screen, clear of the corners.
+
+Not run or not covered: the US build; two PCs; a real display and hand play
+(sizes and colours by the owner's eye); Windows; bosses, rival stages and the
+three rooms that never call `func_80245CDC` (whether the story HUD shows
+there was not checked, and the co-op HUD follows it); the pause menu and
+cutscenes beyond room 0x28's dialogue. At 4:3 the two corners would touch
+only with two-digit counts in both and the remote icon on both (counts from
+10 come from upstream's max cheats, which set player 1's).
 
 ## Open questions for a running build
 

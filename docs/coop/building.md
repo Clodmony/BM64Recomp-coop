@@ -304,7 +304,11 @@ pressed while a test game has the focus still reaches it.
 Captures (screenshots, clips) are fine for debugging but stay in the run
 folder: never in commits, issues or pull requests.
 Capture only the game's window: a capture of the active window takes
-whatever window has the focus once the game loses it.
+whatever window has the focus once the game loses it. A headless run is
+captured through its own gamescope: the game process (its working folder is
+the run folder) has `GAMESCOPE_WAYLAND_DISPLAY` in its environment, and
+`XDG_RUNTIME_DIR=/run/user/$(id -u) GAMESCOPE_WAYLAND_DISPLAY=<that display>
+gamescopectl screenshot <run folder>/shot.png` saves what it shows (#53).
 
 ## The test harness
 
