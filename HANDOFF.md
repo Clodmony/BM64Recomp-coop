@@ -31,7 +31,7 @@ Last updated 2026-10-19 (#47: notes split for two people).
   `handoff/owner.md`.
 - Open issues: #11 (Europe follow-ups, the owner's eye check), #14 and #16
   (leftover checks), #19 (their group), #22, #24 (follow-ups of #19), #29
-  (two machines, Windows/macOS), #46 (scenario.py and a garbled log line),
+  (two machines, Windows/macOS), #46 (scenario.py and a garbled log line), #49 (enemy targeting),
   and the owner's last step of #47: inviting the collaborator on GitHub.
 - Open pull requests: none. #48 (#47, two developers) merged 2026-10-19.
 
@@ -52,6 +52,12 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 - Local split-screen co-op is on hold (owner, 2026-10-18); the co-op is
   played online.
 - Heart items (#36): shared, but a full player does not take one.
+- **Downed players (#22, owner, 2026-10-19):** approach B, S stays player 1.
+  The same rule for both players: down while the partner lives, no timed
+  respawn; revived only at stage start, stage clear, a cutscene, or when the
+  living player finds a heart (the heart is used up for it); not at a room
+  change, warp or scripted walk. Each revive costs one shared life. Details
+  and the research in #22's comment.
 - The client plays on a copy of the host's save (#26).
 - Test runs are headless and keep background input off (owner).
 - The older decisions with their reasons are in `handoff/owner.md`.
@@ -78,8 +84,9 @@ A shared pool: take one by claiming it under *In progress*.
 6. **Rest of #14 and #16**: a story teleport (`func_802512C0` from a room
    script, beyond Green Garden stage 1) and a scene with player 2 already in
    the room, then a check that pad 1 does not move a frozen player 2.
-7. **#22** needs the owner's choice of approach first (player 1's slot moves
-   to player 2, or the code copes with a downed player 1); **#24** overlaps
+7. **#22** (downed players, rule decided, see *Project decisions*; the
+   research is in its comment, notes in the owner's scratch `i22/`), then
+   **#49** (enemies target the nearest living player); **#24** overlaps
    #44's file and needs a US ROM for its US run.
 8. With #45: scenarios through the file select, Custom screen and pause
    menu (the `title-menu` recipe in building.md).
