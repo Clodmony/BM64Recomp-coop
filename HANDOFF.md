@@ -53,6 +53,7 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 |-------|--------|--------|-------|
 | #56 (group: #55, #52, #49, #51, #53, #46, #57) | owner | `coop/56-playtest` (lanes `coop/56-a-player2`, `-b-enemies`, `-c-hud`, `-d-harness`) | four lane agents started 2026-10-19, worktrees under scratch `wt/` |
 | #63 | collaborator | `coop/63-run-wrapper` | done 2026-10-20, draft pull request #65, verify 8/8 and 383/383 on Ubuntu 24.04 without gamescope; waiting for the owner's review |
+| #71 | collaborator | `coop/71-fast-scenarios` | done 2026-10-20, draft pull request #72: the scenario stage 2:44 instead of 11:47 (scenario.py lanes), verify 8/8 and 383/383; waiting for the owner's review |
 
 ## Project decisions (bind both people)
 
