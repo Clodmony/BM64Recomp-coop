@@ -62,7 +62,7 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 
 | Issue | Person | Branch | State |
 |-------|--------|--------|-------|
-| #56 (group: #55, #52, #49, #51, #53, #46, #57) | owner | `coop/56-playtest` (lanes merged D, A, B, C) | PR #74 open, verify 555/555; waits for the collaborator's review. Then #72 (rebase on #59's `scenario.py`, see its review) |
+| #75 (the playtest's desync with enemies, Linux against Windows) | owner | `coop/75-enemy-desync` | draft pull request #88, part of #75: the state hash covers the enemies, a desync names the parts that differ and both sides log their values of that frame (`coop: snapshot`), `compare_logs.py` shows them side by side; the random generator hashed at its real address. Not reproduced on one machine (ten sessions, Linux and Wine, enemies, cameras apart). Next: a playtest with this branch, #87 (replay); waiting for the collaborator's review |
 | #63 | collaborator | `coop/63-run-wrapper` | done 2026-10-20, draft pull request #65, verify 8/8 and 383/383 on Ubuntu 24.04 without gamescope; waiting for the owner's review |
 | #29 (everything one machine can answer; the issue is now the LAN playtest) | collaborator | `coop/29-windows-build` | done 2026-10-20, draft pull request #68: the Windows build cross-compiled in WSL2 and run natively on Windows (both platforms `0xFC44BFB4`), a Windows pair and a Windows-against-Linux pair in lockstep with the same hash on every frame, `tools/compare_logs.py` for two machines' logs; waiting for the owner's review. #29 stays open for two real machines, the internet and macOS |
 | #77 | collaborator | `coop/77-skip-intro` | done 2026-10-20, draft pull request #84: **Z during the intro** starts a new file in the world map (overlay 0x21), so a run by hand skips the logos, the attract demo and the opening cutscene; three scenarios (logos, demo with its repeated step, and Z in a room doing nothing); waiting for the owner's review |
@@ -76,6 +76,8 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 - **Build identity (#67, owner, 2026-10-20):** hashed from the patches'
   sources (#73), not the compiled binary and not a pinned clang; the same
   number on clang 18 and 23 (measured).
+- **Intro skip (#77, owner, 2026-10-21):** Z stays always on (only in the
+  intro, refused in a session), not behind a switch.
 - Local split-screen co-op is on hold (owner, 2026-10-18); the co-op is
   played online.
 - Heart items (#36): shared, but a full player does not take one.

@@ -6,7 +6,46 @@ each issue found, the decisions taken in those sessions and the cleanup still
 to approve. Decisions that bind both people are also listed in `HANDOFF.md`,
 *Project decisions*.
 
-Last updated 2026-10-19 (#22: downed players are ghosts).
+Last updated 2026-10-21 (#75: the desync with enemies, and the review of #84).
+
+## #75: the playtest's desync with enemies (2026-10-20/21)
+
+- Branch `coop/75-enemy-desync` (rebased onto `bm64recomp-coop` after #74),
+  draft PR #88, **part of #75, not closing it**. Worktree
+  `~/dev-scratch/BM64Recomp-coop/wt/75-enemy-desync`, build folders
+  `build/75-enemy-desync-eu` and `build/75-enemy-desync-win-eu` (the
+  Windows build of the branch, cross-compiled).
+- Found: the state hash covered no enemy, the desync line named only the
+  whole hash, and the random generator was hashed 0x10 bytes early (US
+  `D_802ACFD0` used where the Europe code's 0x802ACFD0 is US 0x802ACFE0,
+  `g_RandomIndex`). Now five parts (scene, random, players, enemies, save)
+  sent with the pad (protocol 6); a desync names the parts and each side
+  logs its snapshot of the frame (`coop: snapshot` lines);
+  `BM64_COOP_LOG_STATE=N`; `compare_logs.py` prints the first differing
+  snapshot. Red on the playtest build: `session-desync` 5/10; green 10/10.
+- **Not reproduced on one machine:** ten sessions (five Linux–Linux, five
+  Linux–Wine), enemies hashed, the two cameras apart and turned, random
+  walks of 3673 frames: all frames equal. FPU control word 0x1F80 on Linux
+  and in Wine. Kept: `session-enemy-cameras`.
+- Leads, none shown: `func_8027CE10` hides an object between the camera and
+  the player from this machine's camera (bit 0x1 of its model's flags,
+  ~12 objects a frame in room 0x29); `func_802441F4` steers a bounce by this
+  machine's yaw (never called in the runs); Wine uses its own `ucrtbase`, so
+  native Windows is untested. Next: a playtest with this branch's kit (its
+  desync line and snapshots say where), and #87 (record the agreed pads for
+  a replay). For a kit from this worktree mind #85 (`playtest-kit.sh`
+  ignores `WIN_BUILD`).
+- The playtest logs stay in the playtest kit folder on the owner's machine
+  (they hold local paths); read, not changed.
+
+## Review of #84 (#77, Z skips the intro), 2026-10-21
+
+- Changes requested (owner's word): after the skip no save file is current
+  (boot sets `D_802A1DB4` to -1) and the stage clear's save
+  (`func_8023FD08` → `func_802947AC`) indexes the EEPROM mirror with it,
+  0x88 bytes before it (read, not run). The rest approved; the merged
+  result ran 8/8 stages and 20/20 checks here.
+- **Owner decision:** Z stays always on (not behind a switch).
 
 ## #22: downed players are ghosts (2026-10-19)
 
