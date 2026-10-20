@@ -912,8 +912,8 @@ each; `func_80286CA8`, `func_80286400`), each run by an enemy process
   to its band. Types 0x19 and 0x1C stay. **This is #51**: with player 1 far
   away, the enemies around player 2 went, and came back only with player 1
   (`enemy-range` before the fix: enemy 7 taken out right after player 1 was
-  put 2300 units away, `coop: enemy despawn rec=7 type=0x0 x=1400 z=1049
-  near=0`). The test reads S's position, game state, not a camera: before
+  put 2300 units away by a tile step, `coop: enemy despawn rec=7 type=0x0
+  x=1400 z=1049 near=0`). The test reads S's position, game state, not a camera: before
   the fix too, both games of a session hashed the same frames and logged the
   same enemy lines (`session-enemy-range`, no desync).
 - **Targets:** the chase on the same floor (`func_80283CF0`), the line-up
@@ -956,23 +956,28 @@ Why per function:
 **Determinism.** The choice reads positions and flags from RDRAM in a fixed
 order, nothing of a machine's own (camera, pads before the lockstep). In
 `session-enemy-range` (two games on one machine, Linux) both games hashed the
-same 1215 frames, logged no desync and the same seven `coop: enemy` lines.
+same 1561 frames, logged no desync and the same 12 `coop: enemy` lines.
 
 **Runs** (Europe, seed 1, room 0x29, `BM64_COOP_NO_DEMO`): before the fix
-17 of 28 checks passed, after it 28 of 28.
+17 of 28 checks passed, after it 28 of 28, with the scenarios' first
+versions. Player 2's new join (#55: it joins once player 1's entry walk is
+over, without its step, and a tile step of player 1 makes it join player 1
+again) moved them to what follows; on #55's code they pass, 36 of 36 checks.
 
 - `enemy-ghost` (#49): enemy 8 (type 0x17) aims at player 1 as the room
   starts; once player 1 is down, it aims at player 2 (`coop: enemy aim rec=8
-  slot=4 ghost=0`) and no enemy aims at the ghost. With both players far it
-  is taken out; player 2 walking towards it brings it back (`coop: enemy
-  spawn rec=8 … near=4`), aimed at player 2. Before the fix the ghost stayed
-  the target and the enemy came back only with player 1.
-- `enemy-range` (#51): player 1 put 2300 units away, player 2 at the start:
-  enemy 7 (type 0) stays; with player 2 put next to player 1, it is taken out,
-  tested against player 2, the nearer one (`near=4`). On the way enemy 8 aims
-  at player 2 while player 2 is the nearer (#49).
-- `session-enemy-range`: the same online, both sides' tile steps on the same
-  frames.
+  slot=4 ghost=0`) and no enemy aims at the ghost. The ghost walks off, and
+  with both players out of range enemy 8 is taken out; player 2 walking
+  towards it alone brings it back (`coop: enemy spawn rec=8 … near=4`), aimed
+  at player 2. Before the fix the ghost stayed the target and the enemy came
+  back only with player 1.
+- `enemy-range` (#51): player 1 walks off along the room's upper corridor to
+  x 28, about 1400 units from enemy 7 along x; player 2 stays at the start:
+  enemy 7 (type 0) stays. With player 2 then put next to player 1 (tile 28,
+  22), it is taken out, tested against player 2, the nearer one (`near=4`).
+  On the way enemy 8 aims at player 2 while player 2 is the nearer (#49).
+- `session-enemy-range`: the same online, the host's pad walking player 1,
+  both sides' tile step on the same frame.
 
 **Logs**, whenever player 2 is on: `coop: enemy aim rec=R slot=S ghost=G x=…
 z=…` (an enemy record's target, when it or its ghost flag changes, and after
