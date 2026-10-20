@@ -73,13 +73,17 @@ are Bash and Python scripts made for Linux. On a Windows PC, work inside
 
    ```bash
    sudo apt install git gh make cmake ninja-build clang lld llvm python3 \
-       libsdl2-dev libgtk-3-dev libfreetype-dev pkg-config
+       libsdl2-dev libgtk-3-dev libfreetype-dev pkg-config xvfb
    ```
 
    `make` is easy to miss and not installed by default: `make -C patches`
    builds the patches, so without it the `patches` stage of
    `tools/verify.sh` fails with `make: command not found`, and `europe` then
    fails for the missing `patches.elf` (#58).
+
+   `xvfb` is what the headless test runs use where `gamescope` is not
+   packaged, which is every Ubuntu 24.04 (#63); `tools/run.sh` picks
+   whichever of the two is there.
 
 3. Install Claude Code inside WSL2 (Anthropic's Claude Code documentation,
    *Windows / WSL*), log in with your own account, and log in to GitHub with
@@ -112,19 +116,18 @@ WSLg supplies `DISPLAY`, `WAYLAND_DISPLAY` and `XDG_RUNTIME_DIR` by itself,
 so `tools/run.sh --window` opens the game window with no further setup and
 SDL takes its `x11` driver.
 
-One thing does not work: **Ubuntu 24.04 packages no `gamescope`**, which
-`tools/run.sh` wraps its headless runs in, and `tools/scenario.py` has no
-way to pass `--window` instead (#63). Until #63 is done, run headless under
-Xvfb (`sudo apt install xvfb`):
+**Ubuntu 24.04 packages no `gamescope`**, which `tools/run.sh` used to wrap
+every headless run in; since #63 it picks its wrapper instead, so install
+Xvfb once and the headless runs and the scenarios need nothing further:
 
 ```bash
-env -u WAYLAND_DISPLAY xvfb-run -a -s "-screen 0 640x480x24" \
-    tools/run.sh --version eu --window --until-overlay 0x20
+sudo apt install xvfb
+tools/run.sh --version eu --until-overlay 0x20   # headless, under Xvfb
 ```
 
-The scenarios need one thing more, a stand-in for `gamescope` on `PATH` that
-drops its own options and runs what follows `--`; the numbers above were
-measured that way. Both are local to the machine and change no project file.
+The run's summary line names the display it used (`display: xvfb` here,
+`gamescope` on a machine that has it); `--wrapper` forces one
+([building.md](building.md), *Running the game*).
 
 To **play** on Windows, use the Windows build rather than the WSL2 one: the
 playtest kit's `windows/` folder ([playtest.md](playtest.md)), made by

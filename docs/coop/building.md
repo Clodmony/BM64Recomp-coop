@@ -271,13 +271,24 @@ TEXT), `--timeout` (default 60 s), `--exe`, `--rom`, `--env NAME=VALUE`
 (repeatable), `--input FILE` (an input script, copied into the run folder;
 *The test harness*, below), `--saves DIR` (start with a copy of DIR, e.g. an
 earlier run's `saves/`, as the run's save folder), `--audio` (sound on the default device; by
-default SDL's dummy driver, which consumes audio at the real rate). Exit
+default SDL's dummy driver, which consumes audio at the real rate),
+`--window` and `--wrapper gamescope|xvfb` (the headless display, below). Exit
 status: 0 overlay reached or log line seen (or ran until the timeout
 without either), 1 timeout before them, 2 the game exited or crashed, 3 the
-owner's config folder changed, 4 bad setup. The game runs headless, inside
-`gamescope --backend headless` (640x480), so no window opens on the desktop
-(owner, 2026-10-18); `--window` opens one. Each run is its own process group,
-which the stop ends whole (gamescope and Wine start children of their own).
+owner's config folder changed, 4 bad setup. The game runs headless, in a
+640x480 display of its own, so no window opens on the desktop (owner,
+2026-10-18); `--window` opens one. Each run is its own process group, which
+the stop ends whole (the wrapper and Wine start children of their own).
+
+Which wrapper gives that display is chosen per machine (#63): `gamescope
+--backend headless` when `gamescope` is on `PATH`, else `env -u
+WAYLAND_DISPLAY xvfb-run -a -s "-screen 0 640x480x24"` (Ubuntu 24.04 packages
+no gamescope, `apt install xvfb` gives the other), else the run fails with
+exit 4 naming both. `--wrapper gamescope|xvfb` forces one, which is how a
+machine with both compares them; the run's summary line names the one used
+(`display: xvfb`, or `window`). Under Xvfb, `WAYLAND_DISPLAY` must go: with
+it SDL takes the desktop's Wayland display and opens a window there instead
+of drawing into Xvfb.
 
 Debug switches, all off unless set (`src/coop/debug.cpp`):
 
