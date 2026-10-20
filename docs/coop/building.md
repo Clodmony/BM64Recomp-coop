@@ -286,11 +286,12 @@ cross-compiled Windows build of one checkout must match — and do:
   same twelve overlay loads on both sides, about 49 frames a second at PAL
   50. The Windows runs logged no audio skips, where the same machine's WSL2
   runs log them (#66).
-- **Not tested:** a session between the Windows build and the Linux build
-  (the playtest's real pair; the identity above says the hello will pass, the
-  network path of each side is what remains), a build made with Visual Studio
-  (upstream's `BUILDING.md`), and whether another clang version changes the
-  patches' binary and with it the identity.
+- The Windows build and the Linux build **played against each other** on one
+  machine, both ways (*A session between the Windows and the Linux build*,
+  below).
+- **Not tested:** a build made with Visual Studio (upstream's `BUILDING.md`),
+  and whether another clang version changes the patches' binary and with it
+  the identity (#67).
 
 The identity is logged only when a hello happens, so a game that boots alone
 never prints it. Two ways to read it without playing:
@@ -324,6 +325,66 @@ plain environment variables (`BM64_COOP_AUTOSTART=1`,
 `BM64_COOP_LOG_OVERLAYS=1`, `BM64_COOP_SESSION=…`), and the folder keeps
 everything the run writes, so no setting of the person's own is touched. Such
 a run opens a window: Windows has no headless wrapper here.
+
+### A session between the Windows and the Linux build
+
+The playtest's real pair is one player on Windows and one on Linux (#29). On a
+Windows machine with WSL2 both builds are there, so the pair can be played
+without a second PC: the native Windows build in a portable folder on the
+Windows side, the Linux build through `tools/run.sh` inside WSL2. The two go
+through different network stacks, WSL2's NAT between them.
+
+- The **Windows side joins the WSL2 host** at `127.0.0.1`: WSL2's localhost
+  relay carries it to the listening game inside WSL2.
+- The **WSL2 side joins the Windows host** at the address of WSL2's default
+  route (`ip route | grep default`, the Windows host on the NAT network).
+  This needed no firewall rule of its own here, so it says nothing about what
+  a host on a real LAN needs: there, Windows asks (`playtest.md`, *Start a
+  session*).
+
+Each side is started on its own, as a playtest player would be, with the same
+switches `tools/scenario.py` would set (*The test harness*): the scripts of
+`tools/scenarios/session-lockstep.txt`, its host part on the host and its
+`#client` steps on the client, `BM64_COOP_WARP=0x29:0x13`,
+`BM64_COOP_LOG_HASH=1` and `BM64_COOP_LOG_FRAMES=300` on both. Afterwards the
+two logs are compared with `tools/compare_logs.py` (below). A game started
+without a console keeps its log in `coop.log` in its folder; started with its
+output redirected, as a script does, the log is on **stderr**.
+
+**Measured** (#29, 2026-10-20, Europe, one Windows machine with WSL2 on
+Ubuntu 24.04):
+
+- Both ways, 448 frames of the `session-lockstep` scripts: the same build
+  identity `0xFC44BFB4` on both sides, `coop: session lockstep from frame 0`,
+  the same state hash on **every** frame both logged, the same two overlay
+  loads, no `coop: session desync` and no `coop: session lost` before the
+  scripts ended.
+- A longer run with the WSL2 build hosting, 3551 frames hashed by both: all
+  equal. About **49.4 frames a second** on either side at PAL 50. Audio: 4
+  skips on the WSL2 side, which runs with SDL's dummy driver (`run.sh`
+  without `--audio`), 0 on the Windows side, which plays on the real device.
+- **Still not run:** two real machines on a LAN, the internet with a
+  forwarded port, and macOS.
+
+### Comparing the logs of two machines: tools/compare_logs.py
+
+`tools/scenario.py` compares the two sides itself (`#check same-hashes`), but
+only for two games it starts on one machine. A session across machines leaves
+one log on each PC instead:
+
+```bash
+python3 -I tools/compare_logs.py <host log> <client log>
+```
+
+It cuts both logs at `coop: input end` (once one game is stopped the other
+loses the session), and reports the build identity of each side, the state
+hash of every frame both logged with the first one that differs, the overlay
+loads, the frames a second and audio skips of each side
+(`BM64_COOP_LOG_FRAMES`), and any `coop: session desync`, `lost` or `refused`.
+Exit 0 only when the identities agree, no frame differs and no such event was
+logged; two logs without `BM64_COOP_LOG_HASH` (a playtest build) still give
+the rest. Either side's `game.log`, `coop.log` or captured stderr will do,
+with Unix or Windows line ends.
 
 ## Running the game: tools/run.sh
 
@@ -556,7 +617,9 @@ A scenario with a `#session` line runs both games at once (`tools/run.sh
 is the host's script; `#client STEP` lines are the client's script (its pad
 0 is pad 1, player 2, in both games), `#env-host` and `#env-client` set one
 side's environment, `#check-client` checks the client's log, and `#check
-same-hashes` compares the two logs' `coop: hash` lines frame by frame. Both
+same-hashes` compares the two logs' `coop: hash` lines frame by frame (for a
+session across two machines, which this cannot start, there is
+`tools/compare_logs.py` instead: *Comparing the logs of two machines*). Both
 logs are cut at their `coop: input end`, since the session is lost as soon
 as one game is stopped; both scripts should end on the same frame. A tile
 step runs on one side only, outside the lockstep: `session-desync` uses one
@@ -565,6 +628,15 @@ to part the two games on purpose.
 ```bash
 tools/scenario.py --version eu session-lockstep   # both games, about 15 s
 ```
+
+**One gamepad, two games** (#29, read in the code, not played): the game sets
+SDL's `JOYSTICK_ALLOW_BACKGROUND_EVENTS` and its own *background input* option
+is on by default (`src/main/main.cpp`, `src/ui/ui_config.cpp`), so two games
+on one machine both take the events of the same controller — one stick would
+move both players. `tools/run.sh` writes a `general.json` with the option off
+for that reason, and a hand test of two games on one machine (#33) has to do
+the same in each game: then only the game whose window has the focus reads the
+pad.
 
 ## Europe speed
 
