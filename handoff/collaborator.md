@@ -183,12 +183,23 @@ needed the gamescope stand-in again, since the branch predates #63.
   `src/coop/harness.{h,cpp}`, `docs/coop/building.md` and adds three
   scenarios, so it should not conflict with #65, #68, #72 or #73 beyond
   `building.md` and the notes.
-- **The three findings of that session are open and unstarted:** #78 (the
-  death animation), #81 (player 2 dancing after a stage clear) and #83 (the
-  intro skip in a session). #78 and #81 both want a decision first: #78 how a
-  dying player's animation runs when the story death path is skipped, #81
-  whether a just revived player dances too. #81 also needs a scripted way to
-  clear a stage, which nothing has today.
+- **#78 is the next issue of this machine** (the person running the session,
+  2026-10-20): a downed player plays no death animation. Start from why, which
+  is already read: `coop_partner_death` returns 1 at `func_8023A870`'s entry
+  while the partner lives, so flags 0x92, the death process `func_8023F26C`
+  and the room's retry are all skipped - and the animation hangs on that path
+  (#22, `docs/coop/design.md`, *The death chain*). `func_8023F26C` cannot
+  simply be let run: in the story case it takes **slot 0's actor and slot 0**
+  (0x8023F3A4-0x8023F3BC), so a player 2 death would play and end as player
+  1's, with the retry behind it. So the animation has to be driven on the
+  dying actor itself, and the open points (which animation, who is frozen
+  while it plays, when the ghost flag and look are set, the same thing on both
+  machines) are listed in #78. `p2-ghost` and `p1-ghost` are the scenarios to
+  extend.
+- **#81 and #83 are open and unstarted** too: #81 (player 2 dancing after a
+  stage clear - the clear works on slot 0's actor only, and nothing can clear
+  a stage in a scripted run today, so it needs that first) and #83 (the intro
+  skip inside a session).
 - **Ask the owner to review and merge #68 and #65** (either person may merge
   after the other's approving review, `HANDOFF.md`, *Project decisions*;
   locally with `git merge --no-ff`, never `gh pr merge`). #65 first: #68 does
@@ -315,5 +326,8 @@ never the hardware itself. Recipes that hold for everyone go into
   path to it is at the top of the .ps1). **Keep** — they are what a later
   session needs to play either pair again without building anything.
 - `rom/`, `build/BM64Recomp-coop-eu/`, `build/win-eu/`, `n64recomp/`: keep.
-- `runs/`: emptied 2026-10-20. `verify/`: only `20261020-195322` left, the
-  run quoted in pull request #68; delete it once #68 is merged.
+- `runs/`: emptied again 2026-10-20 after #77 (502 MB of its test runs).
+  `verify/`: `20261020-195322` (quoted in #68) and `20261020-234733`
+  (quoted in #84) left; delete each once its pull request is merged.
+- `wt/77-skip-intro/`: #77's worktree, with its build folder
+  `build/77-skip-intro-eu`. Remove both once #84 is merged.
