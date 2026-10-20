@@ -132,7 +132,18 @@ needed the gamescope stand-in again, since the branch predates #63.
 - **#29 is now the LAN playtest** and nothing else; #69 (the internet with a
   forwarded port) and #70 (macOS, waiting for such a machine) carry the
   rest. #69 waits for the LAN run, #70 for hardware nobody here has.
-- **#67 is the next issue of this machine** (collaborator, 2026-10-20) and it
+- **#71 is the next issue of this machine** (the person running the session,
+  2026-10-20): the scenario stage is about 13 minutes, measured as 43 runs
+  and 646 s of scripted game time, one after the other. Take the two safe
+  levers: the scenarios **in parallel** (`scenario.py` runs them
+  sequentially today, while unique run folders and free ports are already
+  there, so nothing about the game changes) and **`BM64_COOP_PAL60=1`**
+  where a scenario does not measure the rate (measured on `p2-slot4`:
+  26.5 s against 23.2 s, 37/37 checks unchanged). The turbo of the issue's
+  third lever (extra retraces into the scheduler's queue) only if those two
+  are not enough: it can shift timing-sensitive checks. Whatever is done
+  must leave every check's result as it is, 383/383.
+- **#67 then** (collaborator, 2026-10-20) and it
   **needs a number from the owner**: the offline sum from their own checkout
   of the same commit (the snippet in `docs/coop/building.md`, *The build
   identity across platforms*) and their `clang --version`. Without it the

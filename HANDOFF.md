@@ -43,6 +43,8 @@ Last updated 2026-10-19 (#47: notes split for two people).
   ways (pull request #68); #29 is now only **two real machines on a LAN**
   (the playtest), its other leftovers split off as #69 (the internet, with a
   forwarded port) and #70 (the macOS build, waiting for such a machine).
+  #71 asks the test runs to be faster (the scenario stage is about 13
+  minutes).
   #58 (the collaborator's setup) is done and merged.
   The owner's last step of #47 is done: the collaborator has write access on
   the fork (checked 2026-10-20).
@@ -112,7 +114,12 @@ A shared pool: take one by claiming it under *In progress*.
    afterwards both `coop.log` files, which `tools/compare_logs.py` reads side
    by side. What breaks becomes an issue (a desync line first). **#67 comes
    first**: whether the two machines' builds agree on the identity at all.
-2. **#46** (scenario.py and a garbled log line): a small harness fix, a good
+2. **#71** (the scenario stage takes about 13 minutes): taken by the
+   collaborator's next session (the person running it, 2026-10-20) with the
+   two safe levers, the scenarios in parallel and `BM64_COOP_PAL60=1` where
+   a scenario does not measure the rate; the turbo of its third lever only
+   if those are not enough.
+3. **#46** (scenario.py and a garbled log line): a small harness fix, a good
    first issue for a session with a smaller plan.
 3. ~~**#63**~~ (`run.sh`'s headless wrapper): taken by the collaborator
    2026-10-20, see *In progress*. Since it, `run.sh` picks gamescope or
