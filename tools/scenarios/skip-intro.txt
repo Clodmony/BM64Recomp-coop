@@ -1,0 +1,22 @@
+# The intro skip (#77): Z during the logos takes a new file straight into the
+# world map (0x21), instead of the attract demo (0x1B) and the opening
+# cutscene (0x1A). Z comes from the pads the game reads, so this scenario
+# presses it the way a person does.
+#check log "^coop: skip intro: a new file, to the world map \(step 1, from overlay 0x20\)$"
+#check no-log "^coop: skip intro: a new file, to the world map \(step 2"
+#check no-log "^coop: skip intro: gave up"
+# the world map follows the title's first load, with no demo in between
+#check after "^coop: overlay 0x20$" "^coop: overlay 0x21$"
+#check no-log "^coop: overlay 0x1B$"
+#check no-log "^coop: overlay 0x1A$"
+# and the game is there and running (the probe reads the live state)
+#check log "^coop: state overlay=0x21 "
+overlay 0x20
+wait 35
+pad 0 Z
+wait 4
+pad 0 -
+overlay 0x21
+wait 60
+probe world
+end

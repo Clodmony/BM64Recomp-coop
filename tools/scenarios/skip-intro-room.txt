@@ -1,0 +1,23 @@
+# Z in a room is the game's own button and must not skip anything (#77): the
+# run warps into room 0x29 and holds Z there. No skip, no scene change, and
+# player 1 still plays afterwards.
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_P2=4
+#check no-log "^coop: skip intro"
+#check no-log "^coop: overlay 0x21$"
+#check log "^coop: state overlay=0x29 "
+# the room is still the one that was warped into, before and after Z
+#check still before after 0 200
+overlay 0x29
+wait 300
+probe before
+pad 0 Z
+wait 10
+pad 0 -
+wait 30
+pad 0 Z
+wait 10
+pad 0 -
+wait 60
+probe after
+end

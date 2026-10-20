@@ -449,6 +449,26 @@ Debug switches, all off unless set (`src/coop/debug.cpp`):
   refresh-rate hint back to 60, *Presenting 50 game frames a second*).
 - `BM64_COOP_CRASH=1`: crash on purpose when the title loads (a test of the
   crash log, #29).
+**Z skips the intro** (#77). It is not a switch and needs nothing set: press
+**Z on the controller** while the intro runs and the game starts a new file
+and goes straight to the world map (overlay 0x21), instead of the logos, the
+attract demo and the opening cutscene. It works in the title overlay 0x20
+(the logos and the main menu), in the demo 0x1B and the stages the demo plays,
+and in a new file's opening cutscene 0x1A. Everywhere else **Z stays the
+game's own button**: in a room nothing happens (`skip-intro-room`), and in an
+**online session** the skip is refused (`coop: skip intro: not in an online
+session`), since the step is one machine's alone and the other game would
+play on ([design.md](design.md), *The session core*).
+
+Two things about how it works. The button is read where the game reads its
+pads (`recomp::get_n64_input`, `src/game/controls.cpp`), not from this
+machine's keyboard, so a scenario presses it with an ordinary `pad 0 Z` step.
+And the step itself is the warp's (`coop_warp`, `patches/coop_harness.c`) with
+the world map as its target, so nothing new runs inside the game — but one
+step does not always arrive: pressed inside the demo, the demo's own scene
+change wins, so the skip keeps asking while the intro runs (at most 6 steps,
+60 frames apart) until the world map loads. Each step logs
+`coop: skip intro: a new file, to the world map (step N, from overlay 0xID)`.
 
 A run's own `general.json` turns background input off, so a controller in
 use elsewhere does not press the test game's buttons; a key or button
@@ -519,7 +539,9 @@ Everything is off unless a switch asks for it:
   menu and A (60 frames later) takes its first entry, Adventure, into the
   file select (0x1F). In a run without saves, A picks the first file and A
   again starts it: the new file's opening cutscene (0x1A). A tap is
-  `pad 0 START`, `wait 4`, `pad 0 -`.
+  `pad 0 START`, `wait 4`, `pad 0 -`. Nothing in the game's own menus cuts
+  that path short; what skips it is **Z** (*Z skips the intro*, above, and the
+  `skip-intro` scenarios), which lands in the world map of a new file (#77).
 - `BM64_COOP_WARP=ID[:ENTRY[:FILE]]`: 30 frames after the title (overlay
   0x20) loads, start a story session as the file select does, for a new file
   (`func_8023DA04(0)`) or, with FILE, by loading file 0–2

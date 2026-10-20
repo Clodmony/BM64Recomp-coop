@@ -1,0 +1,17 @@
+# The intro skip pressed inside the attract demo (#77): the demo's own scene
+# change wins the first step, so the skip keeps asking while the intro runs
+# until the world map loads. Nothing of the demo's stages (0x38, 0x50, …) is
+# left running.
+#check log "^coop: skip intro: a new file, to the world map \(step 1, from overlay 0x1B\)$"
+#check no-log "^coop: skip intro: gave up"
+#check after "^coop: overlay 0x1B$" "^coop: overlay 0x21$"
+#check log "^coop: state overlay=0x21 "
+overlay 0x1B
+wait 60
+pad 0 Z
+wait 4
+pad 0 -
+overlay 0x21
+wait 60
+probe world
+end

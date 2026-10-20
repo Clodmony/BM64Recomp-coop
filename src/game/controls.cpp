@@ -84,9 +84,16 @@ namespace recomp {
 bool recomp::get_n64_input(int controller_num, uint16_t* buttons_out, float* x_out, float* y_out) {
     // coop: in an online session both machines read the same pads (src/coop/session.cpp)
     if (auto connected = coop::session_input(controller_num, buttons_out, x_out, y_out, get_local_n64_input)) {
+        if (*connected) {
+            coop::note_pad(controller_num, *buttons_out); // coop: Z skips the intro (#77)
+        }
         return *connected;
     }
-    return get_local_n64_input(controller_num, buttons_out, x_out, y_out);
+    const bool connected = get_local_n64_input(controller_num, buttons_out, x_out, y_out);
+    if (connected) {
+        coop::note_pad(controller_num, *buttons_out); // coop: Z skips the intro (#77)
+    }
+    return connected;
 }
 
 // coop: this machine's pads, the body of get_n64_input before the session

@@ -22,6 +22,9 @@
 //                                asset), placement, bomb, hit, the item a hit
 //                                knocks out, a pickup, death and room teardown
 //
+// One thing here is not a switch and is always on: **Z during the intro skips
+// it** (#77, *the intro skip* below), a new file straight to the world map.
+//
 // Input script: one step per line, '#' starts a comment.
 //   overlay <ID>        wait for the next load of overlay ID (the n-th
 //                       `overlay ID` step waits for the n-th load of ID)
@@ -321,6 +324,86 @@ struct Warp {
     int32_t file = -1; // a new file
 };
 
+// The intro skip (#77): Z during the intro starts a new file and goes to the
+// world map at once, instead of the logos, the attract demo and the opening
+// cutscene. The step is the warp's, with the world map as its target, so
+// nothing new runs in the game. The button is taken from the pads the game
+// reads (coop::note_pad), not from this machine's keyboard, so a scenario can
+// press it like any other button.
+constexpr int32_t world_map_overlay = 0x21;
+constexpr int32_t world_map_entry = 0x10; // the code the world map is started with
+constexpr uint32_t no_overlay = 0xFFFFFFFF;
+constexpr uint16_t pad_z = 0x2000;           // the N64 Z button (parse_buttons)
+constexpr uint64_t skip_settle_frames = 30;  // as the warp waits, for the overlay to settle
+constexpr uint64_t skip_retry_frames = 60;   // ... before trying again
+constexpr int skip_tries = 6;                // ... and how often at most
+
+bool skip_intro_asked = false; // Z was pressed during the intro
+bool attract = false;          // the boot's demo loop runs (0x1B and its stages)
+int skip_tried = 0;            // steps asked for so far
+uint64_t skip_frame = 0;       // the frame of the last one
+uint16_t pad0_buttons = 0;     // pad 0 the frame before, for the press edge
+
+// Whether the game is still in the intro and the skip may step out of it: the
+// title overlay 0x20, which is the logos until a file is picked, a new file's
+// opening cutscene 0x1A, and the attract demo 0x1B with the stages it plays
+// (0x38, 0x50, …), which count only while the demo loop runs - the same
+// overlays are real rooms once the person plays, and Z must stay the game's
+// own there.
+bool in_intro() {
+    return last_overlay == 0x20 || last_overlay == 0x1A || last_overlay == 0x1B || attract;
+}
+
+// The skip's step, under the lock: whether the hook should warp this frame.
+// The request stays until the world map is loaded, because one step does not
+// always get there: pressed inside the demo (0x1B), the demo's own scene
+// change wins and its stage loads instead, so the step is repeated while the
+// intro runs. Dropped in an online session, whose other game would play on and
+// part ways, once the game left the intro, and after `skip_tries` steps that
+// did not arrive.
+bool take_skip_intro(int32_t* args) {
+    if (!skip_intro_asked) {
+        return false;
+    }
+    if (coop::session_connected()) {
+        skip_intro_asked = false;
+        std::fprintf(stderr, "coop: skip intro: not in an online session\n");
+        return false;
+    }
+    if (last_overlay == world_map_overlay) {
+        skip_intro_asked = false; // arrived
+        return false;
+    }
+    if (last_overlay == no_overlay) {
+        return false; // nothing loaded yet: wait for the logos
+    }
+    if (!in_intro()) {
+        skip_intro_asked = false;
+        std::fprintf(stderr, "coop: skip intro: only during the intro, not in overlay 0x%02X\n", last_overlay);
+        return false;
+    }
+    if (frames - last_overlay_frame < skip_settle_frames) {
+        return false; // let the overlay settle, as the warp does
+    }
+    if (skip_tried > 0 && frames - skip_frame < skip_retry_frames) {
+        return false; // give the last step time to arrive
+    }
+    if (skip_tried >= skip_tries) {
+        skip_intro_asked = false;
+        std::fprintf(stderr, "coop: skip intro: gave up after %d steps (overlay 0x%02X)\n", skip_tried,
+                     last_overlay);
+        return false;
+    }
+    skip_tried++;
+    skip_frame = frames;
+    args[0] = world_map_overlay;
+    args[1] = world_map_entry;
+    args[5] = -1; // a new file
+    std::fprintf(stderr, "coop: skip intro: a new file, to the world map (step %d, from overlay 0x%02X)\n",
+                 skip_tried, last_overlay);
+    return true;
+}
+
 Warp read_warp() {
     Warp warp;
     const char* value = std::getenv("BM64_COOP_WARP");
@@ -379,12 +462,37 @@ bool coop::scripted_input(int pad, uint16_t* buttons, float* x, float* y) {
     return true;
 }
 
+void coop::note_pad(int pad, uint16_t buttons) {
+    if (pad != 0) {
+        return;
+    }
+    std::lock_guard lock{mutex};
+    const uint16_t pressed = static_cast<uint16_t>(buttons & ~pad0_buttons);
+    pad0_buttons = buttons;
+    // Z asks for the intro skip (#77), and only while the intro runs: in a
+    // room Z is the game's own button and must stay it. A fresh press gets the
+    // full number of steps again.
+    if ((pressed & pad_z) != 0 && in_intro()) {
+        skip_intro_asked = true;
+        skip_tried = 0;
+    }
+}
+
 void coop::note_overlay_load(uint32_t id) {
     std::lock_guard lock{mutex};
     id &= 0xFFFF;
     overlay_loads[id]++;
     last_overlay = id;
     last_overlay_frame = frames;
+    // The demo loop (#77): it begins with the demo itself and plays stage
+    // rooms of its own, which are ordinary overlays; it is over once the
+    // title, the file select, the world map or a cutscene loads, all of
+    // which only a person's own game reaches.
+    if (id == 0x1B) {
+        attract = true;
+    } else if (id == 0x20 || id == 0x1F || id == 0x21 || id == 0x1A) {
+        attract = false;
+    }
 }
 
 // Called by the per-frame hook (func_8023A208, bm64.us.toml). Returns what the
@@ -405,6 +513,11 @@ extern "C" uint32_t coop_harness_frame(int32_t* args) {
         args[0] = warp.overlay;
         args[1] = warp.entry;
         args[5] = warp.file;
+        requests |= 1;
+    }
+    // The intro skip (#77) uses the same step, so only when the warp did not
+    // ask for it this frame; a warp of its own already leaves the intro.
+    if ((requests & 1) == 0 && take_skip_intro(args)) {
         requests |= 1;
     }
     args[2] = -1;
