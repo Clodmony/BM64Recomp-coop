@@ -64,7 +64,7 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 | Issue | Person | Branch | State |
 |-------|--------|--------|-------|
 | #56 (group: #55, #52, #49, #51, #53, #46, #57) | owner | `coop/56-playtest` (lanes `coop/56-a-player2`, `-b-enemies`, `-c-hud`, `-d-harness`) | four lane agents started 2026-10-19, worktrees under scratch `wt/` |
-| #67 | collaborator | `coop/67-build-identity` | done 2026-10-20, draft pull request PR_NUMBER: the identity is hashed from the patches' sources (`tools/build_id.py`, a `buildid` verify stage) instead of the compiled `patches.bin`, so the two machines' clang versions no longer part the builds; verify 9/9 and 383/383, every session logging the same number; waiting for the owner's review |
+| #67 | collaborator | `coop/67-build-identity` | done 2026-10-20, draft pull request #73: the identity is hashed from the patches' sources (`tools/build_id.py`, a `buildid` verify stage) instead of the compiled `patches.bin`, so the two machines' clang versions no longer part the builds; verify 9/9 and 383/383, every session logging the same number; waiting for the owner's review |
 
 ## Project decisions (bind both people)
 

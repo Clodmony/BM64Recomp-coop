@@ -10,7 +10,7 @@ Last updated 2026-10-20 (#67: the build identity comes from the sources).
 ## State
 
 - **#67 done**, branch `coop/67-build-identity` off `bm64recomp-coop`,
-  **draft pull request PR_NUMBER** (`Closes #67`): the identity a session's
+  **draft pull request #73** (`Closes #67`): the identity a session's
   hello compares is hashed from the patches' **sources** and the recompiler
   configs instead of the compiled `patches/patches.bin`, so the two people's
   builds of one commit accept each other although their clang versions
@@ -96,7 +96,7 @@ config, so a number holds for one commit only.
 
 ## Next step
 
-- **Ask the owner to review and merge #72 and PR_NUMBER** (either person may
+- **Ask the owner to review and merge #72 and #73** (either person may
   merge after the other's approving review, `HANDOFF.md`, *Project
   decisions*; locally with `git merge --no-ff`, never `gh pr merge`). Then
   delete the branches and take their rows out of *In progress*.
