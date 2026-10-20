@@ -124,7 +124,9 @@ A shared pool: take one by claiming it under *In progress*.
    of the way**: the two machines' builds of one commit now report the same
    identity by construction, so the join no longer depends on either
    person's clang. Both sides build the same commit and compare
-   `python3 -I tools/build_id.py --version eu` before starting.
+   `python3 -I tools/build_id.py --version eu` before starting. **Taken by
+   the collaborator's next session** (the person running it, 2026-10-20): it
+   needs a date with the owner, since both people must play at once.
 2. ~~**#71**~~ (the scenario stage takes about 13 minutes): done by the
    collaborator 2026-10-20, pull request #72 (the scenarios run in parallel:
    the stage 2:44 instead of 11:47).

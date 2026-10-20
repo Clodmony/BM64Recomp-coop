@@ -103,10 +103,22 @@ config, so a number holds for one commit only.
 - **The playtest's blocker is gone**: with both people on one commit the
   identities agree by construction. Worth confirming once in a real session
   between the two machines, which is what is left of #29.
-- Candidates left for this person: **#69** (the internet, a forwarded port),
-  **#70** (macOS, needs such a machine), **#66** (needs a machine with both
-  headless wrappers, so the owner's), and #46, #14 or #16 out of the shared
-  pool once the owner's group #56 releases them.
+- **Next issue: #29, the LAN playtest** (the person running the session,
+  2026-10-20), now that #67 has cleared the join. It needs both people at
+  once and the **same commit** on both sides, so it starts with a date and
+  with each side building that commit and comparing
+  `python3 -I tools/build_id.py --version eu`. The kit comes from
+  `tools/playtest-kit.sh`, the guide is `docs/coop/playtest.md`, and
+  afterwards `tools/compare_logs.py` reads the two `coop.log` files.
+- Candidates after it: **#69** (the internet, a forwarded port), **#66**
+  (needs a machine with both headless wrappers, so the owner's), **#70**
+  (macOS, needs such a machine), and #46, #14 or #16 out of the shared pool
+  once the owner's group #56 releases them.
+- **Decisions of this session** (the person running it, 2026-10-20): #72 and
+  #73 stay **drafts** and wait for the owner's review, with no further nudge
+  beyond the request already made; the scratch `runs/` and every `verify/`
+  folder but the two the open pull requests quote were deleted, while
+  `build/`, `rom/`, `n64recomp/` and `win/` stay.
 
 ## Machine notes
 
