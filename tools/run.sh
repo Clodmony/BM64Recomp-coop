@@ -5,7 +5,7 @@
 #   tools/run.sh [--version us|eu] [--until-overlay ID] [--timeout SECONDS]
 #                [--exe PATH] [--rom PATH] [--env NAME=VALUE]... [--audio]
 #                [--input FILE] [--until-log TEXT] [--name NAME] [--saves DIR]
-#                [--prev-log FILE] [--window]
+#                [--prev-log FILE] [--window] [--wrapper gamescope|xvfb]
 #
 #   --version        us or eu (default: us if its build exists, else eu)
 #   --until-overlay  stop with success once the game loads overlay ID (e.g.
@@ -31,7 +31,10 @@
 #   --prev-log       FILE as the run before's log (coop.prev.log, which a
 #                    session sends to the other side, #29)
 #   --window         open the game's window on the desktop (default: headless,
-#                    in gamescope's headless backend, 640x480)
+#                    in a display of the wrapper's own, 640x480)
+#   --wrapper        the headless wrapper: gamescope (the owner's machine) or
+#                    xvfb (xvfb-run, where gamescope is not packaged, #63);
+#                    default: gamescope if on PATH, else xvfb-run
 #
 # The run folder ~/dev-scratch/BM64Recomp-coop/runs/<stamp>-<version>[-<name>]-<suffix>/
 # holds everything the run writes: portable.txt (so saves and config stay in it),
@@ -65,6 +68,7 @@ name=
 saves=
 prev_log=
 window=0
+wrapper=
 envs=()
 while (( $# )); do
 	case "$1" in
@@ -81,7 +85,8 @@ while (( $# )); do
 		--saves) saves="${2:-}"; shift ;;
 		--prev-log) prev_log="${2:-}"; shift ;;
 		--window) window=1 ;;
-		-h|--help) sed -n '2,46p' "$0"; exit 0 ;;
+		--wrapper) wrapper="${2:-}"; shift ;;
+		-h|--help) sed -n '2,49p' "$0"; exit 0 ;;
 		*) echo "unknown option: $1" >&2; exit 4 ;;
 	esac
 	shift
@@ -93,6 +98,7 @@ if [ -z "$version" ]; then
 	[ ! -x "$(build_of us)" ] && [ -x "$(build_of eu)" ] && version=eu
 fi
 case "$version" in us|eu) ;; *) echo "--version must be us or eu" >&2; exit 4 ;; esac
+case "$wrapper" in ""|gamescope|xvfb) ;; *) echo "--wrapper must be gamescope or xvfb" >&2; exit 4 ;; esac
 exe="${exe:-$(build_of "$version")}"
 rom="${rom:-$scratch/rom/bm64.$version.z64}"
 [ -x "$exe" ] || [[ "$exe" == *.exe && -f "$exe" ]] || { echo "no executable at $exe (tools/verify.sh --version $version)" >&2; exit 4; }
@@ -136,9 +142,28 @@ ms() { echo $(( $(date +%s%N) / 1000000 )); }
 start=$(ms)
 launch=("$exe")
 [[ "$exe" == *.exe ]] && launch=(wine "$exe")
-# headless: the game draws into gamescope's own display, nothing on the desktop
-(( window )) || launch=(gamescope --backend headless -w 640 -h 480 -W 640 -H 480 -- "${launch[@]}")
-# a process group of its own, so the stop reaches gamescope's and Wine's children
+# headless: the game draws into a display of the wrapper's own, nothing on the
+# desktop. gamescope is the one the owner's machine has; Ubuntu 24.04 packages
+# none, so a machine with Xvfb instead runs under that (#63).
+if (( ! window )); then
+	wrapper_cmd() { case "$1" in gamescope) echo gamescope ;; xvfb) echo xvfb-run ;; esac; }
+	if [ -n "$wrapper" ]; then
+		command -v "$(wrapper_cmd "$wrapper")" >/dev/null ||
+			{ echo "--wrapper $wrapper: no $(wrapper_cmd "$wrapper") on PATH" >&2; exit 4; }
+	elif command -v gamescope >/dev/null; then wrapper=gamescope
+	elif command -v xvfb-run >/dev/null; then wrapper=xvfb
+	else
+		echo "no headless wrapper on PATH: install gamescope or xvfb (xvfb-run), or pass --window" >&2
+		exit 4
+	fi
+	case "$wrapper" in
+	gamescope) launch=(gamescope --backend headless -w 640 -h 480 -W 640 -H 480 -- "${launch[@]}") ;;
+	# -u WAYLAND_DISPLAY: with it SDL takes the desktop's Wayland display (WSLg's)
+	# and opens a window there instead of drawing into Xvfb
+	xvfb) launch=(env -u WAYLAND_DISPLAY xvfb-run -a -s "-screen 0 640x480x24" -- "${launch[@]}") ;;
+	esac
+fi
+# a process group of its own, so the stop reaches the wrapper's and Wine's children
 (cd "$run" && exec setsid env "${game_env[@]}" "${launch[@]}") > "$log" 2>&1 &
 pid=$!
 
@@ -165,7 +190,7 @@ while :; do
 	sleep 0.2
 done
 
-# stop the process group this script started (the game, and gamescope's and
+# stop the process group this script started (the game, and the wrapper's and
 # Wine's processes around it)
 if kill -0 -- "-$pid" 2>/dev/null; then
 	kill -TERM -- "-$pid" 2>/dev/null
@@ -183,6 +208,6 @@ fi
 if [ -n "$touched" ]; then
 	result="$result; OWNER CONFIG CHANGED: $touched"; status=3
 fi
-summary="run $version: $result; overlays: ${overlays:-none}; folder $run"
+summary="run $version: $result; display: ${wrapper:-window}; overlays: ${overlays:-none}; folder $run"
 echo "$summary" | tee "$run/summary.txt"
 exit "$status"

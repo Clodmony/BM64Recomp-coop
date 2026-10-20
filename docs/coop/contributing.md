@@ -62,13 +62,28 @@ are Bash and Python scripts made for Linux. On a Windows PC, work inside
 **WSL2** (Ubuntu 24.04 or newer, for Python 3.11+ and a recent clang):
 
 1. Install WSL2 with Ubuntu (`wsl --install -d Ubuntu-24.04` in an
-   administrator PowerShell), then open the Ubuntu shell.
+   administrator PowerShell), then open the Ubuntu shell. On a machine
+   without WSL this takes two steps, because the optional components must be
+   active before a distribution can be registered:
+   `wsl --install --no-distribution`, a reboot, then the distribution. The
+   distribution's disk, the build folders and the N64Recomp cache together
+   take well over ten gigabytes; on a small system drive pass
+   `--location <path>` to keep the distribution on another one.
 2. Install the build dependencies:
 
    ```bash
-   sudo apt install git gh cmake ninja-build clang lld llvm python3 \
-       libsdl2-dev libgtk-3-dev libfreetype-dev pkg-config
+   sudo apt install git gh make cmake ninja-build clang lld llvm python3 \
+       libsdl2-dev libgtk-3-dev libfreetype-dev pkg-config xvfb
    ```
+
+   `make` is easy to miss and not installed by default: `make -C patches`
+   builds the patches, so without it the `patches` stage of
+   `tools/verify.sh` fails with `make: command not found`, and `europe` then
+   fails for the missing `patches.elf` (#58).
+
+   `xvfb` is what the headless test runs use where `gamescope` is not
+   packaged, which is every Ubuntu 24.04 (#63); `tools/run.sh` picks
+   whichever of the two is there.
 
 3. Install Claude Code inside WSL2 (Anthropic's Claude Code documentation,
    *Windows / WSL*), log in with your own account, and log in to GitHub with
@@ -90,19 +105,49 @@ are Bash and Python scripts made for Linux. On a Windows PC, work inside
    eu` (links the game; the first run recompiles the whole ROM and takes a
    while).
 
-Not run yet (the collaborator's first setup check finds out, and what it
-finds goes here): the game window through WSLg, `tools/run.sh`'s headless
-runs in gamescope inside WSL2, and the scenarios. If headless runs fail in
-WSL2, `tools/verify.sh` without `--scenarios` still checks a branch; the
-scenarios then run on the owner's machine before the merge.
+**Checked in WSL2** (the collaborator's first setup check, #58, 2026-10-20,
+Ubuntu 24.04 with clang 18): `tools/verify.sh --quick` and
+`tools/verify.sh --full --version eu` both pass, so the Europe build
+recompiles and links there. The game runs and plays the attract demo at full
+speed, 5200 game frames in 104 s of wall-clock time at PAL 50, the rate the
+owner's machine shows. `tools/verify.sh --full --version eu --scenarios`
+passes whole, 383/383 checks, the two-game `session-*` scenarios included.
+WSLg supplies `DISPLAY`, `WAYLAND_DISPLAY` and `XDG_RUNTIME_DIR` by itself,
+so `tools/run.sh --window` opens the game window with no further setup and
+SDL takes its `x11` driver.
+
+**Ubuntu 24.04 packages no `gamescope`**, which `tools/run.sh` used to wrap
+every headless run in; since #63 it picks its wrapper instead, so install
+Xvfb once and the headless runs and the scenarios need nothing further:
+
+```bash
+sudo apt install xvfb
+tools/run.sh --version eu --until-overlay 0x20   # headless, under Xvfb
+```
+
+The run's summary line names the display it used (`display: xvfb` here,
+`gamescope` on a machine that has it); `--wrapper` forces one
+([building.md](building.md), *Running the game*).
 
 To **play** on Windows, use the Windows build rather than the WSL2 one: the
 playtest kit's `windows/` folder ([playtest.md](playtest.md)), made by
 `tools/playtest-kit.sh` on either machine. Both players need builds with the
 same build identity, or the session refuses the join; builds of the same
-commit from `tools/verify.sh` and `tools/build-windows.sh` have it. A native
-Windows build made with Visual Studio (upstream's [BUILDING.md](../../BUILDING.md))
-compiles the patches with another clang and likely does not match (#29).
+commit from `tools/verify.sh` and `tools/build-windows.sh` have it, measured
+on one machine (#29, both `0xFC44BFB4`; [building.md](building.md), *The
+build identity across platforms*, also for reading the identity without
+playing). A build made with Visual Studio (upstream's
+[BUILDING.md](../../BUILDING.md)) compiles the patches with another clang and
+may not match; that is untried.
+
+The cross build itself runs in WSL2 too, and needs more than the Linux build:
+`clang-cl` (the clang package ships no such name, link it),
+`wine64`, `xwin` and its splat of Microsoft's CRT and Windows SDK, and for
+Ubuntu's clang 18 the STL's version switch, which the toolchain sets by
+itself ([building.md](building.md), *The Windows build*).
+`tools/build-windows.sh` names what is missing before it builds. The
+resulting `.exe` runs natively on the Windows side, outside WSL2, from a
+portable folder of its own.
 
 ## Usage limits
 

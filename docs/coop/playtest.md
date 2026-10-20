@@ -97,7 +97,10 @@ folder:
   crash, start the game again and join once more.
 
 Nothing else is sent, and only to the PC you connect to. Note what you did
-when something went wrong, and the time. In the logs, look for:
+when something went wrong, and the time.
+`python3 -I tools/compare_logs.py <host coop.log> <other coop.log>` reads the
+two side by side and says whether the two games agreed (building.md,
+*Comparing the logs of two machines*). In the logs, look for:
 
 - `coop: session desync frame=…`: the two games no longer agree (the most
   important line).
