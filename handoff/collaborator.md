@@ -5,10 +5,20 @@ work*). Only the collaborator's sessions rewrite it: session history, what
 each issue found, decisions taken in those sessions, the next step. No
 names, handles or hardware in it.
 
-Last updated 2026-10-20 (#29: the Windows build against the Linux build).
+Last updated 2026-10-20 (#77: Z skips the intro).
 
 ## State
 
+- **#77 is done**, branch `coop/77-skip-intro`, **draft pull request #84** into
+  `bm64recomp-coop` (`Closes #77`): **Z during the intro** starts a new file
+  and goes straight to the world map, so a run by hand no longer sits through
+  the logos, the attract demo and the opening cutscene. Section *#77* below.
+- Three playtest findings of the person running that session became issues
+  and are **not** started: **#78** (a downed player plays no death
+  animation - a consequence of #22, the story death path is skipped whole),
+  **#81** (player 2 does not dance after a stage clear - the clear works on
+  slot 0's actor only) and **#83** (the intro skip inside an online session,
+  the part #77 left out on purpose).
 - **#29's Windows side and the Windows-against-Linux pair are done**, branch
   `coop/29-windows-build`, **draft pull request #68** into `bm64recomp-coop`
   (no `Closes`: #29 stays open for two real machines, the internet and
@@ -30,6 +40,50 @@ Last updated 2026-10-20 (#29: the Windows build against the Linux build).
   #29 itself carries a comment on what is answered and what is left.
 - The branch was cut from `bm64recomp-coop`, so it does **not** have #63's
   `run.sh`: runs on it need the local gamescope stand-in again (below).
+
+## #77: Z skips the intro (2026-10-20)
+
+The person running the session asked for a key that skips the intro, because
+every test run by hand paid for it: the boot's first `0x20` only shows the
+logos and goes on to the attract demo whatever is pressed, and a new file then
+plays its opening cutscene. Measured: left alone a run was still not at the
+world map after 60 s (the demo and its stages `0x38`, `0x50`, `0x58`, `0x29`).
+
+What it is now: **Z during the intro** starts a new file and goes straight to
+the world map (overlay `0x21`). Decided by that person during the session:
+first the target (the world map of a new file, not the title menu), then the
+trigger (a **controller** button, not a host key - an F9 version was built and
+thrown away), and Z because it is free in the intro and in the menus.
+
+What is worth keeping from the work:
+
+- **The target was cheap to prove:** `BM64_COOP_WARP=0x21` already lands in
+  the world map 2.2 s after the start. So the skip reuses the warp's step
+  (`coop_warp`) and `bm64.us.toml` needed no change at all - the per-frame
+  hook's warp request already exists, so no ROM recompile for a hook text.
+- **Read the button where the game reads its pads** (`recomp::get_n64_input`,
+  `src/game/controls.cpp`), not from SDL: a scenario then presses it with an
+  ordinary `pad 0 Z` step, and a session's two machines see the same press
+  through the lockstep. This is what made the whole thing testable - the F9
+  version needed xdotool and could never be a scenario.
+- **One step does not always arrive.** Pressed inside the demo (`0x1B`), the
+  demo's own scene change wins and nothing happens; the skip therefore keeps
+  asking while the intro runs (at most 6 steps, 60 frames apart). Only the
+  hand runs found this: the switch-driven test fired in the logo phase, where
+  a single step always works.
+- **The demo's stages are ordinary room overlays**, so "am I in the intro?"
+  cannot be a list of overlay ids: a flag follows the demo loop (set by a
+  `0x1B` load, cleared by the title, the file select, the world map or a
+  cutscene). Without it, Z in a real room would have skipped a game in play.
+- **Refused in an online session** and filed as **#83**: the press itself
+  would travel through the lockstep, but the decision also reads this
+  machine's overlay and frame counters, which wants a `same-hashes` check of
+  its own.
+
+Scenarios (all with a real Z press): `skip-intro` (logos), `skip-intro-demo`
+(the repeat), `skip-intro-room` (Z twice in room `0x29` changes nothing,
+player 1 moved 0.0 units). Red before the change: the first timed out after
+60 s without reaching `0x21`, 1/6 checks.
 
 ## #29: what the Windows side found
 
@@ -124,6 +178,28 @@ needed the gamescope stand-in again, since the branch predates #63.
 
 ## Next step
 
+- **#77's pull request #84 waits for the owner's review** like the others. It
+  touches `src/game/controls.cpp` (two `coop::note_pad` calls),
+  `src/coop/harness.{h,cpp}`, `docs/coop/building.md` and adds three
+  scenarios, so it should not conflict with #65, #68, #72 or #73 beyond
+  `building.md` and the notes.
+- **#78 is the next issue of this machine** (the person running the session,
+  2026-10-20): a downed player plays no death animation. Start from why, which
+  is already read: `coop_partner_death` returns 1 at `func_8023A870`'s entry
+  while the partner lives, so flags 0x92, the death process `func_8023F26C`
+  and the room's retry are all skipped - and the animation hangs on that path
+  (#22, `docs/coop/design.md`, *The death chain*). `func_8023F26C` cannot
+  simply be let run: in the story case it takes **slot 0's actor and slot 0**
+  (0x8023F3A4-0x8023F3BC), so a player 2 death would play and end as player
+  1's, with the retry behind it. So the animation has to be driven on the
+  dying actor itself, and the open points (which animation, who is frozen
+  while it plays, when the ghost flag and look are set, the same thing on both
+  machines) are listed in #78. `p2-ghost` and `p1-ghost` are the scenarios to
+  extend.
+- **#81 and #83 are open and unstarted** too: #81 (player 2 dancing after a
+  stage clear - the clear works on slot 0's actor only, and nothing can clear
+  a stage in a scripted run today, so it needs that first) and #83 (the intro
+  skip inside a session).
 - **Ask the owner to review and merge #68 and #65** (either person may merge
   after the other's approving review, `HANDOFF.md`, *Project decisions*;
   locally with `git merge --no-ff`, never `gh pr merge`). #65 first: #68 does
@@ -175,6 +251,14 @@ never the hardware itself. Recipes that hold for everyone go into
   own options and runs what follows `--` **under Xvfb**, so the runs stay
   headless as the owner asks; it lives in `~/.local/bin`, outside the
   repository.
+- **`xdotool` is installed** (apt, the person approved it for #77). It is how
+  a real key press can be tested, which no scenario can do: start
+  `Xvfb :N -screen 0 640x480x24`, run the game with `DISPLAY=:N` and
+  `run.sh --window`, then `xdotool search --onlyvisible --name Bomberman`,
+  `xdotool windowfocus <id>` and `xdotool key F9`. It worked without a window
+  manager (the window is named "Bomberman 64: Recompiled"); `windowactivate`
+  would not, it needs EWMH. A **pad** button needs none of this: an input
+  script presses it (`pad 0 Z`), which is why #77 ended up reading the pads.
 - **The agent session runs on the Windows side** and drives WSL2 through
   `wsl.exe`. What a later session should know:
   - The WSL checkout is reachable from Windows as
@@ -242,5 +326,8 @@ never the hardware itself. Recipes that hold for everyone go into
   path to it is at the top of the .ps1). **Keep** — they are what a later
   session needs to play either pair again without building anything.
 - `rom/`, `build/BM64Recomp-coop-eu/`, `build/win-eu/`, `n64recomp/`: keep.
-- `runs/`: emptied 2026-10-20. `verify/`: only `20261020-195322` left, the
-  run quoted in pull request #68; delete it once #68 is merged.
+- `runs/`: emptied again 2026-10-20 after #77 (502 MB of its test runs).
+  `verify/`: `20261020-195322` (quoted in #68) and `20261020-234733`
+  (quoted in #84) left; delete each once its pull request is merged.
+- `wt/77-skip-intro/`: #77's worktree, with its build folder
+  `build/77-skip-intro-eu`. Remove both once #84 is merged.
