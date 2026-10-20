@@ -65,6 +65,7 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 | #56 (group: #55, #52, #49, #51, #53, #46, #57) | owner | `coop/56-playtest` (lanes merged D, A, B, C) | PR #74 open, verify 555/555; waits for the collaborator's review. Then #72 (rebase on #59's `scenario.py`, see its review) |
 | #63 | collaborator | `coop/63-run-wrapper` | done 2026-10-20, draft pull request #65, verify 8/8 and 383/383 on Ubuntu 24.04 without gamescope; waiting for the owner's review |
 | #29 (everything one machine can answer; the issue is now the LAN playtest) | collaborator | `coop/29-windows-build` | done 2026-10-20, draft pull request #68: the Windows build cross-compiled in WSL2 and run natively on Windows (both platforms `0xFC44BFB4`), a Windows pair and a Windows-against-Linux pair in lockstep with the same hash on every frame, `tools/compare_logs.py` for two machines' logs; waiting for the owner's review. #29 stays open for two real machines, the internet and macOS |
+| #77 | collaborator | `coop/77-skip-intro` | done 2026-10-20, draft pull request: **Z during the intro** starts a new file in the world map (overlay 0x21), so a run by hand skips the logos, the attract demo and the opening cutscene; three scenarios (logos, demo with its repeated step, and Z in a room doing nothing); waiting for the owner's review |
 
 ## Project decisions (bind both people)
 
@@ -102,6 +103,14 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 
 A shared pool: take one by claiming it under *In progress*.
 
+0. **New playtest findings (collaborator, 2026-10-20), nobody on them:**
+   **#78** a downed player plays no death animation (a consequence of #22:
+   the story death path is skipped whole, so the animation goes with it; it
+   needs a decision on how the animation runs on the dying actor, since the
+   death process always takes slot 0), **#81** player 2 does not dance after
+   a stage clear (the clear works on slot 0's actor only; it also needs a
+   scripted way to clear a stage, which nothing has today) and **#83** the
+   intro skip inside an online session, the part #77 left out.
 0. **Group #56, next (owner, 2026-10-19):** the playtest findings and the
    #22 follow-ups in four parallel lanes, one agent each, merged in the
    order D, A, B, C: lane A #55 (urgent: player 2 cannot walk before
