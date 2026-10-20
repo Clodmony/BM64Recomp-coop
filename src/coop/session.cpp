@@ -17,6 +17,8 @@
 //                                         works without a session too (two
 //                                         runs on the same script then match)
 //   BM64_COOP_LOG_HASH=<n>                log the state hash every n frames
+//   BM64_COOP_LOG_STATE=<n>               log the values behind it (the
+//                                         snapshot lines) every n frames
 //   BM64_COOP_CONNECT_TIMEOUT=<s>         wait this long for the other (60)
 //   BM64_COOP_BUILD_ID=<n>                claim build identity n (a test of
 //                                         the hello's build check)
@@ -46,11 +48,12 @@
 //
 // Then every message is u16 kind, u16 size and size bytes (protocol 5, #57;
 // a receiver skips a kind it does not know):
-//   frame  kind 1, 32 bytes: u32 frame, u16 buttons, u16 flags (1: the
+//   frame  kind 1, 52 bytes: u32 frame, u16 buttons, u16 flags (1: the
 //          camera's angles are set), f32 x, f32 y (the bits the game will
 //          read), u32 hash frame, u32 hash (of the state after that frame),
 //          f32 yaw, f32 pitch (the sender's camera, in degrees, when it sent
-//          the pad)
+//          the pad), then the hash's five parts, u32 each (scene, random,
+//          players, enemies, save; protocol 6, #75)
 //   log    kind 2: the next text of the sender's log (coop.log, from the
 //          start of its run; whole lines). The other side appends it to
 //          coop-logs/<time>-<host|client>.log as it comes, so the text is
@@ -64,11 +67,13 @@
 // a machine sends its hash of frame f and its pad for frame f + delay, then
 // waits for the other's pad for frame f + 1; frames below the delay hold no
 // buttons. A hash that differs from
-// this machine's for the same frame logs "coop: session desync" (once, then a
-// count every 600 frames). A peer that closes, or sends nothing for 10 s,
+// this machine's for the same frame logs "coop: session desync" with the
+// parts that differ and this machine's values of that frame ("coop:
+// snapshot" lines, #75; once, then a count every 600 frames). A peer that closes, or sends nothing for 10 s,
 // ends the session: "coop: session lost", and the game reads the local pads
 // again. The build identity (build_id) is a hash of the patches' binary and
 // of the game's recompiler config, which holds the hooks (src/coop/version.cmake).
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -86,6 +91,10 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+#if defined(__x86_64__) || defined(_M_X64)
+#include <xmmintrin.h>
+#endif
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -123,18 +132,32 @@ extern "C" const size_t mm_patches_bin_size;
 namespace {
 
 // 5 (#57): the messages after the save got a kind and a size, for the log's
-// text; a protocol 4 peer would read a log message as a frame
-constexpr uint16_t protocol = 5;
+// text; a protocol 4 peer would read a log message as a frame. 6 (#75): the
+// frame message carries the hash's parts
+constexpr uint16_t protocol = 6;
 constexpr uint32_t no_frame = 0xFFFFFFFF;
 constexpr size_t hello_head = 8; // "COOP", protocol, role, game: the same in every protocol
 constexpr size_t hello_size = 20;
-constexpr size_t frame_size = 32;
+constexpr size_t frame_size = 52;
 constexpr size_t message_head = 4; // u16 kind, u16 size
 constexpr uint16_t message_frame = 1;
 constexpr uint16_t message_log = 2;
 constexpr size_t log_per_frame = 512; // log text after each frame, at most
 constexpr size_t log_message_max = 0xFFFF;
 constexpr auto peer_timeout = std::chrono::seconds(10);
+
+// The state the per-frame hook hands over (patches/coop_session.c,
+// CoopStateWords): the hash, its parts, then the values the snapshot lines
+// show. Words, floats as their bits.
+constexpr size_t hash_parts = 5;
+constexpr const char* part_names[hash_parts] = {"scene", "random", "players", "enemies", "save"};
+constexpr size_t state_scene = 1 + hash_parts; // overlay, flow flags, lives, S
+constexpr size_t state_random = state_scene + 4; // the generator's index and the word after it
+constexpr size_t state_players = state_random + 2; // 5 of: controlType, states, flags, x, y, z
+constexpr size_t state_enemies = state_players + 5 * 6; // 16 records of: state, type (-1 not in the room), x, y, z
+constexpr size_t state_words = state_enemies + 16 * 5;
+constexpr size_t state_fpu = state_words; // then the host's: the game thread's FPU control word
+using State = std::array<uint32_t, state_words + 1>;
 
 #ifdef BM64_VERSION_EU
 constexpr uint8_t game_version = 1;
@@ -157,6 +180,13 @@ struct Pad {
     uint32_t pitch = 0;
 };
 
+// The other side's hash of a frame, with its parts.
+struct PeerHash {
+    uint32_t frame = 0;
+    uint32_t hash = 0;
+    std::array<uint32_t, hash_parts> parts{};
+};
+
 struct Config {
     Role role = Role::None;
     std::string host;
@@ -167,6 +197,7 @@ struct Config {
     bool build_set = false;
     uint32_t build = 0;
     uint32_t log_hash = 0;
+    uint32_t log_state = 0;
     int connect_timeout = 60;
     bool launcher = false; // from the launcher's menu: wait until cancelled
 };
@@ -182,7 +213,7 @@ struct Session {
     uint32_t frame = 0;      // the game frame being played
     std::array<Pad, 2> pads; // its pads 0 and 1
     std::map<uint32_t, Pad> own;   // this machine's delayed pads, by frame
-    std::map<uint32_t, uint32_t> hashes; // this machine's hashes, by frame
+    std::map<uint32_t, State> hashes; // this machine's hashes and their values, by frame
     uint32_t hash_frame = no_frame;
     uint32_t hash = 0;
     uint32_t desyncs = 0;
@@ -196,7 +227,7 @@ struct Session {
     std::mutex mutex;
     std::condition_variable arrived;
     std::map<uint32_t, Pad> peer;
-    std::deque<std::pair<uint32_t, uint32_t>> peer_hashes;
+    std::deque<PeerHash> peer_hashes;
     bool peer_closed = false;
 };
 
@@ -248,6 +279,7 @@ Config read_config() {
     }
     config.delay = env_number("BM64_COOP_DELAY", 2);
     config.log_hash = env_number("BM64_COOP_LOG_HASH", 0);
+    config.log_state = env_number("BM64_COOP_LOG_STATE", 0);
     config.connect_timeout = static_cast<int>(env_number("BM64_COOP_CONNECT_TIMEOUT", 60));
     const char* value = std::getenv("BM64_COOP_SESSION");
     if (value == nullptr || value[0] == '\0') {
@@ -456,10 +488,14 @@ void receive_frames(socket_t sock) {
         const uint8_t* msg = body.data();
         Pad pad{get16(msg + 4), bits_float(get32(msg + 8)), bits_float(get32(msg + 12)), (get16(msg + 6) & 1) != 0,
                 get32(msg + 24), get32(msg + 28)};
+        PeerHash hash{get32(msg + 16), get32(msg + 20)};
+        for (size_t i = 0; i < hash_parts; i++) {
+            hash.parts[i] = get32(msg + 32 + i * 4);
+        }
         std::lock_guard lock{session.mutex};
         session.peer[get32(msg)] = pad;
-        if (get32(msg + 16) != no_frame) {
-            session.peer_hashes.emplace_back(get32(msg + 16), get32(msg + 20));
+        if (hash.frame != no_frame) {
+            session.peer_hashes.push_back(hash);
         }
         session.arrived.notify_all();
     }
@@ -774,10 +810,69 @@ void lose(Session& s, const char* why) {
     shutdown(s.sock, 2);
 }
 
+float word_float(uint32_t word) {
+    return bits_float(word);
+}
+
+// The control bits of the calling thread's SSE control word, MXCSR (#75): the
+// rounding mode the game sets (its ctc1 becomes fesetround, N64Recomp's
+// set_cop1_cs), flush-to-zero (0x8000) and denormals-are-zero (0x40), which
+// change float results and which a platform may start a thread with. 0 where
+// there is none (not x86-64). The status bits are left out: host code sets
+// them in its own way on each machine.
+uint32_t fpu_control() {
+#if defined(__x86_64__) || defined(_M_X64)
+    return _mm_getcsr() & 0xFFC0;
+#else
+    return 0;
+#endif
+}
+
+// The values behind a frame's hash, a line each (#75): the scene, every player
+// with a control type, the enemy records' states and every enemy in the room,
+// positions in world units and as their bits. Two machines' lines for the same
+// frame show what parted them (tools/compare_logs.py).
+void log_snapshot(uint32_t frame, const State& w) {
+    std::fprintf(stderr,
+                 "coop: snapshot frame=%u scene overlay=0x%X flags=0x%X lives=%d s=%d random=%u,%08X fpu=0x%04X\n",
+                 frame, w[state_scene], w[state_scene + 1], static_cast<int32_t>(w[state_scene + 2]),
+                 static_cast<int32_t>(w[state_scene + 3]), w[state_random], w[state_random + 1], w[state_fpu]);
+    for (size_t slot = 0; slot < 5; slot++) {
+        const uint32_t* p = &w[state_players + slot * 6];
+        if (p[0] == 0) {
+            continue;
+        }
+        std::fprintf(stderr,
+                     "coop: snapshot frame=%u slot=%zu control=%d states=0x%X flags=0x%X x=%.3f y=%.3f z=%.3f "
+                     "bits=%08X,%08X,%08X\n",
+                     frame, slot, static_cast<int32_t>(p[0]), p[1], p[2], word_float(p[3]), word_float(p[4]),
+                     word_float(p[5]), p[3], p[4], p[5]);
+    }
+    std::string records;
+    for (size_t rec = 0; rec < 16; rec++) {
+        records += (rec == 0 ? "" : ",") + std::to_string(static_cast<int32_t>(w[state_enemies + rec * 5]));
+    }
+    std::fprintf(stderr, "coop: snapshot frame=%u records=%s\n", frame, records.c_str());
+    for (size_t rec = 0; rec < 16; rec++) {
+        const uint32_t* e = &w[state_enemies + rec * 5];
+        if (static_cast<int32_t>(e[1]) == -1) {
+            continue;
+        }
+        std::fprintf(stderr,
+                     "coop: snapshot frame=%u enemy rec=%zu state=%d type=0x%X x=%.3f y=%.3f z=%.3f "
+                     "bits=%08X,%08X,%08X\n",
+                     frame, rec, static_cast<int32_t>(e[0]), e[1], word_float(e[2]), word_float(e[3]),
+                     word_float(e[4]), e[2], e[3], e[4]);
+    }
+}
+
 // Compares the other side's hashes with this machine's; called with the lock.
+// The first frame that differs is logged with the parts that differ and this
+// machine's snapshot of it: the other side logs the same frame with its own.
 void compare_hashes(Session& s) {
     while (!s.peer_hashes.empty()) {
-        auto [frame, hash] = s.peer_hashes.front();
+        const PeerHash& peer = s.peer_hashes.front();
+        uint32_t frame = peer.frame;
         auto mine = s.hashes.find(frame);
         if (mine == s.hashes.end()) {
             if (frame > s.hash_frame || s.hash_frame == no_frame) {
@@ -786,11 +881,19 @@ void compare_hashes(Session& s) {
             s.peer_hashes.pop_front(); // too old to compare
             continue;
         }
-        if (mine->second != hash) {
+        const State& state = mine->second;
+        if (state[0] != peer.hash) {
             if (s.desyncs++ == 0) {
                 s.first_desync = frame;
-                std::fprintf(stderr, "coop: session desync frame=%u local=%08X peer=%08X\n", frame, mine->second,
-                             hash);
+                std::string parts;
+                for (size_t i = 0; i < hash_parts; i++) {
+                    if (state[1 + i] != peer.parts[i]) {
+                        parts += std::string(parts.empty() ? "" : ",") + part_names[i];
+                    }
+                }
+                std::fprintf(stderr, "coop: session desync frame=%u local=%08X peer=%08X parts=%s\n", frame,
+                             state[0], peer.hash, parts.empty() ? "none" : parts.c_str());
+                log_snapshot(frame, state);
             }
         }
         s.peer_hashes.pop_front();
@@ -801,13 +904,13 @@ void compare_hashes(Session& s) {
 }
 
 // One frame of the lockstep, from the per-frame hook at the end of frame
-// s.frame: this machine's hash of it, its pad and its camera's yaw and pitch
-// for frame s.frame + delay, and both pads of the next frame (the other's
-// waited for).
-void step(Session& s, uint32_t hash, uint32_t yaw, uint32_t pitch) {
+// s.frame: this machine's hash of it (with its parts), its pad and its
+// camera's yaw and pitch for frame s.frame + delay, and both pads of the next
+// frame (the other's waited for).
+void step(Session& s, const State& state, uint32_t yaw, uint32_t pitch) {
     s.hash_frame = s.frame;
-    s.hash = hash;
-    s.hashes[s.frame] = hash;
+    s.hash = state[0];
+    s.hashes[s.frame] = state;
     Pad mine{};
     if (!s.local(0, &mine.buttons, &mine.x, &mine.y)) {
         mine = Pad{};
@@ -830,6 +933,9 @@ void step(Session& s, uint32_t hash, uint32_t yaw, uint32_t pitch) {
     put32(msg + 20, s.hash);
     put32(msg + 24, mine.yaw);
     put32(msg + 28, mine.pitch);
+    for (size_t i = 0; i < hash_parts; i++) {
+        put32(msg + 32 + i * 4, state[1 + i]);
+    }
     add_log_text(s, log_per_frame); // after the frame, in the same packet (#57)
     if (!send_all(s.sock, s.out.data(), s.out.size())) {
         lose(s, "send failed");
@@ -948,6 +1054,7 @@ std::optional<bool> coop::session_input(int pad, uint16_t* buttons, float* x, fl
             return std::nullopt;
         }
         std::fprintf(stderr, "coop: session lockstep from frame 0\n");
+        std::fprintf(stderr, "coop: session fpu=0x%04X\n", fpu_control()); // the game thread's (#75)
         start_log_stream(s);
     }
     if (pad > 1) {
@@ -982,9 +1089,9 @@ extern "C" uint32_t coop_session_seed(uint32_t seed) {
 }
 
 // Whether the per-frame hook should hash the state (a session, or
-// BM64_COOP_LOG_HASH).
+// BM64_COOP_LOG_HASH or BM64_COOP_LOG_STATE).
 extern "C" uint32_t coop_session_hashing(void) {
-    return coop::session_configured() || config().log_hash > 0;
+    return coop::session_configured() || config().log_hash > 0 || config().log_state > 0;
 }
 
 // Hook in the player update func_8024E088 (bm64.us.toml), where it has read
@@ -1007,18 +1114,24 @@ extern "C" int32_t coop_session_view(int32_t slot, uint32_t* yaw, uint32_t* pitc
 }
 
 // From the per-frame hook, at the end of each game frame: the hash of the
-// state after it (patches/coop_session.c), the camera's yaw and pitch (their
-// bits) and, in a session, the lockstep's step to the next frame. Frames
-// count from the one of the game's first pad read. (Upstream's main loop
-// reads the pads twice a frame, once for its cheats, so the step is here
-// rather than at a pad read.)
-extern "C" void coop_session_frame(uint32_t hash, uint32_t yaw, uint32_t pitch) {
+// state after it with its parts and values (`words` words, patches/
+// coop_session.c), the camera's yaw and pitch (their bits) and, in a session,
+// the lockstep's step to the next frame. Frames count from the one of the
+// game's first pad read. (Upstream's main loop reads the pads twice a frame,
+// once for its cheats, so the step is here rather than at a pad read.)
+extern "C" void coop_session_frame(const uint32_t* words, uint32_t count, uint32_t yaw, uint32_t pitch) {
     Session& s = session;
     uint32_t frame = hashed_frames++;
+    State state{};
+    std::memcpy(state.data(), words, std::min<size_t>(count, state_words) * sizeof(uint32_t));
+    state[state_fpu] = fpu_control();
     if (config().log_hash > 0 && frame % config().log_hash == 0) {
-        std::fprintf(stderr, "coop: hash frame=%u hash=%08X\n", frame, hash);
+        std::fprintf(stderr, "coop: hash frame=%u hash=%08X\n", frame, state[0]);
+    }
+    if (config().log_state > 0 && frame % config().log_state == 0) {
+        log_snapshot(frame, state);
     }
     if (s.live) {
-        step(s, hash, yaw, pitch);
+        step(s, state, yaw, pitch);
     }
 }
