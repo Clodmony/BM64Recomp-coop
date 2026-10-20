@@ -34,8 +34,9 @@ Last updated 2026-10-19 (#47: notes split for two people).
   (two machines, Windows/macOS), #46 (scenario.py and a garbled log line), #49 (enemy targeting),
   #51–#55 (playtest findings; #55 urgent), #56 (their group), #57 (live client log),
   #63 (`run.sh`'s headless default needs gamescope, which Ubuntu 24.04 does
-  not package; found by #58, in progress). #58 (the collaborator's setup) is
-  done and merged.
+  not package; found by #58, pull request #65) and #66 (are gamescope and
+  Xvfb runs comparable? a follow-up of #63, for a machine with both
+  wrappers). #58 (the collaborator's setup) is done and merged.
   The owner's last step of #47 is done: the collaborator has write access on
   the fork (checked 2026-10-20).
 - Open pull requests: #65 (#63, `run.sh` picks its headless wrapper,
@@ -105,9 +106,11 @@ A shared pool: take one by claiming it under *In progress*.
 4. **A hand try of the Co-op menu**: two games on one machine, Host 7777 in
    one, Join 127.0.0.1 7777 in the other, then turn each camera with the
    C-buttons (#33).
-5. **#29** (the rest): the internet, macOS; whether two compilers give the
-   same build identity; whether two games on one machine read the same
-   gamepad.
+5. **#29, the Windows side: taken by the collaborator** for the next
+   session (2026-10-20) — whether a native Windows build has the same build
+   identity as the WSL2 one, since an online session refuses the join when
+   they differ. The rest of #29 stays in the pool: the internet, macOS,
+   whether two games on one machine read the same gamepad.
 6. **Rest of #14 and #16**: a story teleport (`func_802512C0` from a room
    script, beyond Green Garden stage 1) and a scene with player 2 already in
    the room, then a check that pad 1 does not move a frozen player 2.
