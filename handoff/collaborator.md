@@ -177,11 +177,13 @@ stand-in again.
   forwarded port) and #70 (macOS, waiting for such a machine) carry the
   rest. #69 waits for the LAN run, #70 for hardware nobody here has.
 - **#71 is done** (above): the lanes alone took the stage from 11:47 to
-  2:44, so the issue's *done when* is met. Still open for the person to
-  decide: whether `BM64_COOP_PAL60=1` (the second lever, about 12 % more and
-  the one that changes the game's timing) should be built as an opt-out per
-  scenario on top. If they say no, that part of #71 is simply not wanted and
-  the issue can close with the pull request.
+  2:44, so the issue's *done when* is met. **The person decided at the end
+  of the session (2026-10-20): the second lever is not wanted** —
+  `BM64_COOP_PAL60=1` stays unbuilt, since it is worth about 12 % against
+  the lanes' 77 % and is the one that changes the game's own timing; #71
+  closes with #72. They also kept the default at a third of the cores (at
+  most 6) rather than raising it to a half (at most 8), so a session
+  scenario's two games and a busy machine keep headroom.
 - **#67 next** (collaborator, 2026-10-20) and it
   **needs a number from the owner**: the offline sum from their own checkout
   of the same commit (the snippet in `docs/coop/building.md`, *The build
