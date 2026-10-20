@@ -72,6 +72,9 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
   once the other has reviewed it on GitHub (an approving review). Merge
   locally under the Claude identity, never with `gh pr merge` (AGENTS.md,
   *Workflow*).
+- **Build identity (#67, owner, 2026-10-20):** hashed from the patches'
+  sources (#73), not the compiled binary and not a pinned clang; the same
+  number on clang 18 and 23 (measured).
 - Local split-screen co-op is on hold (owner, 2026-10-18); the co-op is
   played online.
 - Heart items (#36): shared, but a full player does not take one.
