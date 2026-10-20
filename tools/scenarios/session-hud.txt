@@ -1,0 +1,105 @@
+# The co-op HUD in an online session (#53, owner 2026-10-19): the same on both
+# machines, player 1 top left and player 2 top right on the host and on the
+# client. hud-corners' way into room 0x29 through the menus (the host's pad
+# drives them; both scripts wait the same frames and take the scene step on
+# the same frame), then session-ghost's moves: player 1 is downed by its own
+# bomb, and both games show its dead face. The HUD only draws: both games hash
+# the same state on every frame.
+#session
+#saves-host save-file
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_LOG_HASH=1
+#
+#check no-log ^coop: session (desync|lost|refused)
+#check-client no-log ^coop: session (desync|lost|refused)
+#check same-hashes
+#check log ^coop: hud on p2=4$
+#check-client log ^coop: hud on p2=4$
+#check log "^coop: hud slot=0 corner=left x=28 y=44 face=0 hearts=1 bombs=2 fire=2 type=0x200$"
+#check-client log "^coop: hud slot=0 corner=left x=28 y=44 face=0 hearts=1 bombs=2 fire=2 type=0x200$"
+#check log "^coop: hud slot=4 corner=right x=188 y=44 face=2 hearts=\d bombs=\d fire=\d type=0x[0-9A-F]+$"
+#check-client log "^coop: hud slot=4 corner=right x=188 y=44 face=2 hearts=\d bombs=\d fire=\d type=0x[0-9A-F]+$"
+#check after "^coop: down slot=0 cause=1 lives=2 ghost$" "^coop: hud slot=0 corner=left x=28 y=44 face=8 hearts=1 "
+#check-client after "^coop: down slot=0 cause=1 lives=2 ghost$" "^coop: hud slot=0 corner=left x=28 y=44 face=8 hearts=1 "
+#check not-after "^coop: down slot=0" "^coop: hud slot=4 .* face=10 "
+#check-client not-after "^coop: down slot=0" "^coop: hud slot=4 .* face=10 "
+#
+# The client's script: the same frames, its pad 0 is player 2's.
+#client overlay 0x20
+#client overlay 0x1B
+#client wait 60
+#client wait 4
+#client overlay 0x20
+#client wait 60
+#client wait 4
+#client wait 60
+#client wait 4
+#client overlay 0x1F
+#client wait 60
+#client wait 4
+#client wait 60
+#client wait 4
+#client wait 60
+#client wait 4
+#client overlay 0x21
+#client wait 60
+#client scene 0x29 0x13
+#client overlay 0x29
+#client wait 700
+#client probe start
+#client wait 15
+#client pad 0 - 1 0.05
+#client wait 30
+#client pad 0 -
+#client wait 10
+#client probe apart
+#client wait 2
+#client wait 200
+#client probe dead
+#client end
+overlay 0x20
+overlay 0x1B
+wait 60
+pad 0 START
+wait 4
+pad 0 -
+overlay 0x20
+wait 60
+pad 0 START
+wait 4
+pad 0 -
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+overlay 0x1F
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+overlay 0x21
+wait 60
+scene 0x29 0x13
+overlay 0x29
+wait 700
+probe start
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+wait 30
+wait 10
+probe apart
+pad 0 A
+wait 2
+pad 0 -
+wait 200
+probe dead
+end

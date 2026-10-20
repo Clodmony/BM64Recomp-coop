@@ -9,6 +9,9 @@
 //                                file 0-2 loaded as the file select does) and
 //                                go to overlay ID (entry default 0x10, as the
 //                                world map starts a stage)
+//   BM64_COOP_NO_DEMO=1          the title never starts the attract demo, so
+//                                the warp's room plays as a game's does, with
+//                                its enemies (coop_harness_no_demo)
 //   BM64_COOP_P2=1|4             a second human player in that slot in story
 //                                rooms (patches/coop_player2.c): slot 1 reads
 //                                pad 1, slot 4 reads its command record, which
@@ -596,6 +599,16 @@ extern "C" int32_t coop_camera_slot(void) {
 // 4 (the client of a live session, or BM64_COOP_CAMERA=4), else pad 0.
 extern "C" int32_t coop_camera_pad(void) {
     return coop_camera_slot() == 4 ? 1 : 0;
+}
+
+// BM64_COOP_NO_DEMO=1 (#49, #51): the attract demo never starts. The title
+// starts it as it is left (func_80297ADC, from its teardown), also when a warp
+// leaves it, so a warped room ran as the demo: story flag 0x4, its enemy
+// tiles made start points of slots 1-3 (func_8026F5E8), no timer, START back
+// to the title. A hook skips the demo's setup when this says so.
+extern "C" int32_t coop_harness_no_demo(void) {
+    static const bool enabled = env_flag("BM64_COOP_NO_DEMO");
+    return enabled;
 }
 
 // Hooks in bm64.us.toml report player events here (BM64_COOP_LOG_PLAYERS=1):
