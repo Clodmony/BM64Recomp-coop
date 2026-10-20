@@ -195,6 +195,10 @@ never the hardware itself. Recipes that hold for everyone go into
   (`ip route | grep default`). The second direction needed no firewall rule
   of its own here; a host on a real LAN is a different question. Both
   directions played a session.
+- PowerShell's `Start-Process -ArgumentList` refuses an **empty string** in
+  the list ("ein Element der Argumentauflistung enthalt einen NULL-Wert"), so
+  an optional argument has to be appended only when it has a value, not
+  passed as `""`.
 - A background process started inside `wsl.exe -- bash -s` **dies with that
   call**: `nohup ... &` left nothing behind, not even its output file. A long
   run (a verify) has to stay in the foreground of the call, with the agent's
@@ -205,17 +209,19 @@ never the hardware itself. Recipes that hold for everyone go into
 
 ## Scratch on this machine
 
-- `~/dev-scratch/BM64Recomp-coop/i29/`: the Windows side's logs, deleted with
-  the pull request open, as the project asks. `i29x/`: the pad scripts, the
-  WSL2 side's run script and the logs of the Windows-against-Linux pair;
-  delete once #68 is merged, the recipe itself is in building.md.
+- `~/dev-scratch/BM64Recomp-coop/i29/` and `i29x/`: the two #29 sessions'
+  logs, deleted with the pull request open, as the project asks. The pair's
+  scripts moved to the Windows side (below), since they are the only copy of
+  a recipe building.md describes but cannot run.
 - `win/` (the xwin splat 630 MB, its download cache and the Wine prefix,
   2.4 GB together): **keep**, or the next Windows build starts with the
   download again.
 - On the **Windows side**, `dev-scratch/BM64Recomp-coop/win-play/`: the two
   portable folders (host and client, with the ROM), `win-session.ps1` (the
-  Windows pair) and `cross-session.ps1` (the Windows-against-Linux pair,
-  either way, with each run's output beside it). **Keep** — they are what a
-  later session needs to play either pair again without building anything.
+  Windows pair), `cross-session.ps1` (the Windows-against-Linux pair, either
+  way, `-Direction linux-host|windows-host [-Suffix -long]`), the pad scripts
+  it hands each side and `linux-side.sh`, which it starts inside WSL2 (the
+  path to it is at the top of the .ps1). **Keep** — they are what a later
+  session needs to play either pair again without building anything.
 - `rom/`, `build/BM64Recomp-coop-eu/`, `build/win-eu/`, `n64recomp/`: keep.
 - `runs/`, `verify/`: delete freely.
