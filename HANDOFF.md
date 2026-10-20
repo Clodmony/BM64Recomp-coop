@@ -40,8 +40,9 @@ Last updated 2026-10-19 (#47: notes split for two people).
   identity? the patches' clang, a follow-up of #29 the playtest depends on).
   #29's Windows side is answered (both platforms `0xFC44BFB4`) and the
   Windows build and the Linux build have played against each other, both
-  ways (pull request #68); the issue stays open for two real machines, the
-  internet and macOS.
+  ways (pull request #68); #29 is now only **two real machines on a LAN**
+  (the playtest), its other leftovers split off as #69 (the internet, with a
+  forwarded port) and #70 (the macOS build, waiting for such a machine).
   #58 (the collaborator's setup) is done and merged.
   The owner's last step of #47 is done: the collaborator has write access on
   the fork (checked 2026-10-20).
@@ -61,7 +62,7 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 |-------|--------|--------|-------|
 | #56 (group: #55, #52, #49, #51, #53, #46, #57) | owner | `coop/56-playtest` (lanes `coop/56-a-player2`, `-b-enemies`, `-c-hud`, `-d-harness`) | four lane agents started 2026-10-19, worktrees under scratch `wt/` |
 | #63 | collaborator | `coop/63-run-wrapper` | done 2026-10-20, draft pull request #65, verify 8/8 and 383/383 on Ubuntu 24.04 without gamescope; waiting for the owner's review |
-| #29 (everything one machine can answer) | collaborator | `coop/29-windows-build` | done 2026-10-20, draft pull request #68: the Windows build cross-compiled in WSL2 and run natively on Windows (both platforms `0xFC44BFB4`), a Windows pair and a Windows-against-Linux pair in lockstep with the same hash on every frame, `tools/compare_logs.py` for two machines' logs; waiting for the owner's review. #29 stays open for two real machines, the internet and macOS |
+| #29 (everything one machine can answer; the issue is now the LAN playtest) | collaborator | `coop/29-windows-build` | done 2026-10-20, draft pull request #68: the Windows build cross-compiled in WSL2 and run natively on Windows (both platforms `0xFC44BFB4`), a Windows pair and a Windows-against-Linux pair in lockstep with the same hash on every frame, `tools/compare_logs.py` for two machines' logs; waiting for the owner's review. #29 stays open for two real machines, the internet and macOS |
 
 ## Project decisions (bind both people)
 
@@ -81,6 +82,10 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
   at a stage start too. A cutscene revives at its end (the release), placed
   next to the living player (owner, 2026-10-19). Built in #50: design.md,
   *Downed players are ghosts (#22)*.
+- **#29 narrowed** (collaborator, 2026-10-20, the owner confirms): #29 is
+  the LAN playtest; the internet with a forwarded port is #69 and the macOS
+  build #70. The Windows build and the Linux build play in lockstep both
+  ways, so the pair itself is no longer open (#68).
 - The client plays on a copy of the host's save (#26).
 - **Co-op HUD (#53, owner, 2026-10-19):** a corner per player (face,
   hearts, bomb count, fire), not one panel; player 1 always first (left),
@@ -102,10 +107,11 @@ A shared pool: take one by claiming it under *In progress*.
    is the kit's `linux/` here; start it with `start.sh`, or it writes no
    `coop.log` (until #57). The owner
    starts the multi-agent run ("use a workflow" / "fan out agents").
-1. **The playtest** (both people, two PCs: one Linux, one Windows): the kit
-   from `tools/playtest-kit.sh`, guide in `docs/coop/playtest.md`;
-   afterwards both `coop.log` files. What breaks becomes an issue (a desync
-   line first). This is also the real-PC part of #29.
+1. **The playtest = #29** (both people, two PCs: one Linux, one Windows): the
+   kit from `tools/playtest-kit.sh`, guide in `docs/coop/playtest.md`;
+   afterwards both `coop.log` files, which `tools/compare_logs.py` reads side
+   by side. What breaks becomes an issue (a desync line first). **#67 comes
+   first**: whether the two machines' builds agree on the identity at all.
 2. **#46** (scenario.py and a garbled log line): a small harness fix, a good
    first issue for a session with a smaller plan.
 3. ~~**#63**~~ (`run.sh`'s headless wrapper): taken by the collaborator

@@ -17,7 +17,14 @@ Last updated 2026-10-20 (#29: the Windows build against the Linux build).
   `docs/coop/playtest.md` and adds `tools/compare_logs.py`.
 - **#63 still waits**: draft pull request #65, the owner's review requested.
   Nothing further to do on it until the review.
-- Two follow-ups came out of this session: **#67** (do the two people's
+- **The collaborator's decisions at the end of this session** (2026-10-20,
+  the owner confirms): #65 and #68 stay drafts and wait for the owner's
+  review (it is requested on both, no further nudge); what was left of #29
+  split into **#69** (the internet with a forwarded port) and **#70** (the
+  macOS build), so #29 itself is now only the LAN playtest and its title says
+  so; the next session takes **#67**; this machine's `runs/` and all but the
+  quoted `verify/` folder deleted.
+- Two follow-ups came out of the Windows session: **#67** (do the two people's
   builds agree on the identity at all? the patches' clang — the playtest
   depends on it) and a comment on **#66** with the Windows audio numbers.
   #29 itself carries a comment on what is answered and what is left.
@@ -122,16 +129,16 @@ needed the gamescope stand-in again, since the branch predates #63.
   locally with `git merge --no-ff`, never `gh pr merge`). #65 first: #68 does
   not conflict with it, and with #63 merged a later session needs no
   stand-in.
-- **What is left of #29** can only be answered elsewhere: two real machines
-  on a LAN (the playtest, `HANDOFF.md` candidate 1), the internet with a
-  forwarded port, and macOS (no such machine here; upstream has no macOS
-  build either). The owner decides whether those become their own issues and
-  #29 closes with the playtest.
-- **#67 needs both machines** (collaborator, 2026-10-20): whichever person's
-  session takes it, the other must run the offline sum in their own checkout
-  of the same commit and report the number and their `clang --version`. If
-  they differ, the playtest cannot happen as planned and the project has to
-  decide how the hello should treat it.
+- **#29 is now the LAN playtest** and nothing else; #69 (the internet with a
+  forwarded port) and #70 (macOS, waiting for such a machine) carry the
+  rest. #69 waits for the LAN run, #70 for hardware nobody here has.
+- **#67 is the next issue of this machine** (collaborator, 2026-10-20) and it
+  **needs a number from the owner**: the offline sum from their own checkout
+  of the same commit (the snippet in `docs/coop/building.md`, *The build
+  identity across platforms*) and their `clang --version`. Without it the
+  session can only report this machine's side. If the two numbers differ, the
+  playtest cannot happen as planned and the project has to decide how the
+  hello should treat it.
 - **#66** waits for a machine with both wrappers (the owner's). This
   session's numbers say the audio skips are the WSL2 side's, not the
   session's.
@@ -224,4 +231,5 @@ never the hardware itself. Recipes that hold for everyone go into
   path to it is at the top of the .ps1). **Keep** — they are what a later
   session needs to play either pair again without building anything.
 - `rom/`, `build/BM64Recomp-coop-eu/`, `build/win-eu/`, `n64recomp/`: keep.
-- `runs/`, `verify/`: delete freely.
+- `runs/`: emptied 2026-10-20. `verify/`: only `20261020-195322` left, the
+  run quoted in pull request #68; delete it once #68 is merged.
