@@ -9,7 +9,7 @@ Last updated 2026-10-20 (#77: Z skips the intro).
 
 ## State
 
-- **#77 is done**, branch `coop/77-skip-intro`, draft pull request into
+- **#77 is done**, branch `coop/77-skip-intro`, **draft pull request #84** into
   `bm64recomp-coop` (`Closes #77`): **Z during the intro** starts a new file
   and goes straight to the world map, so a run by hand no longer sits through
   the logos, the attract demo and the opening cutscene. Section *#77* below.
@@ -178,7 +178,7 @@ needed the gamescope stand-in again, since the branch predates #63.
 
 ## Next step
 
-- **#77's pull request waits for the owner's review** like the others. It
+- **#77's pull request #84 waits for the owner's review** like the others. It
   touches `src/game/controls.cpp` (two `coop::note_pad` calls),
   `src/coop/harness.{h,cpp}`, `docs/coop/building.md` and adds three
   scenarios, so it should not conflict with #65, #68, #72 or #73 beyond
