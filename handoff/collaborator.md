@@ -140,10 +140,14 @@ never the hardware itself. Recipes that hold for everyone go into
 
 ## Scratch on this machine
 
-- `~/dev-scratch/BM64Recomp-coop/i29/`: this session's logs; delete with the
+- `~/dev-scratch/BM64Recomp-coop/i29/`: this session's logs, deleted with the
   pull request open, as the project asks.
-- `win/` (the xwin splat, its cache and the Wine prefix) and the Windows-side
-  portable folders: **keep** — a session between the Windows and the Linux
-  build is the next step of #29 and they are ready for it.
+- `win/` (the xwin splat 630 MB, its download cache and the Wine prefix,
+  2.4 GB together): **keep**, or the next Windows build starts with the
+  download again.
+- On the **Windows side**, `dev-scratch/BM64Recomp-coop/win-play/`: the two
+  portable folders (host and client, with the ROM) and the script that runs
+  a session between them. **Keep** — a session between the Windows and the
+  Linux build is the next step of #29 and they are ready for it.
 - `rom/`, `build/BM64Recomp-coop-eu/`, `build/win-eu/`, `n64recomp/`: keep.
 - `runs/`, `verify/`: delete freely.
