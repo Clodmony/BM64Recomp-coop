@@ -5,91 +5,83 @@ work*). Only the collaborator's sessions rewrite it: session history, what
 each issue found, decisions taken in those sessions, the next step. No
 names, handles or hardware in it.
 
-Last updated 2026-10-20 (#63, pull request #65 open).
+Last updated 2026-10-20 (#29's Windows side, pull request #68 open).
 
 ## State
 
-- **#63 done**, branch `coop/63-run-wrapper`, **draft pull request #65**
-  open into `bm64recomp-coop` (`Closes #63`), the owner's review requested.
-  The fix is one commit (`a8ab437`): `tools/run.sh`,
-  `docs/coop/building.md`, `docs/coop/contributing.md`.
-- **#58 is done and merged** (pull request #64, merged by the owner
-  2026-10-19 22:42 UTC). Its row is out of `HANDOFF.md`.
-- The first session of #63 was stopped on usage before the pull request; the
-  second one finished the verify run and opened it. `git status` is clean on
-  the branch.
+- **#29's Windows side done**, branch `coop/29-windows-build`, **draft pull
+  request #68** into `bm64recomp-coop` (no `Closes`: #29 stays open for the
+  rest). It changes `tools/build-windows.sh`, `tools/windows-cross.cmake`,
+  `docs/coop/building.md` and `docs/coop/contributing.md`.
+- **#63 still waits**: draft pull request #65, the owner's review requested.
+  Nothing further to do on it until the review.
+- Two follow-ups came out of this session: **#67** (do the two people's
+  builds agree on the identity at all? the patches' clang — the playtest
+  depends on it) and a comment on **#66** with the Windows audio numbers.
+  #29 itself carries a comment on what is answered and what is left.
+- The branch was cut from `bm64recomp-coop`, so it does **not** have #63's
+  `run.sh`: runs on it need the local gamescope stand-in again (below).
 
-## #63: what it found and what the fix is
+## #29: what the Windows side found
 
-`tools/run.sh` hard-coded `gamescope --backend headless` for every headless
-run. Reproduced on Ubuntu 24.04 in WSL2 (Europe build, `gamescope` off
-`PATH`, no stand-in):
+One Windows machine with WSL2 (Ubuntu 24.04, clang 18), Europe build.
 
-- `tools/run.sh --version eu --until-overlay 0x20` → exit 2,
-  `run eu: game exited (status 127) after 0.2 s`, `game.log`:
-  `env: 'gamescope': No such file or directory`.
-- `tools/scenario.py --version eu tools/scenarios/europe-rate.txt` →
-  `1/3 checks passed`, `RESULT FAILED`, so no scenario could run at all.
+**The question answered:** the build identity is the same on both platforms.
+The Linux build logs `coop: session build 0xFC44BFB4`; the cross-compiled
+Windows build, run **natively on Windows 11** (not Wine), logs the same
+`0xFC44BFB4`. Reason it must: neither part of the sum (FNV-1a over
+`patches/patches.bin`, then the SHA-256 head of `bm64.<version>.toml`) comes
+from the compiler of the C++ code. The sum can be computed offline from the
+checkout, and gives the same number — the recipe is now in `building.md`,
+*The build identity across platforms*, and it is what #67 asks the two
+machines to compare.
 
-The fix: `run.sh` chooses the wrapper of its headless display — `gamescope
---backend headless` when `gamescope` is on `PATH` (the same command line as
-before, so the owner's machine is unchanged), else `env -u WAYLAND_DISPLAY
-xvfb-run -a -s "-screen 0 640x480x24"`, else exit 4 with a message naming
-both packages. New `--wrapper gamescope|xvfb` forces one (how a machine with
-both can compare them, the open question in the issue), and the run's
-summary line names the display used: `display: gamescope`, `display: xvfb`
-or `display: window`.
+**The Winsock branch runs**, first time on real Windows: two portable folders
+on 127.0.0.1 played **3600 frames in lockstep**, same state hash at frame 0
+(`199C12E7`) and 3600 (`AE6DD052`), no `session desync`, no `session lost`,
+the same twelve overlay loads on both sides, ~49 frames a second at PAL 50,
+and **no audio skips** (the last field of `coop: frame` stayed 0, queue about
+16 ms) where this machine's WSL2 runs log them.
 
-`-u WAYLAND_DISPLAY` is needed under Xvfb: with it SDL takes the desktop's
-Wayland display (WSLg's) and opens a window there instead of drawing into
-Xvfb.
+**Two things stood in the way of the build, both fixed on the branch:**
 
-After the fix, same machine and conditions: `run.sh` loads overlay 0x20
-after 0.8 s with `display: xvfb`, and `europe-rate` scores `2/2 checks
-passed, RESULT ok`. All six selection paths were run one by one: default
-without gamescope → xvfb; default with a `gamescope` on `PATH` → gamescope;
-`--wrapper xvfb` while gamescope is there → xvfb; `--wrapper gamescope`
-without it → exit 4, `no gamescope on PATH`; neither on `PATH` → exit 4,
-`no headless wrapper on PATH: install gamescope or xvfb (xvfb-run), or pass
---window`; `--wrapper foo` → exit 4, `--wrapper must be gamescope or xvfb`.
+- `tools/build-windows.sh` died with
+  `ln: failed to create symbolic link …: No such file or directory` when the
+  xwin splat was missing, and said nothing about `clang-cl` or Wine either. It
+  now names what is missing and exits 4 (checked both ways: no splat, and a
+  `PATH` without `clang-cl`). A fresh Ubuntu 24.04 has none of the three:
+  `clang-cl` (the clang package ships the driver but not that name),
+  `wine64`, `xwin`.
+- The MSVC STL stops clang 18 with `error STL1000`: the CRT xwin splats from
+  the release channel is 14.44, which asks for clang 19, and the channel
+  offers no older CRT (`--crt-version 14.41.34120` → *does not exist in the
+  manifest*). `tools/windows-cross.cmake` now sets the STL's own switch
+  `_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH` for a clang below 19 and says so
+  when configuring. A newer clang was the other way out and was **not** taken
+  on purpose: it would also build the patches, and with them the identity.
 
-**Not run here:** real gamescope headless. This machine has no such package,
-so the gamescope branch was exercised with a stand-in on `PATH` that proves
-only the selection. Its command line is byte-for-byte the one before this
-change.
+**Not run:** a session between the Windows and the Linux build (the
+playtest's real pair), two machines, the internet, macOS, a Visual Studio
+build, and whether another clang version changes `patches.bin` (#67).
 
-`tools/verify.sh --full --version eu --scenarios` on the branch, with no
-gamescope and no stand-in on `PATH`: **8/8 stages, 383/383 checks, RESULT:
-ALL PASSED** (2026-10-20 18:01, log folder
-`~/dev-scratch/BM64Recomp-coop/verify/20261020-180114/`). Every scenario ran
-under Xvfb, the two-game `session-*` ones included — before the change the
-scenario stage could not run at all here.
-
-Docs on the branch: `building.md` (*Running the game*) gets the wrapper
-choice, `--wrapper`, the `display:` field and the `WAYLAND_DISPLAY` reason;
-`contributing.md` gets `xvfb` in the dependency list with its reason and
-loses the stand-in workaround #63 made unnecessary.
+Verify on the branch: the summary is quoted in pull request #68 (the scenario
+stage needed the gamescope stand-in, since the branch predates #63).
 
 ## Next step
 
-- **Ask the owner to merge #65** once they have approved it; either person
-  may merge after the other's approving review (`HANDOFF.md`, *Project
-  decisions*), locally with `git merge --no-ff`, never `gh pr merge`.
-  Afterwards: delete the branch, remove the #63 row from *In progress* in
-  `HANDOFF.md` and drop #63 from its issue list.
-- **Next issue: #29, the Windows side** (collaborator, 2026-10-20): whether
-  a native Windows build has the same build identity as the WSL2 one, since
-  an online session refuses the join when they differ. The whole of #29 is
-  wider (the internet, macOS, two games on one gamepad); take the Windows
-  part first. The owner's group #56 (#46, #49, #51–#53, #55, #57) and its
-  four lane pull requests #59–#62 are theirs, not ours.
-- The question #63 left open — **whether gamescope and Xvfb runs are close
-  enough to compare** (frame rate, audio skips) — is now **issue #66**
-  (collaborator, 2026-10-20). Only a machine with both wrappers can answer
-  it, so it waits for the owner's; the audio skips this machine logged stay
-  an observation until then.
-- **#65 stays a draft** and waits for the owner's review (collaborator,
-  2026-10-20): no further nudge beyond the review request.
+- **Ask the owner to review and merge #68 and #65** (either person may merge
+  after the other's approving review, `HANDOFF.md`, *Project decisions*;
+  locally with `git merge --no-ff`, never `gh pr merge`). #65 first: #68 does
+  not conflict with it, and with #63 merged a later session needs no
+  stand-in.
+- **#67 next, and it needs both machines** (collaborator, 2026-10-20):
+  whichever person's session takes it, the other must run the offline sum in
+  their own checkout of the same commit and report the number and their
+  `clang --version`. If the numbers differ, the playtest cannot happen as
+  planned and the project has to decide how the hello should treat it.
+- Candidates after it from this side: the rest of #29 (a Windows-against-Linux
+  session first — it needs nothing but the two builds this machine already
+  has), or #46 if the owner's group #56 has released it.
 
 ## Machine notes
 
@@ -102,35 +94,54 @@ never the hardware itself. Recipes that hold for everyone go into
   `XDG_RUNTIME_DIR` to every shell, so the game's window needs no setup of
   its own and SDL picks its `x11` driver (through Xwayland).
 - gamescope is not packaged for Ubuntu 24.04 (noble), with universe enabled.
-  Xvfb is, and `run.sh` uses it by itself since #63 — the local stand-in
-  named `gamescope` that #58 needed is no longer required (it still sits in
-  `~/.local/bin/gamescope`; removing it is the honest setup now, and it also
-  makes the default run pick Xvfb).
-- The agent session runs on the Windows side and drives WSL2 through
-  `wsl.exe`. Three things to know if a later session does the same: pass a
-  script on **stdin** (`wsl.exe -- bash -s <<'EOF' … EOF`), not a long
-  `bash -lc '…'`, whose quoting breaks and whose output is sometimes cut
-  short; `wsl.exe` writes UTF-16 unless `WSL_UTF8=1` is set; and a
-  **backslash in a here-document gets mangled** on the way through, so a
-  patch script must not match or write text containing one (edit such lines
-  by line number or with `sed` instead). A non-login `bash -s` also has no
-  `~/.local/bin` on `PATH`, which hides anything installed there.
+  Since #63 `run.sh` picks Xvfb by itself — but on a branch cut from
+  `bm64recomp-coop` before #63 is merged, the scenarios need the local
+  stand-in named `gamescope` again. The honest shape of it drops gamescope's
+  own options and runs what follows `--` **under Xvfb**, so the runs stay
+  headless as the owner asks; it lives in `~/.local/bin`, outside the
+  repository.
+- **The agent session runs on the Windows side** and drives WSL2 through
+  `wsl.exe`. What a later session should know:
+  - The WSL checkout is reachable from Windows as
+    `//wsl.localhost/<distro>/home/<user>/BM64Recomp-coop/…`, so the Read,
+    Edit and Write tools work on it directly. That is far more reliable than
+    patching files through a here-document (a backslash gets mangled on the
+    way through `wsl.exe`). **But a file written that way loses its
+    executable bit**: after editing a script, `chmod +x` it in WSL and check
+    `git diff --summary` for a mode change.
+  - Pass a script on **stdin** (`wsl.exe -- bash -s < file`), not a long
+    `bash -lc '…'`, whose quoting breaks and whose output is sometimes cut
+    short; set `WSL_UTF8=1`, or `wsl.exe` writes UTF-16.
+  - A non-login `bash -s` has no `~/.local/bin` on `PATH`, which hides
+    `clang-cl`, `xwin` and the gamescope stand-in: export it in the script.
+- The Windows cross build on this machine: `xwin` from a release binary in
+  `~/.local/bin`, its splat in `~/dev-scratch/BM64Recomp-coop/win/sdk`
+  (630 MB, the download cache beside it), `clang-cl` a symlink to clang 18,
+  `wine64` from apt (it warns about a missing wine32; the 64-bit build does
+  not care). A full cross build is about 2350 objects and takes a while; it
+  is incremental afterwards.
+- A native Windows run needs no WSL at all: a portable folder on the Windows
+  side with the `.exe`, the three DLLs, `assets/`, `recompcontrollerdb.txt`,
+  `portable.txt` and the ROM as `bm64_eu.z64`, started with the same
+  environment variables `tools/run.sh` would set. Two such folders make a
+  session over 127.0.0.1. A window opens — Windows has no headless wrapper
+  here — so keep such runs short.
 - Ubuntu 24.04 packages `gh` 2.45, old enough that some commands fail on a
   deprecated GraphQL field: `gh pr edit --add-reviewer` dies with
   "Projects (classic) is being deprecated ... (repository.pullRequest.projectCards)"
   and changes nothing. The REST call works:
   `gh api -X POST repos/<owner>/<repo>/pulls/<N>/requested_reviewers -f 'reviewers[]=<login>'`.
   Installing `gh` from GitHub's own apt repository would avoid it.
-- Audio in a headless run logs skips: 91 over a 104 s run, with the queue
-  between 65 and 82 ms (the last two fields of `coop: frame`). Whether a
-  native Linux run shows the same was not measured, so this is an
-  observation, not a fault (collaborator, 2026-10-20) — worth comparing when
-  both machines run the same scenario.
+- Audio: the WSL2 runs log skips (91 over a 104 s run, queue 65-82 ms), the
+  native Windows runs of the same commit log none. So the skips are not the
+  game itself; what they are is #66's question.
 
 ## Scratch on this machine
 
-- `~/dev-scratch/BM64Recomp-coop/i63/`: deleted with the pull request
-  open, as the project asks.
-- `rom/`, `build/BM64Recomp-coop-eu/`, `n64recomp/`: keep.
-- `runs/`, `verify/`: delete freely; the summary of `verify/20261020-180114/`
-  is quoted in pull request #65 and above.
+- `~/dev-scratch/BM64Recomp-coop/i29/`: this session's logs; delete with the
+  pull request open, as the project asks.
+- `win/` (the xwin splat, its cache and the Wine prefix) and the Windows-side
+  portable folders: **keep** — a session between the Windows and the Linux
+  build is the next step of #29 and they are ready for it.
+- `rom/`, `build/BM64Recomp-coop-eu/`, `build/win-eu/`, `n64recomp/`: keep.
+- `runs/`, `verify/`: delete freely.

@@ -130,9 +130,21 @@ To **play** on Windows, use the Windows build rather than the WSL2 one: the
 playtest kit's `windows/` folder ([playtest.md](playtest.md)), made by
 `tools/playtest-kit.sh` on either machine. Both players need builds with the
 same build identity, or the session refuses the join; builds of the same
-commit from `tools/verify.sh` and `tools/build-windows.sh` have it. A native
-Windows build made with Visual Studio (upstream's [BUILDING.md](../../BUILDING.md))
-compiles the patches with another clang and likely does not match (#29).
+commit from `tools/verify.sh` and `tools/build-windows.sh` have it, measured
+on one machine (#29, both `0xFC44BFB4`; [building.md](building.md), *The
+build identity across platforms*, also for reading the identity without
+playing). A build made with Visual Studio (upstream's
+[BUILDING.md](../../BUILDING.md)) compiles the patches with another clang and
+may not match; that is untried.
+
+The cross build itself runs in WSL2 too, and needs more than the Linux build:
+`clang-cl` (the clang package ships no such name, link it),
+`wine64`, `xwin` and its splat of Microsoft's CRT and Windows SDK, and for
+Ubuntu's clang 18 the STL's version switch, which the toolchain sets by
+itself ([building.md](building.md), *The Windows build*).
+`tools/build-windows.sh` names what is missing before it builds. The
+resulting `.exe` runs natively on the Windows side, outside WSL2, from a
+portable folder of its own.
 
 ## Usage limits
 

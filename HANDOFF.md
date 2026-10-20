@@ -36,7 +36,11 @@ Last updated 2026-10-19 (#47: notes split for two people).
   #63 (`run.sh`'s headless default needs gamescope, which Ubuntu 24.04 does
   not package; found by #58, pull request #65) and #66 (are gamescope and
   Xvfb runs comparable? a follow-up of #63, for a machine with both
-  wrappers). #58 (the collaborator's setup) is done and merged.
+  wrappers) and #67 (do the two machines' builds have the same build
+  identity? the patches' clang, a follow-up of #29 the playtest depends on).
+  #29's Windows side is answered (both platforms `0xFC44BFB4`, pull request
+  #68); the issue stays open for two machines, the internet and macOS.
+  #58 (the collaborator's setup) is done and merged.
   The owner's last step of #47 is done: the collaborator has write access on
   the fork (checked 2026-10-20).
 - Open pull requests: #65 (#63, `run.sh` picks its headless wrapper,
@@ -53,6 +57,7 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 |-------|--------|--------|-------|
 | #56 (group: #55, #52, #49, #51, #53, #46, #57) | owner | `coop/56-playtest` (lanes `coop/56-a-player2`, `-b-enemies`, `-c-hud`, `-d-harness`) | four lane agents started 2026-10-19, worktrees under scratch `wt/` |
 | #63 | collaborator | `coop/63-run-wrapper` | done 2026-10-20, draft pull request #65, verify 8/8 and 383/383 on Ubuntu 24.04 without gamescope; waiting for the owner's review |
+| #29 (the Windows side only) | collaborator | `coop/29-windows-build` | done 2026-10-20, draft pull request #68: Windows build cross-compiled in WSL2 and run natively on Windows, both platforms `0xFC44BFB4`, a Windows pair in lockstep over 3600 frames; waiting for the owner's review. #29 stays open for the rest |
 
 ## Project decisions (bind both people)
 
@@ -106,11 +111,13 @@ A shared pool: take one by claiming it under *In progress*.
 4. **A hand try of the Co-op menu**: two games on one machine, Host 7777 in
    one, Join 127.0.0.1 7777 in the other, then turn each camera with the
    C-buttons (#33).
-5. **#29, the Windows side: taken by the collaborator** for the next
-   session (2026-10-20) — whether a native Windows build has the same build
-   identity as the WSL2 one, since an online session refuses the join when
-   they differ. The rest of #29 stays in the pool: the internet, macOS,
-   whether two games on one machine read the same gamepad.
+5. ~~**#29, the Windows side**~~: done by the collaborator 2026-10-20 (pull
+   request #68), see *In progress*. The rest of #29 stays in the pool: a
+   session between the Windows and the Linux build, two machines on a LAN,
+   the internet, macOS, whether two games on one machine read the same
+   gamepad. **#67** comes before the playtest: whether the two people's own
+   builds agree on the identity at all (the patches' clang) — the offline sum
+   in `docs/coop/building.md` answers it without a build or a session.
 6. **Rest of #14 and #16**: a story teleport (`func_802512C0` from a room
    script, beyond Green Garden stage 1) and a scene with player 2 already in
    the room, then a check that pad 1 does not move a frozen player 2.

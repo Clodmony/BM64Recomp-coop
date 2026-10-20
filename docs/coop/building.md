@@ -222,7 +222,8 @@ together (`tools/windows-cross.cmake`):
   Windows CI. Windows finds headers and libraries in any case; the script
   links the four spellings the sources use that the SDK lacks.
 - The patches are built by the Linux clang as in the Linux build, so both
-  builds have the same build identity and can play together.
+  builds have the same build identity and can play together: measured on one
+  machine, both `0xFC44BFB4` (*The build identity across platforms*, below).
 - Build-time tools built for Windows (`file_to_c`) run in Wine. The shaders
   are compiled by RT64's Windows `dxc.exe` (1.7, what upstream's Windows
   builds use) in Wine through `tools/dxc-wine.sh`, which turns the Unix paths
@@ -231,6 +232,27 @@ together (`tools/windows-cross.cmake`):
   which Wine's D3D12 takes but a real Windows' might not.
 - RT64's SDL 2.26.3 headers define `_m_prefetch`, a builtin in newer clang;
   the toolchain sets their guard `__PRFCHWINTRIN_H`.
+- The MSVC STL stops a compiler it holds too old (`error STL1000`): the CRT
+  xwin splats from the release channel (14.44) asks for clang 19, Ubuntu
+  24.04 packages clang 18, and the channel offers no older CRT. For a clang
+  below 19 the toolchain sets the STL's own switch,
+  `_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH`, and says so when configuring
+  (#29). Installing a newer clang instead would also change the clang that
+  builds the patches, and with it the build identity.
+
+What the cross build needs beyond the Linux build, and what it does not have
+on a fresh Ubuntu 24.04: `clang-cl` (the clang package ships the driver but
+not that name: `ln -s "$(command -v clang)" ~/.local/bin/clang-cl`), `wine64`,
+`xwin` (a release binary from its repository, kept outside the checkout) and
+the splat itself:
+
+```bash
+xwin --accept-license --cache-dir ~/dev-scratch/BM64Recomp-coop/win/xwin-cache \
+    splat --output ~/dev-scratch/BM64Recomp-coop/win/sdk    # ~630 MB, a few minutes
+```
+
+`tools/build-windows.sh` names what of this is missing and stops with exit 4
+before it builds anything.
 
 `tools/run.sh --exe <…>.exe` runs it in Wine with its own prefix
 (`~/dev-scratch/BM64Recomp-coop/win/prefix`, never the owner's), and
@@ -243,6 +265,65 @@ Windows build started without a console (from Explorer) writes its log to
 `tools/playtest-kit.sh` makes portable folders of both builds for a playtest
 on two PCs (`docs/coop/playtest.md`): builds of the game, copied by hand,
 never uploaded.
+
+### The build identity across platforms
+
+A session's hello refuses a peer whose build identity differs (#26), so two
+players need builds that agree. It is FNV-1a over the patches' binary and
+over the first 8 hex digits of the SHA-256 of the game's recompiler config
+(`src/coop/version.cmake`, `src/coop/session.cpp`, `build_id`). Neither part
+comes from the host compiler of the C++ code, so the Linux build and the
+cross-compiled Windows build of one checkout must match — and do:
+
+- **Measured** (#29, 2026-10-20, one Windows machine with WSL2, Ubuntu 24.04,
+  clang 18, Europe): the Linux build reports `coop: session build 0xFC44BFB4`
+  and the cross-compiled Windows build, run **natively on Windows 11**, the
+  same `0xFC44BFB4`. Both sides of each session then reached
+  `coop: session lockstep from frame 0`.
+- The Windows pair played 3600 frames in lockstep (two portable folders on
+  127.0.0.1): the same state hash at frame 0 (`199C12E7`) and at frame 3600
+  (`AE6DD052`), no `coop: session desync` and no `coop: session lost`, the
+  same twelve overlay loads on both sides, about 49 frames a second at PAL
+  50. The Windows runs logged no audio skips, where the same machine's WSL2
+  runs log them (#66).
+- **Not tested:** a session between the Windows build and the Linux build
+  (the playtest's real pair; the identity above says the hello will pass, the
+  network path of each side is what remains), a build made with Visual Studio
+  (upstream's `BUILDING.md`), and whether another clang version changes the
+  patches' binary and with it the identity.
+
+The identity is logged only when a hello happens, so a game that boots alone
+never prints it. Two ways to read it without playing:
+
+```bash
+# in a session (what the hello compared), from either side's log
+grep "coop: session build" <run folder>/game.log
+
+# offline, from the checkout the build was made from
+python3 - <<'PY'
+import hashlib, pathlib
+version = "eu"
+data = pathlib.Path("patches/patches.bin").read_bytes()
+hooks = int(hashlib.sha256(pathlib.Path(f"bm64.{version}.toml").read_bytes()).hexdigest()[:8], 16)
+h = 2166136261
+for byte in list(data) + [(hooks >> (i * 8)) & 0xFF for i in range(4)]:
+    h = ((h ^ byte) * 16777619) & 0xFFFFFFFF
+print("build id 0x%08X" % h)
+PY
+```
+
+Both gave `0xFC44BFB4` for the build above, so the offline sum is a way for
+two players to compare their builds before a playtest.
+
+To run the Windows build **natively on Windows** rather than in Wine, make a
+portable folder of it on the Windows side (as `tools/playtest-kit.sh` does,
+plus the stored ROM): `BM64Recompiled.exe`, `SDL2.dll`, `dxcompiler.dll`,
+`dxil.dll`, `assets/`, `recompcontrollerdb.txt`, an empty `portable.txt` and
+the ROM as `bm64_<version>.z64`. The switches `tools/run.sh` would set are
+plain environment variables (`BM64_COOP_AUTOSTART=1`,
+`BM64_COOP_LOG_OVERLAYS=1`, `BM64_COOP_SESSION=…`), and the folder keeps
+everything the run writes, so no setting of the person's own is touched. Such
+a run opens a window: Windows has no headless wrapper here.
 
 ## Running the game: tools/run.sh
 
