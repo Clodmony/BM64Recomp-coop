@@ -31,10 +31,13 @@ Last updated 2026-10-21 (#75: the desync with enemies, and the review of #84).
   the player from this machine's camera (bit 0x1 of its model's flags,
   ~12 objects a frame in room 0x29); `func_802441F4` steers a bounce by this
   machine's yaw (never called in the runs); Wine uses its own `ucrtbase`, so
-  native Windows is untested. Next: a playtest with this branch's kit (its
-  desync line and snapshots say where), and #87 (record the agreed pads for
-  a replay). For a kit from this worktree mind #85 (`playtest-kit.sh`
-  ignores `WIN_BUILD`).
+  native Windows is untested.
+- **Owner decisions (end of #75's session):** request the collaborator's
+  review of #88 (done); the next playtest with a kit from
+  `bm64recomp-coop` once #88 is merged (its desync line and snapshots say
+  where), then #87 (record the agreed pads for a replay); the #56 lane
+  worktrees, their build folders and branches and scratch `i22/`, `i56/`
+  removed (done, #74 merged).
 - The playtest logs stay in the playtest kit folder on the owner's machine
   (they hold local paths); read, not changed.
 
@@ -333,4 +336,6 @@ main checkout. The issue worktrees and their build folders are removed.
   `build/prepare-project-according-a3ceb80a-eu` in scratch): remove it in
   Superset.
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/` in scratch:
-  when the player 2 follow-ups are done; `i22/` with #49.
+  when the player 2 follow-ups are done (#75 used them; `i22/` is gone).
+- When #88 is merged: the worktree `wt/75-enemy-desync` and its build
+  folders `build/75-enemy-desync-eu` and `build/75-enemy-desync-win-eu`.
