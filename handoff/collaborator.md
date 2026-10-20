@@ -64,8 +64,10 @@ and **no audio skips** (the last field of `coop: frame` stayed 0, queue about
 playtest's real pair), two machines, the internet, macOS, a Visual Studio
 build, and whether another clang version changes `patches.bin` (#67).
 
-Verify on the branch: the summary is quoted in pull request #68 (the scenario
-stage needed the gamescope stand-in, since the branch predates #63).
+Verify on the branch: `tools/verify.sh --full --version eu --scenarios`,
+**8/8 stages, 383/383 checks, RESULT: ALL PASSED** (2026-10-20 18:57, log
+folder `~/dev-scratch/BM64Recomp-coop/verify/20261020-185712/`). The scenario
+stage needed the gamescope stand-in, since the branch predates #63.
 
 ## Next step
 
