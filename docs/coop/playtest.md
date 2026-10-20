@@ -46,6 +46,14 @@ On the first start the launcher asks for the ROM: pick your Europe ROM.
 5. Both games start together once they are connected. If the join is
    refused, the prompt says why (another build, another game version).
 
+A refusal for *another build* means the two kits were made from different
+commits, or from checkouts that differ in `patches/` or a config: whoever
+built them can compare the two numbers with
+`python3 -I tools/build_id.py --version eu` in each checkout
+([building.md](building.md), *The build identity across platforms*). The
+compiler of each PC does not matter (#67), so one kit built on either machine
+plays against the other's build of the same commit.
+
 ## Playing
 
 - The host drives the title, the file select and the menus; the other

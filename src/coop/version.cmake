@@ -42,15 +42,40 @@ set(BM64_PATCHES_STAMPS
     ${CMAKE_SOURCE_DIR}/RecompiledPatches/version_eu.stamp)
 
 # The build identity an online session's hello compares (src/coop/session.cpp,
-# #26) covers the hooks through the recompiler config of the game, hashed here
-# (configuring again when it changes); the patches' binary is hashed at run time.
-set(BM64_ROM_TOML ${CMAKE_SOURCE_DIR}/bm64.${BM64_VERSION}.toml)
-set(BM64_COOP_HOOKS_ID 0)
-if(EXISTS ${BM64_ROM_TOML})
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${BM64_ROM_TOML})
-    file(SHA256 ${BM64_ROM_TOML} BM64_ROM_TOML_SHA256)
-    string(SUBSTRING ${BM64_ROM_TOML_SHA256} 0 8 BM64_COOP_HOOKS_ID)
-    set(BM64_COOP_HOOKS_ID 0x${BM64_COOP_HOOKS_ID})
+# #26): hashed here, when configuring, from the patches' sources and the two
+# recompiler configs (tools/build_id.py, which prints the same number offline).
+# It was hashed from the compiled patches' binary at run time until #67, which
+# made the builds of two machines with different clang versions refuse each
+# other although the code was the same.
+set(BM64_COOP_BUILD_IDENTITY 0)
+execute_process(
+    COMMAND python3 -I ${CMAKE_SOURCE_DIR}/tools/build_id.py --version ${BM64_VERSION} --number
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE BM64_COOP_BUILD_IDENTITY_OUT
+    ERROR_VARIABLE BM64_COOP_BUILD_IDENTITY_ERR
+    RESULT_VARIABLE BM64_COOP_BUILD_IDENTITY_RESULT
+    OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_STRIP_TRAILING_WHITESPACE)
+if(BM64_COOP_BUILD_IDENTITY_RESULT EQUAL 0)
+    set(BM64_COOP_BUILD_IDENTITY ${BM64_COOP_BUILD_IDENTITY_OUT})
+    message(STATUS "Co-op build identity: ${BM64_COOP_BUILD_IDENTITY} (${BM64_VERSION})")
+    # Configuring again whenever a covered file changes keeps the number current.
+    execute_process(
+        COMMAND python3 -I ${CMAKE_SOURCE_DIR}/tools/build_id.py --version ${BM64_VERSION} --files
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE BM64_COOP_BUILD_IDENTITY_FILES
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    string(REPLACE "\n" ";" BM64_COOP_BUILD_IDENTITY_FILES "${BM64_COOP_BUILD_IDENTITY_FILES}")
+    foreach(covered ${BM64_COOP_BUILD_IDENTITY_FILES})
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+            ${CMAKE_SOURCE_DIR}/${covered})
+    endforeach()
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+        ${CMAKE_SOURCE_DIR}/tools/build_id.py)
+else()
+    # A build without the number still runs, but its hello then refuses every
+    # peer but another build in the same state, so say so loudly.
+    message(WARNING "Co-op build identity is 0 (tools/build_id.py failed): "
+        "${BM64_COOP_BUILD_IDENTITY_ERR}")
 endif()
 set_property(SOURCE ${CMAKE_SOURCE_DIR}/src/coop/session.cpp APPEND PROPERTY
-    COMPILE_DEFINITIONS BM64_COOP_HOOKS_ID=${BM64_COOP_HOOKS_ID})
+    COMPILE_DEFINITIONS BM64_COOP_BUILD_IDENTITY=${BM64_COOP_BUILD_IDENTITY})

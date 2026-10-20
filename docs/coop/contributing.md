@@ -132,13 +132,16 @@ The run's summary line names the display it used (`display: xvfb` here,
 To **play** on Windows, use the Windows build rather than the WSL2 one: the
 playtest kit's `windows/` folder ([playtest.md](playtest.md)), made by
 `tools/playtest-kit.sh` on either machine. Both players need builds with the
-same build identity, or the session refuses the join; builds of the same
-commit from `tools/verify.sh` and `tools/build-windows.sh` have it, measured
-on one machine (#29, both `0xFC44BFB4`; [building.md](building.md), *The
-build identity across platforms*, also for reading the identity without
-playing). A build made with Visual Studio (upstream's
-[BUILDING.md](../../BUILDING.md)) compiles the patches with another clang and
-may not match; that is untried.
+same build identity, or the session refuses the join. Since #67 every build
+of one commit has it, whatever clang the machine has: the identity is hashed
+from the patches' sources and the configs, not from the compiled patches, and
+`python3 -I tools/build_id.py --version eu` prints it without building or
+playing ([building.md](building.md), *The build identity across platforms*).
+Before that the two people's clang versions (18 and 23) gave different
+numbers and their hellos would have refused each other. Compare the two
+numbers before a playtest; a build made with Visual Studio (upstream's
+[BUILDING.md](../../BUILDING.md)) is still untried, but its clang no longer
+enters the identity.
 
 The cross build itself runs in WSL2 too, and needs more than the Linux build:
 `clang-cl` (the clang package ships no such name, link it),

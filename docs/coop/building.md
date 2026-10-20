@@ -221,9 +221,10 @@ together (`tools/windows-cross.cmake`):
   Microsoft's licence; never commit them). `RelWithDebInfo`, as upstream's
   Windows CI. Windows finds headers and libraries in any case; the script
   links the four spellings the sources use that the SDK lacks.
-- The patches are built by the Linux clang as in the Linux build, so both
-  builds have the same build identity and can play together: measured on one
-  machine, both `0xFC44BFB4` (*The build identity across platforms*, below).
+- The patches are built by the Linux clang as in the Linux build. Both builds
+  have the same build identity and can play together — since #67 that holds
+  for any compiler, because the identity is hashed from the sources
+  (*The build identity across platforms*, below).
 - Build-time tools built for Windows (`file_to_c`) run in Wine. The shaders
   are compiled by RT64's Windows `dxc.exe` (1.7, what upstream's Windows
   builds use) in Wine through `tools/dxc-wine.sh`, which turns the Unix paths
@@ -238,7 +239,8 @@ together (`tools/windows-cross.cmake`):
   below 19 the toolchain sets the STL's own switch,
   `_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH`, and says so when configuring
   (#29). Installing a newer clang instead would also change the clang that
-  builds the patches, and with it the build identity.
+  builds the patches: that changes the patches' binary, but since #67 no
+  longer the build identity.
 
 What the cross build needs beyond the Linux build, and what it does not have
 on a fresh Ubuntu 24.04: `clang-cl` (the clang package ships the driver but
@@ -269,17 +271,39 @@ never uploaded.
 ### The build identity across platforms
 
 A session's hello refuses a peer whose build identity differs (#26), so two
-players need builds that agree. It is FNV-1a over the patches' binary and
-over the first 8 hex digits of the SHA-256 of the game's recompiler config
-(`src/coop/version.cmake`, `src/coop/session.cpp`, `build_id`). Neither part
-comes from the host compiler of the C++ code, so the Linux build and the
-cross-compiled Windows build of one checkout must match — and do:
+players need builds that agree. Since #67 it is FNV-1a over the **sources**
+the patches are built from — every `patches/*.c`, `*.h`, `*.ld` and the
+`Makefile` with its flags, each with its path — then over the recompiler
+config of the patches (`patches.toml`, which functions they replace) and the
+first 8 hex digits of the SHA-256 of the game's one (`bm64.<version>.toml`,
+which holds the hooks). `tools/build_id.py` computes it, `src/coop/version.cmake`
+runs the script when configuring and compiles the number in, and
+`build_id()` in `src/coop/session.cpp` only reports it. So one commit gives
+one number on every machine, and `tools/verify.sh`'s `buildid` stage
+(`tools/build_id.py check`) keeps that property: the compiled
+`patches/patches.bin` is left out, and a change to any covered file changes
+the number.
+
+**Why the sources and not the binary** (#67): until then the identity was
+FNV-1a over `patches/patches.bin`, which `make -C patches` builds with
+whatever clang the machine has. The fork's two machines measured, at the same
+commit `18e4c8b` and the same Europe config: clang 18.1.3 a 46 312-byte
+binary and `0xFC44BFB4`, clang 23.1.3 a 46 328-byte one and `0x7F5EB1B6`. The
+hello refused the join although the code was the same, so the two people
+could not have played together at all. One machine shows it too: the same
+sources compiled with an added `-O1` gave a 32 788-byte binary and
+`0xD447083F`. A difference that reaches the game's behaviour is still caught,
+by the session's per-frame state hash (`coop: session desync`).
+
+The Linux build and the cross-compiled Windows build of one checkout match as
+well, which was measured before the change (#29) and now holds by
+construction:
 
 - **Measured** (#29, 2026-10-20, one Windows machine with WSL2, Ubuntu 24.04,
-  clang 18, Europe): the Linux build reports `coop: session build 0xFC44BFB4`
-  and the cross-compiled Windows build, run **natively on Windows 11**, the
-  same `0xFC44BFB4`. Both sides of each session then reached
-  `coop: session lockstep from frame 0`.
+  clang 18, Europe, the identity of the day `0xFC44BFB4`): the Linux build
+  reports `coop: session build <identity>` and the cross-compiled Windows
+  build, run **natively on Windows 11**, the same number. Both sides of each
+  session then reached `coop: session lockstep from frame 0`.
 - The Windows pair played 3600 frames in lockstep (two portable folders on
   127.0.0.1): the same state hash at frame 0 (`199C12E7`) and at frame 3600
   (`AE6DD052`), no `coop: session desync` and no `coop: session lost`, the
@@ -289,9 +313,9 @@ cross-compiled Windows build of one checkout must match — and do:
 - The Windows build and the Linux build **played against each other** on one
   machine, both ways (*A session between the Windows and the Linux build*,
   below).
-- **Not tested:** a build made with Visual Studio (upstream's `BUILDING.md`),
-  and whether another clang version changes the patches' binary and with it
-  the identity (#67).
+- **Not tested:** a build made with Visual Studio (upstream's `BUILDING.md`).
+  Another clang version does change the patches' binary (#67, measured on the
+  two machines); it no longer changes the identity.
 
 The identity is logged only when a hello happens, so a game that boots alone
 never prints it. Two ways to read it without playing:
@@ -300,21 +324,22 @@ never prints it. Two ways to read it without playing:
 # in a session (what the hello compared), from either side's log
 grep "coop: session build" <run folder>/game.log
 
-# offline, from the checkout the build was made from
-python3 - <<'PY'
-import hashlib, pathlib
-version = "eu"
-data = pathlib.Path("patches/patches.bin").read_bytes()
-hooks = int(hashlib.sha256(pathlib.Path(f"bm64.{version}.toml").read_bytes()).hexdigest()[:8], 16)
-h = 2166136261
-for byte in list(data) + [(hooks >> (i * 8)) & 0xFF for i in range(4)]:
-    h = ((h ^ byte) * 16777619) & 0xFFFFFFFF
-print("build id 0x%08X" % h)
-PY
+# offline, from the checkout the build was made from (the same number, since
+# the build compiles in what this prints); --number gives the value alone
+python3 -I tools/build_id.py --version eu
 ```
 
-Both gave `0xFC44BFB4` for the build above, so the offline sum is a way for
-two players to compare their builds before a playtest.
+Two players compare those numbers before a playtest: both run the offline
+command in a checkout of the same commit, with the same `--version`. They
+must be equal — if they are not, the two are not on the same commit, or one
+of them has an edit in `patches/` or in a config (the `--version eu` configs
+are generated, so `tools/europe.py configs` must have run on both).
+
+The game's build, the Windows cross build and the script all read the same
+files, so the version a player holds can be read without building anything.
+A build whose `tools/build_id.py` failed logs the identity `0x00000000` and
+CMake says so with a warning; such a build only ever matches another one in
+the same state.
 
 To run the Windows build **natively on Windows** rather than in Wine, make a
 portable folder of it on the Windows side (as `tools/playtest-kit.sh` does,
