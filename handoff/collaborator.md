@@ -289,5 +289,6 @@ never the hardware itself. Recipes that hold for everyone go into
   request and `building.md`.
 - `rom/`, `build/BM64Recomp-coop-eu/`, `build/win-eu/`, `n64recomp/`: keep.
 - `runs/`: emptied 2026-10-20. `verify/`: `20261020-195322` (quoted in pull
-  request #68) and `20261020-210626` (quoted in #72) left; delete each
-  once its pull request is merged.
+  request #68), `20261020-204048` (#71's measured baseline, the 11:47 stage)
+  and `20261020-210626` (the run quoted in #72) left; delete each once its
+  pull request is merged.
