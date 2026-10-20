@@ -222,7 +222,8 @@ together (`tools/windows-cross.cmake`):
   Windows CI. Windows finds headers and libraries in any case; the script
   links the four spellings the sources use that the SDK lacks.
 - The patches are built by the Linux clang as in the Linux build, so both
-  builds have the same build identity and can play together.
+  builds have the same build identity and can play together: measured on one
+  machine, both `0xFC44BFB4` (*The build identity across platforms*, below).
 - Build-time tools built for Windows (`file_to_c`) run in Wine. The shaders
   are compiled by RT64's Windows `dxc.exe` (1.7, what upstream's Windows
   builds use) in Wine through `tools/dxc-wine.sh`, which turns the Unix paths
@@ -231,6 +232,27 @@ together (`tools/windows-cross.cmake`):
   which Wine's D3D12 takes but a real Windows' might not.
 - RT64's SDL 2.26.3 headers define `_m_prefetch`, a builtin in newer clang;
   the toolchain sets their guard `__PRFCHWINTRIN_H`.
+- The MSVC STL stops a compiler it holds too old (`error STL1000`): the CRT
+  xwin splats from the release channel (14.44) asks for clang 19, Ubuntu
+  24.04 packages clang 18, and the channel offers no older CRT. For a clang
+  below 19 the toolchain sets the STL's own switch,
+  `_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH`, and says so when configuring
+  (#29). Installing a newer clang instead would also change the clang that
+  builds the patches, and with it the build identity.
+
+What the cross build needs beyond the Linux build, and what it does not have
+on a fresh Ubuntu 24.04: `clang-cl` (the clang package ships the driver but
+not that name: `ln -s "$(command -v clang)" ~/.local/bin/clang-cl`), `wine64`,
+`xwin` (a release binary from its repository, kept outside the checkout) and
+the splat itself:
+
+```bash
+xwin --accept-license --cache-dir ~/dev-scratch/BM64Recomp-coop/win/xwin-cache \
+    splat --output ~/dev-scratch/BM64Recomp-coop/win/sdk    # ~630 MB, a few minutes
+```
+
+`tools/build-windows.sh` names what of this is missing and stops with exit 4
+before it builds anything.
 
 `tools/run.sh --exe <…>.exe` runs it in Wine with its own prefix
 (`~/dev-scratch/BM64Recomp-coop/win/prefix`, never the owner's), and
@@ -243,6 +265,126 @@ Windows build started without a console (from Explorer) writes its log to
 `tools/playtest-kit.sh` makes portable folders of both builds for a playtest
 on two PCs (`docs/coop/playtest.md`): builds of the game, copied by hand,
 never uploaded.
+
+### The build identity across platforms
+
+A session's hello refuses a peer whose build identity differs (#26), so two
+players need builds that agree. It is FNV-1a over the patches' binary and
+over the first 8 hex digits of the SHA-256 of the game's recompiler config
+(`src/coop/version.cmake`, `src/coop/session.cpp`, `build_id`). Neither part
+comes from the host compiler of the C++ code, so the Linux build and the
+cross-compiled Windows build of one checkout must match — and do:
+
+- **Measured** (#29, 2026-10-20, one Windows machine with WSL2, Ubuntu 24.04,
+  clang 18, Europe): the Linux build reports `coop: session build 0xFC44BFB4`
+  and the cross-compiled Windows build, run **natively on Windows 11**, the
+  same `0xFC44BFB4`. Both sides of each session then reached
+  `coop: session lockstep from frame 0`.
+- The Windows pair played 3600 frames in lockstep (two portable folders on
+  127.0.0.1): the same state hash at frame 0 (`199C12E7`) and at frame 3600
+  (`AE6DD052`), no `coop: session desync` and no `coop: session lost`, the
+  same twelve overlay loads on both sides, about 49 frames a second at PAL
+  50. The Windows runs logged no audio skips, where the same machine's WSL2
+  runs log them (#66).
+- The Windows build and the Linux build **played against each other** on one
+  machine, both ways (*A session between the Windows and the Linux build*,
+  below).
+- **Not tested:** a build made with Visual Studio (upstream's `BUILDING.md`),
+  and whether another clang version changes the patches' binary and with it
+  the identity (#67).
+
+The identity is logged only when a hello happens, so a game that boots alone
+never prints it. Two ways to read it without playing:
+
+```bash
+# in a session (what the hello compared), from either side's log
+grep "coop: session build" <run folder>/game.log
+
+# offline, from the checkout the build was made from
+python3 - <<'PY'
+import hashlib, pathlib
+version = "eu"
+data = pathlib.Path("patches/patches.bin").read_bytes()
+hooks = int(hashlib.sha256(pathlib.Path(f"bm64.{version}.toml").read_bytes()).hexdigest()[:8], 16)
+h = 2166136261
+for byte in list(data) + [(hooks >> (i * 8)) & 0xFF for i in range(4)]:
+    h = ((h ^ byte) * 16777619) & 0xFFFFFFFF
+print("build id 0x%08X" % h)
+PY
+```
+
+Both gave `0xFC44BFB4` for the build above, so the offline sum is a way for
+two players to compare their builds before a playtest.
+
+To run the Windows build **natively on Windows** rather than in Wine, make a
+portable folder of it on the Windows side (as `tools/playtest-kit.sh` does,
+plus the stored ROM): `BM64Recompiled.exe`, `SDL2.dll`, `dxcompiler.dll`,
+`dxil.dll`, `assets/`, `recompcontrollerdb.txt`, an empty `portable.txt` and
+the ROM as `bm64_<version>.z64`. The switches `tools/run.sh` would set are
+plain environment variables (`BM64_COOP_AUTOSTART=1`,
+`BM64_COOP_LOG_OVERLAYS=1`, `BM64_COOP_SESSION=…`), and the folder keeps
+everything the run writes, so no setting of the person's own is touched. Such
+a run opens a window: Windows has no headless wrapper here.
+
+### A session between the Windows and the Linux build
+
+The playtest's real pair is one player on Windows and one on Linux (#29). On a
+Windows machine with WSL2 both builds are there, so the pair can be played
+without a second PC: the native Windows build in a portable folder on the
+Windows side, the Linux build through `tools/run.sh` inside WSL2. The two go
+through different network stacks, WSL2's NAT between them.
+
+- The **Windows side joins the WSL2 host** at `127.0.0.1`: WSL2's localhost
+  relay carries it to the listening game inside WSL2.
+- The **WSL2 side joins the Windows host** at the address of WSL2's default
+  route (`ip route | grep default`, the Windows host on the NAT network).
+  This needed no firewall rule of its own here, so it says nothing about what
+  a host on a real LAN needs: there, Windows asks (`playtest.md`, *Start a
+  session*).
+
+Each side is started on its own, as a playtest player would be, with the same
+switches `tools/scenario.py` would set (*The test harness*): the scripts of
+`tools/scenarios/session-lockstep.txt`, its host part on the host and its
+`#client` steps on the client, `BM64_COOP_WARP=0x29:0x13`,
+`BM64_COOP_LOG_HASH=1` and `BM64_COOP_LOG_FRAMES=300` on both. Afterwards the
+two logs are compared with `tools/compare_logs.py` (below). A game started
+without a console keeps its log in `coop.log` in its folder; started with its
+output redirected, as a script does, the log is on **stderr**.
+
+**Measured** (#29, 2026-10-20, Europe, one Windows machine with WSL2 on
+Ubuntu 24.04):
+
+- Both ways, 448 frames of the `session-lockstep` scripts: the same build
+  identity `0xFC44BFB4` on both sides, `coop: session lockstep from frame 0`,
+  the same state hash on **every** frame both logged, the same two overlay
+  loads, no `coop: session desync` and no `coop: session lost` before the
+  scripts ended.
+- A longer run with the WSL2 build hosting, 3551 frames hashed by both: all
+  equal. About **49.4 frames a second** on either side at PAL 50. Audio: 4
+  skips on the WSL2 side, which runs with SDL's dummy driver (`run.sh`
+  without `--audio`), 0 on the Windows side, which plays on the real device.
+- **Still not run:** two real machines on a LAN, the internet with a
+  forwarded port, and macOS.
+
+### Comparing the logs of two machines: tools/compare_logs.py
+
+`tools/scenario.py` compares the two sides itself (`#check same-hashes`), but
+only for two games it starts on one machine. A session across machines leaves
+one log on each PC instead:
+
+```bash
+python3 -I tools/compare_logs.py <host log> <client log>
+```
+
+It cuts both logs at `coop: input end` (once one game is stopped the other
+loses the session), and reports the build identity of each side, the state
+hash of every frame both logged with the first one that differs, the overlay
+loads, the frames a second and audio skips of each side
+(`BM64_COOP_LOG_FRAMES`), and any `coop: session desync`, `lost` or `refused`.
+Exit 0 only when the identities agree, no frame differs and no such event was
+logged; two logs without `BM64_COOP_LOG_HASH` (a playtest build) still give
+the rest. Either side's `game.log`, `coop.log` or captured stderr will do,
+with Unix or Windows line ends.
 
 ## Running the game: tools/run.sh
 
@@ -486,7 +628,9 @@ A scenario with a `#session` line runs both games at once (`tools/run.sh
 is the host's script; `#client STEP` lines are the client's script (its pad
 0 is pad 1, player 2, in both games), `#env-host` and `#env-client` set one
 side's environment, `#check-client` checks the client's log, and `#check
-same-hashes` compares the two logs' `coop: hash` lines frame by frame. Both
+same-hashes` compares the two logs' `coop: hash` lines frame by frame (for a
+session across two machines, which this cannot start, there is
+`tools/compare_logs.py` instead: *Comparing the logs of two machines*). Both
 logs are cut at their `coop: input end`, since the session is lost as soon
 as one game is stopped; both scripts should end on the same frame. A tile
 step runs on one side only, outside the lockstep: `session-desync` uses one
@@ -495,6 +639,15 @@ to part the two games on purpose.
 ```bash
 tools/scenario.py --version eu session-lockstep   # both games, about 15 s
 ```
+
+**One gamepad, two games** (#29, read in the code, not played): the game sets
+SDL's `JOYSTICK_ALLOW_BACKGROUND_EVENTS` and its own *background input* option
+is on by default (`src/main/main.cpp`, `src/ui/ui_config.cpp`), so two games
+on one machine both take the events of the same controller — one stick would
+move both players. `tools/run.sh` writes a `general.json` with the option off
+for that reason, and a hand test of two games on one machine (#33) has to do
+the same in each game: then only the game whose window has the focus reads the
+pad.
 
 ## Europe speed
 

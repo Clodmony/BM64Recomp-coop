@@ -88,7 +88,10 @@ join once more: the crashed run's log lands in the host's `coop-logs/`.
 Nothing else is sent, and only to the PC you connect to.
 
 Otherwise keep **both** `coop.log` files (one from each PC). Note what you
-did when something went wrong, and the time. In the logs, look for:
+did when something went wrong, and the time.
+`python3 -I tools/compare_logs.py <host coop.log> <other coop.log>` reads the
+two side by side and says whether the two games agreed (building.md,
+*Comparing the logs of two machines*). In the logs, look for:
 
 - `coop: session desync frame=…`: the two games no longer agree (the most
   important line).
