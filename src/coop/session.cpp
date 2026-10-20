@@ -35,17 +35,29 @@
 //          protocol version, so an older peer is refused, not misread)
 //   logs   right after the hellos, the host's first: "LOGS", u32 size, then
 //          the last run's log of the sender (coop.prev.log, its last 256
-//          KiB; size 0 without one), kept by the other in coop-logs/ (#29:
-//          a crash reaches the other side at the next connect)
+//          KiB; size 0 without one), kept by the other in
+//          coop-logs/<time>-<host|client>.prev.log (#29: a crash's last
+//          lines reach the other side at the next connect)
 //   save   from the host after the hellos: u32 size, then its save file as
 //          the game will read it (zeros without one). The client plays on a
 //          copy of it (saves/coop-session/<game id>.bin), so both games read
 //          and write the same save data and the client's own file is never
 //          written (docs/coop/design.md, section 11)
-//   frame  u32 frame, u16 buttons, u16 flags (1: the camera's angles are
-//          set), f32 x, f32 y (the bits the game will read), u32 hash frame,
-//          u32 hash (of the state after that frame), f32 yaw, f32 pitch (the
-//          sender's camera, in degrees, when it sent the pad)
+//
+// Then every message is u16 kind, u16 size and size bytes (protocol 5, #57;
+// a receiver skips a kind it does not know):
+//   frame  kind 1, 32 bytes: u32 frame, u16 buttons, u16 flags (1: the
+//          camera's angles are set), f32 x, f32 y (the bits the game will
+//          read), u32 hash frame, u32 hash (of the state after that frame),
+//          f32 yaw, f32 pitch (the sender's camera, in degrees, when it sent
+//          the pad)
+//   log    kind 2: the next text of the sender's log (coop.log, from the
+//          start of its run; whole lines). The other side appends it to
+//          coop-logs/<time>-<host|client>.log as it comes, so the text is
+//          there when the sender crashes or the session is lost later. Sent
+//          after the frame in the same packet, at most 512 bytes a frame (25
+//          KiB/s at 50 frames a second), so a frame waits behind no more
+//          than that; what was logged before the lockstep goes at its start.
 //
 // Game frames are numbered from 0, the one of the game's first pad read. The
 // per-frame hook at the end of frame f (bm64.us.toml) is the lockstep's step:
@@ -110,11 +122,18 @@ extern "C" const size_t mm_patches_bin_size;
 
 namespace {
 
-constexpr uint16_t protocol = 4;
+// 5 (#57): the messages after the save got a kind and a size, for the log's
+// text; a protocol 4 peer would read a log message as a frame
+constexpr uint16_t protocol = 5;
 constexpr uint32_t no_frame = 0xFFFFFFFF;
 constexpr size_t hello_head = 8; // "COOP", protocol, role, game: the same in every protocol
 constexpr size_t hello_size = 20;
 constexpr size_t frame_size = 32;
+constexpr size_t message_head = 4; // u16 kind, u16 size
+constexpr uint16_t message_frame = 1;
+constexpr uint16_t message_log = 2;
+constexpr size_t log_per_frame = 512; // log text after each frame, at most
+constexpr size_t log_message_max = 0xFFFF;
 constexpr auto peer_timeout = std::chrono::seconds(10);
 
 #ifdef BM64_VERSION_EU
@@ -168,6 +187,10 @@ struct Session {
     uint32_t hash = 0;
     uint32_t desyncs = 0;
     uint32_t first_desync = no_frame;
+    std::string stamp;        // the connect's time, which names the coop-logs/ files
+    std::ifstream log;        // this machine's coop.log, streamed to the other (#57)
+    uint64_t log_sent = 0;    // its bytes sent so far
+    std::vector<uint8_t> out; // the message being sent
 
     // filled by the receiver thread
     std::mutex mutex;
@@ -395,9 +418,42 @@ socket_t connect_host(const Config& config) {
     return no_socket;
 }
 
+// The other side's log as it streams in (#57), appended to
+// coop-logs/<time>-<host|client>.log in the app folder; the file is opened
+// with the first text.
+void keep_log_text(std::ofstream& file, const uint8_t* text, size_t size) {
+    if (!file.is_open()) {
+        std::string name = session.stamp + (session.config.role == Role::Host ? "-client.log" : "-host.log");
+        std::filesystem::path path = zelda64::get_app_folder_path() / "coop-logs" / name;
+        std::error_code error;
+        std::filesystem::create_directories(path.parent_path(), error);
+        file.open(path, std::ios_base::binary | std::ios_base::app);
+        std::fprintf(stderr, "coop: session: the other side's log streams to coop-logs/%s%s\n", name.c_str(),
+                     file.is_open() ? "" : " (cannot write it)");
+    }
+    if (file.is_open()) {
+        file.write(reinterpret_cast<const char*>(text), static_cast<std::streamsize>(size));
+        file.flush();
+    }
+}
+
 void receive_frames(socket_t sock) {
-    uint8_t msg[frame_size];
-    while (recv_all(sock, msg, sizeof(msg))) {
+    std::vector<uint8_t> body(log_message_max);
+    std::ofstream log;
+    uint8_t head[message_head];
+    while (recv_all(sock, head, sizeof(head))) {
+        uint16_t kind = get16(head);
+        uint16_t size = get16(head + 2);
+        if (!recv_all(sock, body.data(), size) || (kind == message_frame && size != frame_size)) {
+            break;
+        }
+        if (kind == message_log) {
+            keep_log_text(log, body.data(), size);
+        }
+        if (kind != message_frame) {
+            continue;
+        }
+        const uint8_t* msg = body.data();
         Pad pad{get16(msg + 4), bits_float(get32(msg + 8)), bits_float(get32(msg + 12)), (get16(msg + 6) & 1) != 0,
                 get32(msg + 24), get32(msg + 28)};
         std::lock_guard lock{session.mutex};
@@ -410,6 +466,56 @@ void receive_frames(socket_t sock) {
     std::lock_guard lock{session.mutex};
     session.peer_closed = true;
     session.arrived.notify_all();
+}
+
+// Appends to s.out a log message with this machine's next log text (#57):
+// the whole lines of coop.log after those sent, at most `budget` bytes (a
+// longer line goes in pieces). False when no whole line waits.
+bool add_log_text(Session& s, size_t budget) {
+    if (!s.log.is_open()) {
+        return false;
+    }
+    size_t at = s.out.size();
+    s.out.resize(at + message_head + budget);
+    uint8_t* text = s.out.data() + at + message_head;
+    s.log.clear();
+    s.log.seekg(static_cast<std::streamoff>(s.log_sent));
+    s.log.read(reinterpret_cast<char*>(text), static_cast<std::streamsize>(budget));
+    size_t got = static_cast<size_t>(s.log.gcount());
+    size_t size = got;
+    while (size > 0 && text[size - 1] != '\n') {
+        size--;
+    }
+    if (size == 0 && got == budget) {
+        size = got;
+    }
+    s.out.resize(size > 0 ? at + message_head + size : at);
+    if (size == 0) {
+        return false;
+    }
+    put16(s.out.data() + at, message_log);
+    put16(s.out.data() + at + 2, static_cast<uint16_t>(size));
+    s.log_sent += size;
+    return true;
+}
+
+// At the lockstep's start: open this machine's coop.log and send what it
+// holds so far (up to 4 messages of 64 KiB; the rest follows with the frames).
+void start_log_stream(Session& s) {
+    std::filesystem::path path = coop::log_path();
+    if (!path.empty()) {
+        s.log.open(path, std::ios_base::binary);
+    }
+    if (!s.log.is_open()) {
+        std::fprintf(stderr, "coop: session: no log file to stream to the other side\n");
+        return;
+    }
+    s.out.clear();
+    for (int i = 0; i < 4 && add_log_text(s, log_message_max); i++) {
+    }
+    if (!s.out.empty() && !send_all(s.sock, s.out.data(), s.out.size())) {
+        std::fprintf(stderr, "coop: session: the log could not be sent\n"); // the first step notices too
+    }
 }
 
 // This build's identity: FNV-1a of the patches' binary, then of the hash of
@@ -482,9 +588,10 @@ bool use_host_save(const std::vector<uint8_t>& save) {
 }
 
 // The logs, first after the hellos (#29): each side sends its last run's log
-// and keeps the other's in coop-logs/<time>-<host|client>.log in the app
-// folder. The host sends first, the client answers, so neither waits on a
-// full socket buffer.
+// and keeps the other's in coop-logs/<time>-<host|client>.prev.log in the
+// app folder. The host sends first, the client answers, so neither waits on
+// a full socket buffer. This run's log follows during the session (#57,
+// start_log_stream).
 bool exchange_logs(Session& s) {
     constexpr size_t limit = 256 * 1024;
     bool host = s.config.role == Role::Host;
@@ -510,21 +617,22 @@ bool exchange_logs(Session& s) {
     if (!ok) {
         return false;
     }
+    char stamp[32];
+    std::time_t now = std::time(nullptr);
+    std::strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", std::localtime(&now));
+    s.stamp = stamp; // also names the stream's file (#57)
     if (theirs.empty()) {
         std::fprintf(stderr, "coop: session: the other side has no last log\n");
         return true;
     }
-    char stamp[32];
-    std::time_t now = std::time(nullptr);
-    std::strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", std::localtime(&now));
-    std::filesystem::path path =
-        zelda64::get_app_folder_path() / "coop-logs" / (std::string(stamp) + (host ? "-client.log" : "-host.log"));
+    std::string name = s.stamp + (host ? "-client.prev.log" : "-host.prev.log");
+    std::filesystem::path path = zelda64::get_app_folder_path() / "coop-logs" / name;
     std::error_code error;
     std::filesystem::create_directories(path.parent_path(), error);
     std::ofstream file(path, std::ios_base::binary);
     file.write(theirs.data(), static_cast<std::streamsize>(theirs.size()));
-    std::fprintf(stderr, "coop: session: the other side's last log, %zu bytes, %s %s\n", theirs.size(),
-                 file.good() ? "kept in" : "could not be written to", path.string().c_str());
+    std::fprintf(stderr, "coop: session: the other side's last log, %zu bytes, %s coop-logs/%s\n", theirs.size(),
+                 file.good() ? "kept in" : "could not be written to", name.c_str());
     return true;
 }
 
@@ -709,7 +817,10 @@ void step(Session& s, uint32_t hash, uint32_t yaw, uint32_t pitch) {
     mine.pitch = pitch;
     uint32_t target = s.frame + s.config.delay;
     s.own[target] = mine;
-    uint8_t msg[frame_size] = {};
+    s.out.assign(message_head + frame_size, 0);
+    put16(s.out.data(), message_frame);
+    put16(s.out.data() + 2, frame_size);
+    uint8_t* msg = s.out.data() + message_head;
     put32(msg, target);
     put16(msg + 4, mine.buttons);
     put16(msg + 6, 1);
@@ -719,7 +830,8 @@ void step(Session& s, uint32_t hash, uint32_t yaw, uint32_t pitch) {
     put32(msg + 20, s.hash);
     put32(msg + 24, mine.yaw);
     put32(msg + 28, mine.pitch);
-    if (!send_all(s.sock, msg, sizeof(msg))) {
+    add_log_text(s, log_per_frame); // after the frame, in the same packet (#57)
+    if (!send_all(s.sock, s.out.data(), s.out.size())) {
         lose(s, "send failed");
         return;
     }
@@ -836,6 +948,7 @@ std::optional<bool> coop::session_input(int pad, uint16_t* buttons, float* x, fl
             return std::nullopt;
         }
         std::fprintf(stderr, "coop: session lockstep from frame 0\n");
+        start_log_stream(s);
     }
     if (pad > 1) {
         return false;

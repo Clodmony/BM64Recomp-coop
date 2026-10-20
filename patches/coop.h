@@ -72,4 +72,9 @@ s32 func_802399AC(s32 pad);
 s32 func_80239714(s32 pad, s32 back);
 s32 func_802395A8(s32 pad, s32 back);
 
+// Player 2's join and stats (#55, #52; lane A of #56): the room's tile map,
+// one 16-bit cell per tile and floor level (patches/coop_player2.c,
+// coop_free_floor); outside the map a wall.
+s32 func_8026D7D8(s32 x, s32 y, s32 z);
+
 #endif

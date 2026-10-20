@@ -1,0 +1,18 @@
+# The game's own log (#57, docs/coop/building.md, *Running the game*): every
+# run writes its stdout (the patches' lines) and stderr (the host's) to
+# coop.log in its folder as well as to where they went before (the run's
+# game.log).
+#env BM64_COOP_WARP=0x29:0x13
+#
+#check contains coop.log "^coop: overlay 0x29$"
+#check contains coop.log "^coop: input: marker$"
+#check contains coop.log "^coop: probe here$"
+#check contains coop.log "^coop: player slot=0 controlType=1 "
+#check log ^coop: input: marker$
+#check no-file coop.prev.log
+overlay 0x29
+wait 30
+log marker
+probe here
+wait 5
+end

@@ -165,7 +165,8 @@ tools/verify.sh --scenarios      # also the game's test scenarios (below);
 ```
 
 Stages: `submodules`, `configs` (`tools/europe.py configs`, then the US and
-Europe configs parse), `n64recomp`, `patches`, `europe` (Europe only:
+Europe configs parse), `harness` (`tools/test_scenario.py`, `scenario.py`'s
+checks on fake runs' logs, #46), `n64recomp`, `patches`, `europe` (Europe only:
 `tools/europe.py check` on the image), `recomp`, `build`, and with
 `--scenarios` `scenarios` (*The test harness*, below). Logs and
 `summary.txt` go to `~/dev-scratch/BM64Recomp-coop/verify/<stamp>/`, the
@@ -258,9 +259,13 @@ before it builds anything.
 (`~/dev-scratch/BM64Recomp-coop/win/prefix`, never the owner's), and
 `tools/scenario.py --exe-client <…>.exe` makes it a session's client
 (`--exe` the host): the Linux and Windows builds against each other on one
-machine. Its log lines end in CR LF; `run.sh` and `scenario.py` take both. A
-Windows build started without a console (from Explorer) writes its log to
-`coop.log` in its app folder.
+machine. Its log lines end in CR LF; `run.sh` and `scenario.py` take both.
+Every build writes its log to `coop.log` in its app folder as well (#57,
+[design.md](design.md), *The playtest's logs*): a Windows build started
+without a console (from Explorer) there alone, one with a redirect (the
+harness in Wine) to both. `WIN_BUILD=<folder>` builds into another folder
+than `build/win-<version>/`, which belongs to the checkout that configured it
+first (a worktree of its own needs its own).
 
 `tools/playtest-kit.sh` makes portable folders of both builds for a playtest
 on two PCs (`docs/coop/playtest.md`): builds of the game, copied by hand,
@@ -403,7 +408,8 @@ that holds everything it writes: an empty `portable.txt` (so
 and mods there), the stored ROM `bm64_<version>.z64` (what the launcher writes
 after a ROM is chosen; taken from `bm64.<version>.z64` in scratch), links to
 `assets/` and `recompcontrollerdb.txt` in the checkout, `game.log` (stdout and
-stderr) and `summary.txt`. The script stops only the process it started
+stderr, gamescope's and Wine's lines among them), the game's own `coop.log`
+(its lines only, #57) and `summary.txt`. The script stops only the process it started
 (TERM, then KILL) and afterwards checks that nothing under
 `~/.config/BM64Recompiled` was created or changed.
 
@@ -457,7 +463,11 @@ pressed while a test game has the focus still reaches it.
 Captures (screenshots, clips) are fine for debugging but stay in the run
 folder: never in commits, issues or pull requests.
 Capture only the game's window: a capture of the active window takes
-whatever window has the focus once the game loses it.
+whatever window has the focus once the game loses it. A headless run is
+captured through its own gamescope: the game process (its working folder is
+the run folder) has `GAMESCOPE_WAYLAND_DISPLAY` in its environment, and
+`XDG_RUNTIME_DIR=/run/user/$(id -u) GAMESCOPE_WAYLAND_DISPLAY=<that display>
+gamescopectl screenshot <run folder>/shot.png` saves what it shows (#53).
 
 ## The test harness
 
@@ -486,8 +496,9 @@ Everything is off unless a switch asks for it:
     the floor level it stands on (`func_802511EC`, as a room entry does), and
     log `coop: tile slot=… from=… to=…`. With player 2 on, a tile step of
     slot 0 is a room entry: player 2 stays frozen and cannot be hurt until
-    player 1's next step places it (#36); walk player 1 instead when player
-    2 must stay where it is;
+    it is placed next to player 1 (#36; at once once player 1 has been free
+    for 60 frames, #55); walk player 1 instead when player 2 must stay where
+    it is;
   - `hearts SLOT N`: set the player's hearts to N (0–9), as a heart pickup
     does, and log `coop: hearts slot=… from=… to=…`;
   - `save FILE`: save the live progress block into file 0–2 and the EEPROM,
@@ -530,6 +541,20 @@ Everything is off unless a switch asks for it:
   0x28 opens with the tutorial's dialogue, which waits for A; room 0x29 with
   entry 0x13 (room 0x28's exit) starts with player 1's short entry walk and
   then plays.
+  The title, as the warp leaves it, starts the attract demo
+  (`func_80297ADC`, #49, #51): the warped room runs as the demo, story flag
+  0x4 set, so the map's enemy tiles become start points for slots 1–3
+  (`func_8026F5E8`: no enemies), the timer is off and START goes back to
+  the title.
+- `BM64_COOP_NO_DEMO=1`: the attract demo's setup is skipped (a hook at
+  `func_80297ADC`), so a warped room plays as a game's does: its enemies
+  spawn, and player 1 is held longer at the start (room 0x29: still frozen
+  345 frames after the load, free at 600; as the demo, 300 were enough).
+  The enemy scenarios use it (`enemy-ghost`,
+  `enemy-range`, `session-enemy-range`); the older ones run without enemies.
+  The enemy lines (`coop: enemy aim|spawn|despawn|clear …`) come from
+  `patches/coop_enemy.c` whenever player 2 is on ([design.md](design.md),
+  *Enemies and two players*).
 - `BM64_COOP_LOG_PLAYERS=1`: one line per room init, spawn (and the model
   asset it gets), placement on a tile, bomb, hit, the heart a hit knocks
   out (`drop … item=4`), an item picked up (`pickup … item=T`), an item a
@@ -584,6 +609,14 @@ left, a glob relative to its run folder: `saves/bm64_*.bin`), `contains PATH
 REGEX` (such a file has a matching line). The output is
 one line per check, `N/M checks passed`
 and a RESULT line; exit 0 only if all passed. A scenario takes 15–35 s.
+
+A log line the checks read that does not parse (a probe's `coop: player` or
+`coop: camera eye=` line, a `coop: hash` line), as when two games wrote into
+one `game.log`, is a failed check `log line parses` that names the line; a
+check that raises (a text field compared with a number) or a scenario that
+crashes `scenario.py` is a failed check with the error, and the run goes on
+with the next scenario (#46). `tools/test_scenario.py` tests this on fake
+runs' logs without the game (`tools/verify.sh`'s `harness` stage).
 
 ### Session scenarios: two games on one machine
 

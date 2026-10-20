@@ -1,0 +1,64 @@
+# Player 2 keeps its power-ups across a room change (#52). Room 0x29 has a
+# block on tile 7,16 (its tile map cell has bits 0x60). Player 2 joins next
+# to player 1 (5,13, #55), walks to 7,15 and bombs the block; with seed 3 it
+# leaves a bomb-up, which player 2 picks up: 3 bombs (player 1 keeps 2). Then
+# player 2 walks into the room's floor exit (it drops through the hole at
+# z<=7 and slides into the exit tiles at x=3), and room 0x28 loads with both
+# players. Player 2 still has 3 bombs there, as player 1 keeps its own. Before
+# #52 every room's init set player 2's bombs and fire to player 1's (and its
+# bomb type to 0x200), so it came into room 0x28 with 2 bombs.
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_P2=4
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_SEED=3
+#check field joined 4 bombs = 2
+#check field at-block 4 bombs = 2
+#check after "^coop: probe boom$" "^coop: pickup slot=4 item=1$"
+#check field got 4 bombs = 3
+#check field got 4 fire = 2
+#check field got 0 bombs = 2
+#check after "^coop: pickup slot=4 item=1$" "^coop: trigger slot=4 tile=3,"
+#check after "^coop: trigger slot=4" "^coop: overlay 0x28$"
+#check after "^coop: overlay 0x28$" "^coop: stage init overlay=0x28 slot=4 controlType=2 hearts=2 bombs=3 fire=2$"
+#check field next 4 bombs = 3
+#check field next 4 fire = 2
+#check field next 0 bombs = 2
+#check no-log ^coop: (hit|down|death) slot=
+overlay 0x29
+wait 320
+probe joined
+# player 2 to tile 7,15, beside the block on 7,16
+pad 1 - 0.05 -1
+wait 24
+pad 1 -
+wait 5
+pad 1 - -1 0.05
+wait 40
+pad 1 -
+wait 10
+probe at-block
+# player 1 out of the blast's reach (5,11), then player 2's bomb, and away
+pad 0 - 1 0.05
+wait 36
+pad 0 -
+pad 1 A
+wait 2
+pad 1 -
+pad 1 - 1 0.05
+wait 36
+pad 1 -
+wait 200
+probe boom
+# player 2 back along x=7 onto the bomb-up the block left
+pad 1 - -1 0.05
+wait 48
+pad 1 -
+wait 10
+probe got
+pad 1 - 1 0.05
+wait 140
+pad 1 -
+overlay 0x28
+wait 300
+probe next
+end
