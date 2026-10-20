@@ -77,18 +77,19 @@ loses the stand-in workaround #63 made unnecessary.
   decisions*), locally with `git merge --no-ff`, never `gh pr merge`.
   Afterwards: delete the branch, remove the #63 row from *In progress* in
   `HANDOFF.md` and drop #63 from its issue list.
-- **Next issue: undecided.** Nothing in the shared pool is the
-  collaborator's yet; the owner's group #56 holds #46, #49, #51, #52, #53,
-  #55 and #57, and its four lane pull requests (#59–#62) were still open and
-  unreviewed at 2026-10-20. Good unclaimed candidates for this machine are
-  the Windows side of #29 (a native Windows build's build identity against
-  the WSL2 one) and the hand try of the Co-op menu (#33); both are in
-  `HANDOFF.md`, *Next candidates*. Ask the person which one.
-- An open question of #63 stays open: **whether gamescope and Xvfb runs are
-  close enough to compare** (frame rate, audio skips). This machine has no
-  gamescope package, so only the owner's can answer it, with
-  `--wrapper gamescope` and `--wrapper xvfb` on the same scenario. Worth an
-  issue if the owner wants the numbers comparable across machines.
+- **Next issue: #29, the Windows side** (collaborator, 2026-10-20): whether
+  a native Windows build has the same build identity as the WSL2 one, since
+  an online session refuses the join when they differ. The whole of #29 is
+  wider (the internet, macOS, two games on one gamepad); take the Windows
+  part first. The owner's group #56 (#46, #49, #51–#53, #55, #57) and its
+  four lane pull requests #59–#62 are theirs, not ours.
+- The question #63 left open — **whether gamescope and Xvfb runs are close
+  enough to compare** (frame rate, audio skips) — is now **issue #66**
+  (collaborator, 2026-10-20). Only a machine with both wrappers can answer
+  it, so it waits for the owner's; the audio skips this machine logged stay
+  an observation until then.
+- **#65 stays a draft** and waits for the owner's review (collaborator,
+  2026-10-20): no further nudge beyond the review request.
 
 ## Machine notes
 
