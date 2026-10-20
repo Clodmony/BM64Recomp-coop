@@ -5,18 +5,19 @@ work*). Only the collaborator's sessions rewrite it: session history, what
 each issue found, decisions taken in those sessions, the next step. No
 names, handles or hardware in it.
 
-Last updated 2026-10-20 (#63, the session stopped early on usage).
+Last updated 2026-10-20 (#63, pull request #65 open).
 
 ## State
 
-- **#63 in progress**, branch `coop/63-run-wrapper`, pushed, **no pull
-  request yet**. The fix and the docs are committed (`a8ab437`): one commit,
-  `tools/run.sh`, `docs/coop/building.md`, `docs/coop/contributing.md`.
+- **#63 done**, branch `coop/63-run-wrapper`, **draft pull request #65**
+  open into `bm64recomp-coop` (`Closes #63`), the owner's review requested.
+  The fix is one commit (`a8ab437`): `tools/run.sh`,
+  `docs/coop/building.md`, `docs/coop/contributing.md`.
 - **#58 is done and merged** (pull request #64, merged by the owner
   2026-10-19 22:42 UTC). Its row is out of `HANDOFF.md`.
-- The session was stopped before the pull request because the person ran out
-  of usage. Nothing is half-written in the tree: `git status` is clean on the
-  branch.
+- The first session of #63 was stopped on usage before the pull request; the
+  second one finished the verify run and opened it. `git status` is clean on
+  the branch.
 
 ## #63: what it found and what the fix is
 
@@ -57,31 +58,37 @@ so the gamescope branch was exercised with a stand-in on `PATH` that proves
 only the selection. Its command line is byte-for-byte the one before this
 change.
 
+`tools/verify.sh --full --version eu --scenarios` on the branch, with no
+gamescope and no stand-in on `PATH`: **8/8 stages, 383/383 checks, RESULT:
+ALL PASSED** (2026-10-20 18:01, log folder
+`~/dev-scratch/BM64Recomp-coop/verify/20261020-180114/`). Every scenario ran
+under Xvfb, the two-game `session-*` ones included — before the change the
+scenario stage could not run at all here.
+
 Docs on the branch: `building.md` (*Running the game*) gets the wrapper
 choice, `--wrapper`, the `display:` field and the `WAYLAND_DISPLAY` reason;
 `contributing.md` gets `xvfb` in the dependency list with its reason and
 loses the stand-in workaround #63 made unnecessary.
 
-## Next step (fresh session, same branch)
+## Next step
 
-1. `tools/verify.sh --full --version eu --scenarios` was **still running**
-   when the session stopped — 7/8 stages ok (`submodules`, `configs`,
-   `n64recomp`, `patches`, `europe`, `recomp`, `build`), the `scenarios`
-   stage unfinished, log folder
-   `~/dev-scratch/BM64Recomp-coop/verify/20261020-004931/`. Check that
-   folder's `summary.txt` first; if it did not finish, run verify again on
-   the branch. The expected result is the one #58 measured, 8/8 stages and
-   383/383 checks — but now **without** the `gamescope` stand-in on `PATH`,
-   which is the whole point of #63.
-2. Open the draft pull request into `bm64recomp-coop` with `Closes #63`. The
-   body is written and waiting at
-   `~/dev-scratch/BM64Recomp-coop/i63/pr.md`; replace its
-   `VERIFY_SUMMARY` placeholder with the verify summary from step 1.
-3. Ask the owner for a review (`gh` 2.45 here: `gh api -X POST
-   repos/<owner>/<repo>/pulls/<N>/requested_reviewers -f
-   'reviewers[]=<login>'`, see *Machine notes*).
-4. Then `HANDOFF.md`: move #63 out of *In progress* once its pull request is
-   merged, and drop it from the issue list.
+- **Ask the owner to merge #65** once they have approved it; either person
+  may merge after the other's approving review (`HANDOFF.md`, *Project
+  decisions*), locally with `git merge --no-ff`, never `gh pr merge`.
+  Afterwards: delete the branch, remove the #63 row from *In progress* in
+  `HANDOFF.md` and drop #63 from its issue list.
+- **Next issue: undecided.** Nothing in the shared pool is the
+  collaborator's yet; the owner's group #56 holds #46, #49, #51, #52, #53,
+  #55 and #57, and its four lane pull requests (#59–#62) were still open and
+  unreviewed at 2026-10-20. Good unclaimed candidates for this machine are
+  the Windows side of #29 (a native Windows build's build identity against
+  the WSL2 one) and the hand try of the Co-op menu (#33); both are in
+  `HANDOFF.md`, *Next candidates*. Ask the person which one.
+- An open question of #63 stays open: **whether gamescope and Xvfb runs are
+  close enough to compare** (frame rate, audio skips). This machine has no
+  gamescope package, so only the owner's can answer it, with
+  `--wrapper gamescope` and `--wrapper xvfb` on the same scenario. Worth an
+  issue if the owner wants the numbers comparable across machines.
 
 ## Machine notes
 
@@ -121,9 +128,8 @@ never the hardware itself. Recipes that hold for everyone go into
 
 ## Scratch on this machine
 
-- `~/dev-scratch/BM64Recomp-coop/i63/`: the pull request body (`pr.md`,
-  still needed) and `bin/` (a directory of symlinks used to test the
-  "neither wrapper on PATH" path; delete freely).
+- `~/dev-scratch/BM64Recomp-coop/i63/`: deleted with the pull request
+  open, as the project asks.
 - `rom/`, `build/BM64Recomp-coop-eu/`, `n64recomp/`: keep.
-- `runs/`, `verify/`: delete freely, except the folder named under *Next
-  step* until its summary has been read.
+- `runs/`, `verify/`: delete freely; the summary of `verify/20261020-180114/`
+  is quoted in pull request #65 and above.

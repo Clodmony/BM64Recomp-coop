@@ -38,9 +38,9 @@ Last updated 2026-10-19 (#47: notes split for two people).
   done and merged.
   The owner's last step of #47 is done: the collaborator has write access on
   the fork (checked 2026-10-20).
-- Open pull requests: none of the collaborator's; #58's (pull request #64)
-  was merged 2026-10-19 by the owner. #63's branch `coop/63-run-wrapper` is
-  pushed with its fix but has no pull request yet. #50 (#22, downed players are ghosts) merged 2026-10-19
+- Open pull requests: #65 (#63, `run.sh` picks its headless wrapper,
+  collaborator), draft, waiting for the owner's review; #58's (#64) was
+  merged 2026-10-19 by the owner. #50 (#22, downed players are ghosts) merged 2026-10-19
   without a review (owner's one-off exception).
 
 ## In progress
@@ -51,7 +51,7 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 | Issue | Person | Branch | State |
 |-------|--------|--------|-------|
 | #56 (group: #55, #52, #49, #51, #53, #46, #57) | owner | `coop/56-playtest` (lanes `coop/56-a-player2`, `-b-enemies`, `-c-hud`, `-d-harness`) | four lane agents started 2026-10-19, worktrees under scratch `wt/` |
-| #63 | collaborator | `coop/63-run-wrapper` | fix and docs committed and pushed 2026-10-20; the verify run and the pull request are the next session's first step (`handoff/collaborator.md`) |
+| #63 | collaborator | `coop/63-run-wrapper` | done 2026-10-20, draft pull request #65, verify 8/8 and 383/383 on Ubuntu 24.04 without gamescope; waiting for the owner's review |
 
 ## Project decisions (bind both people)
 
