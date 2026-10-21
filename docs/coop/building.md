@@ -456,6 +456,55 @@ Debug switches, all off unless set (`src/coop/debug.cpp`):
 - `BM64_COOP_CRASH=1`: crash on purpose when the title loads (a test of the
   crash log, #29).
 
+**Z skips the story intro** (#77). It is not a switch and needs nothing set:
+start a new game the normal way — title, main menu, Adventure, **pick a
+file** — and then press **Z on the controller** while that file's opening
+cutscene (overlay 0x1A) plays. The game goes to the world map (0x21) at once.
+
+Where it deliberately does **nothing** (the person running the session,
+2026-10-21): before a file is picked. In the logos, in the attract demo and in
+the title's main menu, Z is ignored, so the file select and the Co-op menu are
+reached the normal way and **the file picked is the file played**
+(`skip-intro-title`). In a room Z stays the game's own button
+(`skip-intro-room`), and in an **online session** the skip is refused
+(`coop: skip intro: not in an online session`), since the step is one
+machine's alone and the other game would play on ([design.md](design.md),
+*The session core*).
+
+Not to be confused with `BM64_COOP_NO_DEMO=1` (#49, #51, above), which keeps
+the attract demo from ever starting so a *scripted* run's warped room plays
+with its enemies. Z is for the runs by hand.
+
+Two things about how it works. The button is read where the game reads its
+pads (`recomp::get_n64_input`, `src/game/controls.cpp`), not from this
+machine's keyboard, so a scenario presses it with an ordinary `pad 0 Z` step.
+And the step is the input script's `scene` step (`func_8023AE6C`) **in the
+running session**, not `BM64_COOP_WARP`'s: the warp starts a new file
+(`func_8023DA04`) and would throw away the file the person picked. A cutscene
+can still win a scene change of its own, so the skip keeps asking while the
+intro plays (at most 6 steps, 60 frames apart) until the world map loads. Each
+step logs `coop: skip intro: to the world map, keeping the file (step N)`.
+
+**The hint on screen.** Nobody can guess the button, so while the story intro
+plays the game shows **PRESS Z TO SKIP**, low and centred
+(`patches/coop_intro_hint.c`). It is drawn the way the co-op HUD draws its
+icons (#53, `coop_hud.c`): the text is painted once into an RGBA5551 texture
+from a 5×7 pixel font, white with a black outline so it reads over any scene,
+and a draw object of the game's own pool (`func_8022A328`) puts it on screen
+at twice that size. It only draws — no game state is written, so the
+lockstep's hash is untouched.
+
+When it shows is decided on the host side, in the same place as the skip
+itself (`in_story_intro()` and no online session, `src/coop/harness.cpp`), and
+only a *change* is passed to the patch (the per-frame hook's bit 8), which
+registers the draw object and frees it again. So it appears with the opening
+cutscene, goes away when the world map loads or Z was pressed, and **never
+appears in an online session**, where the skip is refused anyway. It logs
+`coop: hint on x=68 y=196` and `coop: hint off` (and
+`coop: hint none: no free draw object` if the pool is full), which is what the
+scenarios check: `skip-intro` wants the pair around the cutscene,
+`skip-intro-title` and `skip-intro-room` that it never appears.
+
 A run's own `general.json` turns background input off, so a controller in
 use elsewhere does not press the test game's buttons; a key or button
 pressed while a test game has the focus still reaches it.
@@ -484,7 +533,10 @@ Everything is off unless a switch asks for it:
     `START`, `L`, `R`, `DU` `DD` `DL` `DR`, `CU` `CD` `CL` `CR`, joined with
     `+`, or `-` for none) and the stick at X, Y in −1..1;
   - `probe LABEL`: log `coop: probe LABEL`, a `coop: state` line (overlay,
-    S, flow flags, lives), the stick reading of pads 0 and 1, a `coop:
+    S, flow flags, lives), a `coop: file current=N` line (the file the game
+    would save into, `D_802A1DB4`: 0–2, or −1 from the boot until the file
+    select sets it — a save takes it unchecked, so −1 writes below the EEPROM
+    mirror, which is what `skip-intro` checks, #77), the stick reading of pads 0 and 1, a `coop:
     camera` line (its eye, its yaw and pitch in tenths of a degree and its
     distance from the point it looks at) and one `coop: player slot=…` line per player in play
     (controlType, hearts, bombs, fire, flags, position in tenths of a world
@@ -530,7 +582,11 @@ Everything is off unless a switch asks for it:
   menu and A (60 frames later) takes its first entry, Adventure, into the
   file select (0x1F). In a run without saves, A picks the first file and A
   again starts it: the new file's opening cutscene (0x1A). A tap is
-  `pad 0 START`, `wait 4`, `pad 0 -`.
+  `pad 0 START`, `wait 4`, `pad 0 -`. Nothing in the game's own menus cuts
+  that path short, and the menus have to be driven as above. What can be cut
+  is the **opening cutscene** at the end of it: **Z** there goes to the world
+  map (*Z skips the story intro*, above, and the `skip-intro` scenarios, which
+  drive exactly this path and then press Z, #77).
 - `BM64_COOP_WARP=ID[:ENTRY[:FILE]]`: 30 frames after the title (overlay
   0x20) loads, start a story session as the file select does, for a new file
   (`func_8023DA04(0)`) or, with FILE, by loading file 0–2

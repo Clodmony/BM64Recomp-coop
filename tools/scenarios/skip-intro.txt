@@ -1,0 +1,55 @@
+# The story intro skip (#77): the menus are driven the normal way (title, main
+# menu, file select, a file picked and started, as `title-menu` does), and then
+# **Z during the opening cutscene** (0x1A) goes to the world map (0x21) in the
+# running session. The file picked stays the file played, so the step is the
+# `scene` one (func_8023AE6C), not the warp's new file.
+#check log "^coop: skip intro: to the world map, keeping the file \(step 1\)$"
+#check no-log "^coop: skip intro: gave up"
+# the cutscene was reached through the file select, and the world map follows it
+#check after "^coop: overlay 0x1F$" "^coop: overlay 0x1A$"
+#check after "^coop: overlay 0x1A$" "^coop: overlay 0x21$"
+# no new file was started for it (that is the warp's line, and it must not appear)
+#check no-log "^coop: warp "
+# and the game is live in the world map
+#check log "^coop: state overlay=0x21 "
+# the file the person picked is still the file the game would save into: 0, not
+# the boot's -1, which a save would write below the EEPROM mirror (the owner's
+# review of #84)
+#check log "^coop: file current=0$"
+# the "PRESS Z TO SKIP" hint (#77): on in the cutscene, off once it is over
+#check after "^coop: overlay 0x1A$" "^coop: hint on x=68 y=196$"
+#check after "^coop: hint on x=68 y=196$" "^coop: hint off$"
+#check no-log "^coop: hint none"
+overlay 0x20
+overlay 0x1B
+wait 60
+pad 0 START
+wait 4
+pad 0 -
+overlay 0x20
+wait 60
+pad 0 START
+wait 4
+pad 0 -
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+overlay 0x1F
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+overlay 0x1A
+wait 35
+pad 0 Z
+wait 4
+pad 0 -
+overlay 0x21
+wait 60
+probe world
+end

@@ -33,11 +33,13 @@ Last updated 2026-10-19 (#47: notes split for two people).
   (leftover checks), #19 (their group), #24 (follow-ups of #19), #29
   (two machines, Windows/macOS), #46 (scenario.py and a garbled log line), #49 (enemy targeting),
   #51–#55 (playtest findings; #55 urgent), #56 (their group), #57 (live client log),
-  #63 (`run.sh`'s headless default needs gamescope, which Ubuntu 24.04 does
-  not package; found by #58, pull request #65) and #66 (are gamescope and
+  #66 (are gamescope and
   Xvfb runs comparable? a follow-up of #63, for a machine with both
   wrappers) and #67 (do the two machines' builds have the same build
-  identity? the patches' clang, a follow-up of #29 the playtest depends on).
+  identity? the patches' clang, a follow-up of #29 the playtest depends on)
+  and #89 (a file-less `BM64_COOP_WARP` leaves the current save file at -1,
+  found while closing #84's review, measured). #63 is done and merged
+  (pull request #65), so `run.sh` picks gamescope or Xvfb by itself.
   #29's Windows side is answered (both platforms `0xFC44BFB4`) and the
   Windows build and the Linux build have played against each other, both
   ways (pull request #68); #29 is now only **two real machines on a LAN**
@@ -48,10 +50,14 @@ Last updated 2026-10-19 (#47: notes split for two people).
   #58 (the collaborator's setup) is done and merged.
   The owner's last step of #47 is done: the collaborator has write access on
   the fork (checked 2026-10-20).
-- Open pull requests: #65 (#63, `run.sh` picks its headless wrapper,
-  collaborator) and #68 (#29, the Windows build, the Windows-against-Linux
-  pair and `tools/compare_logs.py`, collaborator), both drafts waiting for
-  the owner's review; #58's (#64) was
+- Open pull requests of the collaborator, all drafts: **#72** (#71, the
+  scenarios in parallel) and **#73** (#67, the build identity from the
+  patches' sources), both **approved by the owner** but **conflicting** with
+  `bm64recomp-coop` since #74 and #59 went in — they need their conflicts
+  resolved before they can be merged, each review says how; and **#84** (#77,
+  Z skips the story intro), whose requested changes are **done and pushed**
+  (2026-10-21), review asked for again. #65 (#63) and #68 (#29) are merged.
+  #58's (#64) was
   merged 2026-10-19 by the owner. #50 (#22, downed players are ghosts) merged 2026-10-19
   without a review (owner's one-off exception).
 
@@ -63,9 +69,8 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 | Issue | Person | Branch | State |
 |-------|--------|--------|-------|
 | #75 (the playtest's desync with enemies, Linux against Windows) | owner | `coop/75-enemy-desync` | draft pull request #88, part of #75: the state hash covers the enemies, a desync names the parts that differ and both sides log their values of that frame (`coop: snapshot`), `compare_logs.py` shows them side by side; the random generator hashed at its real address. Not reproduced on one machine (ten sessions, Linux and Wine, enemies, cameras apart). Next (owner, 2026-10-21): the next playtest with a kit from `bm64recomp-coop` once #88 is merged, then #87 (replay); review requested from the collaborator |
-| #63 | collaborator | `coop/63-run-wrapper` | done 2026-10-20, draft pull request #65, verify 8/8 and 383/383 on Ubuntu 24.04 without gamescope; waiting for the owner's review |
-| #29 (everything one machine can answer; the issue is now the LAN playtest) | collaborator | `coop/29-windows-build` | done 2026-10-20, draft pull request #68: the Windows build cross-compiled in WSL2 and run natively on Windows (both platforms `0xFC44BFB4`), a Windows pair and a Windows-against-Linux pair in lockstep with the same hash on every frame, `tools/compare_logs.py` for two machines' logs; waiting for the owner's review. #29 stays open for two real machines, the internet and macOS |
-| #77 | collaborator | `coop/77-skip-intro` | done 2026-10-20, draft pull request #84: **Z during the intro** starts a new file in the world map (overlay 0x21), so a run by hand skips the logos, the attract demo and the opening cutscene; three scenarios (logos, demo with its repeated step, and Z in a room doing nothing); waiting for the owner's review |
+| #71 | collaborator | `coop/71-fast-scenarios` | done, draft pull request #72, **approved**; conflicts with `bm64recomp-coop` since #59 went in (`tools/scenario.py`, the notes) — the review says the `except` guard has to wrap `future.result()`, or #46's bug is back. Not resolved yet |
+| #67 | collaborator | `coop/67-build-identity` | done, draft pull request #73, **approved** (both machines `0x6738F333`, clang 18 and 23); conflicts since #74 went in (`src/coop/session.cpp`, `tools/verify.sh`) — keep protocol 5 and both stages. Not resolved yet |
 
 ## Project decisions (bind both people)
 
@@ -128,11 +133,14 @@ A shared pool: take one by claiming it under *In progress*.
    afterwards both `coop.log` files, which `tools/compare_logs.py` reads side
    by side. What breaks becomes an issue (a desync line first). **#67 comes
    first**: whether the two machines' builds agree on the identity at all.
-2. **#71** (the scenario stage takes about 13 minutes): taken by the
-   collaborator's next session (the person running it, 2026-10-20) with the
-   two safe levers, the scenarios in parallel and `BM64_COOP_PAL60=1` where
-   a scenario does not measure the rate; the turbo of its third lever only
-   if those are not enough.
+2. ~~**#71**~~ (the scenario stage takes about 13 minutes): done by the
+   collaborator, pull request #72, approved — it only waits for its conflicts
+   to be resolved, see *In progress*.
+2. **#89** (a file-less `BM64_COOP_WARP` leaves the current save file at -1,
+   so a save the game does itself writes below the EEPROM mirror): found and
+   measured while closing #84's review, nobody on it. Small, but it wants a
+   decision the issue names — whether the warp picks a file or the save
+   refuses -1.
 3. **#46** (scenario.py and a garbled log line): a small harness fix, a good
    first issue for a session with a smaller plan.
 3. ~~**#63**~~ (`run.sh`'s headless wrapper): taken by the collaborator
