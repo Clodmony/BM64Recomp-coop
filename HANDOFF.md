@@ -40,7 +40,9 @@ Last updated 2026-10-19 (#47: notes split for two people).
   found while closing #84's review, measured).
   **#91** (`session-hud` crashes a game with SIGSEGV when the scenario suite
   runs in lanes; found 2026-10-21 reviewing #88, happens with and without
-  that branch, never when the scenario runs alone). #63 is done and merged
+  that branch, never when the scenario runs alone).
+  **#93** (no scenario checks the enemy half of a `coop: snapshot`; the
+  review points of #88, which was merged without a review). #63 is done and merged
   (pull request #65), so `run.sh` picks gamescope or Xvfb by itself.
   #29's Windows side is answered (both platforms `0xFC44BFB4`) and the
   Windows build and the Linux build have played against each other, both

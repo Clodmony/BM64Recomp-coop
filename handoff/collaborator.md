@@ -15,7 +15,7 @@ Last updated 2026-10-22 (#78 in pull request #92; #88 reviewed; #91 filed).
   *#88*). The owner had already merged it by then, as a one-off exception
   without a review, so the points sit on the pull request and nothing acted
   on them; the first of them (nothing checks the enemy half of a snapshot)
-  is worth an issue if nobody picks it up.
+  is now **#93**, with the three smaller ones listed in it.
 - **#91 filed** (2026-10-21): `session-hud` crashes one of its two games
   with SIGSEGV when the scenario suite runs in lanes. Not a fault of any
   branch - measured on `bm64recomp-coop` as well.
@@ -182,21 +182,20 @@ never the hardware itself. Recipes that hold for everyone go into
 
 ## Scratch on this machine
 
-- `~/dev-scratch/BM64Recomp-coop/i78/`: #78's traces and suite logs. Delete
-  with the pull request open, as the project asks (its numbers are in #92).
+- `~/dev-scratch/BM64Recomp-coop/i78/` and `ref/bm64`: **deleted**
+  2026-10-22 with #92 open, as the project asks (the numbers are in #92).
+- `runs/`: **emptied** 2026-10-22 (7.7 GB of this session's runs).
 - `wt/78-death-anim/` with `build/78-death-anim-eu`: #78's worktree. Keep
   until #92 is merged, so a review point needs no rebuild.
 - `wt/77-skip-intro/`: **now holds the local review merge of #88** (branch
   `review/88`, never pushed), which is what the review's verify ran on. #84
   is merged, so this worktree and `build/77-skip-intro-eu` can go once the
   #88 points are settled.
-- `ref/bm64`: a shallow clone of the decompilation, pulled for #78 and of no
-  use (see *Machine notes*). Delete it.
 - `win/` (the xwin splat, its cache and the Wine prefix, 2.4 GB): keep, or
   the next Windows build starts with the download again.
 - On the **Windows side**, `dev-scratch/BM64Recomp-coop/win-play/`: the two
   portable folders with the ROM and the session scripts. Keep.
 - `rom/`, `build/BM64Recomp-coop-eu/`, `build/win-eu/`, `n64recomp/`: keep.
   `build/win-77-eu/` goes with the `77-skip-intro` worktree.
-- `runs/` and `verify/`: delete freely, except `verify/20261021-235113`
-  (quoted in #92) until it is merged.
+- `verify/`: delete freely, except `verify/20261021-235113` (quoted in #92)
+  until it is merged.
