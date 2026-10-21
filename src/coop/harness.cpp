@@ -353,6 +353,7 @@ bool skip_intro_asked = false; // Z was pressed during the story intro
 int skip_tried = 0;            // steps asked for so far
 uint64_t skip_frame = 0;       // the frame of the last one
 uint16_t pad0_buttons = 0;     // pad 0 the frame before, for the press edge
+int hint_shown = 0;            // whether the hint's draw object is registered
 
 // Whether the story intro is playing, the one state Z acts in.
 bool in_story_intro() {
@@ -495,7 +496,7 @@ void coop::note_overlay_load(uint32_t id) {
 // args[3], args[4]), bit 3 coop_harness_save(args[6]), bit 4
 // coop_harness_hearts(args[7], args[8]), bit 5 coop_harness_scene(args[9],
 // args[10]), bit 6 coop_harness_drop(args[11]), bit 7
-// coop_harness_freeze(args[12]).
+// coop_harness_freeze(args[12]), bit 8 coop_intro_hint(args[13]).
 extern "C" uint32_t coop_harness_frame(int32_t* args) {
     static Warp warp = read_warp();
     std::lock_guard lock{mutex};
@@ -522,6 +523,20 @@ extern "C" uint32_t coop_harness_frame(int32_t* args) {
     // `scene`, so only when the script did not ask for one this frame.
     if (args[9] < 0) {
         take_skip_intro(args);
+    }
+    // The "PRESS Z TO SKIP" hint (#77, patches/coop_intro_hint.c) shows while
+    // the story intro plays and Z would act on it, so never in an online
+    // session, where the skip is refused and the hint would only promise a
+    // button that does nothing. Only a change is passed on, since the patch
+    // registers and frees a draw object for it.
+    {
+        const int hint = in_story_intro() && !coop::session_connected() ? 1 : 0;
+
+        if (hint != hint_shown) {
+            hint_shown = hint;
+            args[13] = hint;
+            requests |= 256;
+        }
     }
     if (args[2] >= 0) {
         requests |= 4;

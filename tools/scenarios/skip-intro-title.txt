@@ -4,6 +4,7 @@
 # reached the normal way. The run ends in the title's menu, where the script
 # left it.
 #check no-log "^coop: skip intro"
+#check no-log "^coop: hint on"
 #check no-log "^coop: overlay 0x21$"
 #check no-log "^coop: warp "
 # the demo ran and the title came back, as it does without any key

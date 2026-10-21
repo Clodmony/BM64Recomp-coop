@@ -485,6 +485,26 @@ can still win a scene change of its own, so the skip keeps asking while the
 intro plays (at most 6 steps, 60 frames apart) until the world map loads. Each
 step logs `coop: skip intro: to the world map, keeping the file (step N)`.
 
+**The hint on screen.** Nobody can guess the button, so while the story intro
+plays the game shows **PRESS Z TO SKIP**, low and centred
+(`patches/coop_intro_hint.c`). It is drawn the way the co-op HUD draws its
+icons (#53, `coop_hud.c`): the text is painted once into an RGBA5551 texture
+from a 5×7 pixel font, white with a black outline so it reads over any scene,
+and a draw object of the game's own pool (`func_8022A328`) puts it on screen
+at twice that size. It only draws — no game state is written, so the
+lockstep's hash is untouched.
+
+When it shows is decided on the host side, in the same place as the skip
+itself (`in_story_intro()` and no online session, `src/coop/harness.cpp`), and
+only a *change* is passed to the patch (the per-frame hook's bit 8), which
+registers the draw object and frees it again. So it appears with the opening
+cutscene, goes away when the world map loads or Z was pressed, and **never
+appears in an online session**, where the skip is refused anyway. It logs
+`coop: hint on x=68 y=196` and `coop: hint off` (and
+`coop: hint none: no free draw object` if the pool is full), which is what the
+scenarios check: `skip-intro` wants the pair around the cutscene,
+`skip-intro-title` and `skip-intro-room` that it never appears.
+
 A run's own `general.json` turns background input off, so a controller in
 use elsewhere does not press the test game's buttons; a key or button
 pressed while a test game has the focus still reaches it.

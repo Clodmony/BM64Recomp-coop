@@ -12,6 +12,10 @@
 #check no-log "^coop: warp "
 # and the game is live in the world map
 #check log "^coop: state overlay=0x21 "
+# the "PRESS Z TO SKIP" hint (#77): on in the cutscene, off once it is over
+#check after "^coop: overlay 0x1A$" "^coop: hint on x=68 y=196$"
+#check after "^coop: hint on x=68 y=196$" "^coop: hint off$"
+#check no-log "^coop: hint none"
 overlay 0x20
 overlay 0x1B
 wait 60
