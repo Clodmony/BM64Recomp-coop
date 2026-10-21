@@ -1,13 +1,18 @@
 # Desync detection of an online session (#21, docs/coop/design.md, *The
 # session core*): the client alone moves player 1 to another tile (a harness
 # step, outside the lockstep), so the two games' states part. Both notice it
-# from the state hashes they exchange, and the session goes on.
+# from the state hashes they exchange, and the session goes on. The desync
+# names the part of the state that differs, the players' (#75), and each game
+# logs its values of that frame: player 1 one tile (100 units) apart along x.
 #session
 #env BM64_COOP_WARP=0x29:0x13
 #
 #check-client log ^coop: tile slot=0 from=5,1,14 to=6,1,14$
-#check log ^coop: session desync frame=\d+ local=[0-9A-F]{8} peer=[0-9A-F]{8}$
-#check-client log ^coop: session desync frame=\d+ local=[0-9A-F]{8} peer=[0-9A-F]{8}$
+#check log ^coop: session desync frame=\d+ local=[0-9A-F]{8} peer=[0-9A-F]{8} parts=players$
+#check-client log ^coop: session desync frame=\d+ local=[0-9A-F]{8} peer=[0-9A-F]{8} parts=players$
+#check after "^coop: session desync" "^coop: snapshot frame=\d+ scene overlay=0x29 "
+#check after "^coop: session desync" "^coop: snapshot frame=\d+ slot=0 control=1 .* x=500\.000 "
+#check-client after "^coop: session desync" "^coop: snapshot frame=\d+ slot=0 control=1 .* x=600\.000 "
 # the first desync is logged only after the step (and only once)
 #check-client after "^coop: tile slot=0" "^coop: session desync"
 #check-client not-after "^coop: session desync" "^coop: session desync"

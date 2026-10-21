@@ -1,0 +1,427 @@
+# A long online session with enemies and two cameras that differ (#75): room
+# 0x29 played as a game (BM64_COOP_NO_DEMO), both players walk a random path
+# (a seeded walk of each pad, written once) with bombs, B presses and C-button
+# turns of each machine's own camera; player 2 is put back next to the start
+# every 500 frames, on the same frame on both sides (a tile step runs outside
+# the lockstep). Enemies spawn and aim, both players die, player 1 twice (its
+# retry reloads the room), and at the end the host's camera has yaw 90 and the
+# client's 45. The state hash covers the enemies (#75), and both games hash
+# the same state on every frame.
+#session
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_LOG_HASH=1
+#env BM64_COOP_SEED=1
+#env BM64_COOP_NO_DEMO=1
+#
+#check no-log ^coop: session (desync|lost|refused)
+#check-client no-log ^coop: session (desync|lost|refused)
+#check same-hashes
+#check log "^coop: enemy spawn "
+#check log "^coop: enemy aim "
+#check log "^coop: bomb slot=4 placed=1$"
+#check log "^coop: death slot=0 "
+#check camera end yaw = 90
+#check-client camera end yaw = 45
+#
+# The client's script first, then the host's, the same 3608 frames each.
+#client overlay 0x29
+#client wait 600
+#client probe start
+#client pad 0 A
+#client wait 4
+#client pad 0 B
+#client wait 4
+#client pad 0 -
+#client wait 46
+#client pad 0 - -0.7 0.7
+#client wait 64
+#client pad 0 B
+#client wait 4
+#client pad 0 - 0.7 -0.7
+#client wait 80
+#client pad 0 -
+#client wait 53
+#client pad 0 - -1 0
+#client wait 18
+#client pad 0 - 0 1
+#client wait 27
+#client pad 0 B
+#client wait 4
+#client pad 0 - -1 0
+#client wait 44
+#client pad 0 - 0.7 0.7
+#client wait 57
+#client pad 0 -
+#client wait 17
+#client pad 0 -
+#client wait 48
+#client pad 0 - -0.7 -0.7
+#client wait 27
+#client pad 0 - 0 1
+#client wait 3
+#client pad 0 -
+#client tile 4 6 13
+#client pad 0 A
+#client wait 4
+#client pad 0 A
+#client wait 4
+#client pad 0 - 1 0
+#client wait 26
+#client pad 0 -
+#client wait 49
+#client pad 0 - 0.7 -0.7
+#client wait 19
+#client pad 0 - -1 0
+#client wait 20
+#client pad 0 - -0.7 0.7
+#client wait 47
+#client pad 0 - 0 1
+#client wait 68
+#client pad 0 - 0 1
+#client wait 15
+#client pad 0 - 0 -1
+#client wait 11
+#client pad 0 A
+#client wait 4
+#client pad 0 A
+#client wait 4
+#client pad 0 - 0 -1
+#client wait 34
+#client pad 0 CD
+#client wait 3
+#client pad 0 B
+#client wait 4
+#client pad 0 - -1 0
+#client wait 30
+#client pad 0 - 0 1
+#client wait 65
+#client pad 0 - 0.7 -0.7
+#client wait 79
+#client pad 0 - 0.7 0.7
+#client wait 14
+#client pad 0 -
+#client tile 4 6 13
+#client pad 0 CD
+#client wait 3
+#client pad 0 -
+#client wait 23
+#client pad 0 - 0 -1
+#client wait 13
+#client pad 0 A
+#client wait 4
+#client pad 0 - 0.7 0.7
+#client wait 50
+#client pad 0 - -0.7 0.7
+#client wait 61
+#client pad 0 A
+#client wait 4
+#client pad 0 - -0.7 -0.7
+#client wait 24
+#client pad 0 CD
+#client wait 3
+#client pad 0 - 0.7 0.7
+#client wait 33
+#client pad 0 - 0.7 0.7
+#client wait 35
+#client pad 0 CL
+#client wait 3
+#client pad 0 - 0 1
+#client wait 67
+#client pad 0 A
+#client wait 4
+#client pad 0 - -0.7 0.7
+#client wait 39
+#client pad 0 - 0.7 0.7
+#client wait 15
+#client pad 0 -
+#client wait 30
+#client pad 0 - 0.7 0.7
+#client wait 41
+#client pad 0 -
+#client wait 44
+#client pad 0 - 0 1
+#client wait 4
+#client pad 0 -
+#client tile 4 6 13
+#client pad 0 CR
+#client wait 3
+#client pad 0 - 0.7 0.7
+#client wait 80
+#client pad 0 - 0 1
+#client wait 12
+#client pad 0 - 0.7 0.7
+#client wait 55
+#client pad 0 - 1 0
+#client wait 22
+#client pad 0 - -0.7 0.7
+#client wait 19
+#client pad 0 - 1 0
+#client wait 32
+#client pad 0 - 1 0
+#client wait 50
+#client pad 0 -
+#client wait 55
+#client pad 0 - 0.7 0.7
+#client wait 26
+#client pad 0 - 1 0
+#client wait 79
+#client pad 0 - 0 -1
+#client wait 50
+#client pad 0 - -1 0
+#client wait 17
+#client pad 0 -
+#client tile 4 6 13
+#client pad 0 -
+#client wait 44
+#client pad 0 B
+#client wait 4
+#client pad 0 - -1 0
+#client wait 42
+#client pad 0 - -0.7 -0.7
+#client wait 65
+#client pad 0 - -0.7 -0.7
+#client wait 78
+#client pad 0 - 0.7 -0.7
+#client wait 53
+#client pad 0 B
+#client wait 4
+#client pad 0 - 0.7 -0.7
+#client wait 12
+#client pad 0 A
+#client wait 4
+#client pad 0 -
+#client wait 18
+#client pad 0 - 1 0
+#client wait 43
+#client pad 0 - 0.7 0.7
+#client wait 60
+#client pad 0 - 1 0
+#client wait 21
+#client pad 0 CL
+#client wait 3
+#client pad 0 B
+#client wait 4
+#client pad 0 -
+#client wait 45
+#client pad 0 -
+#client tile 4 6 13
+#client pad 0 - -1 0
+#client wait 40
+#client pad 0 -
+#client wait 53
+#client pad 0 - -1 0
+#client wait 62
+#client pad 0 -
+#client wait 49
+#client pad 0 - 0.7 0.7
+#client wait 38
+#client pad 0 A
+#client wait 4
+#client pad 0 A
+#client wait 4
+#client pad 0 - -0.7 0.7
+#client wait 30
+#client pad 0 - -1 0
+#client wait 49
+#client pad 0 -
+#client wait 29
+#client pad 0 - -0.7 0.7
+#client wait 31
+#client pad 0 - -0.7 -0.7
+#client wait 20
+#client pad 0 - 0.7 -0.7
+#client wait 32
+#client pad 0 B
+#client wait 4
+#client pad 0 - 0 -1
+#client wait 55
+#client pad 0 -
+#client tile 4 6 13
+#client probe end
+#client end
+overlay 0x29
+wait 600
+probe start
+pad 0 A
+wait 4
+pad 0 - 0 1
+wait 42
+pad 0 A
+wait 4
+pad 0 - -0.7 -0.7
+wait 58
+pad 0 - 0 1
+wait 72
+pad 0 A
+wait 4
+pad 0 - 0.7 -0.7
+wait 10
+pad 0 - 0.7 0.7
+wait 39
+pad 0 - 0 1
+wait 50
+pad 0 A
+wait 4
+pad 0 A
+wait 4
+pad 0 - 0.7 -0.7
+wait 37
+pad 0 - 0 -1
+wait 77
+pad 0 CD
+wait 3
+pad 0 - -1 0
+wait 54
+pad 0 CR
+wait 3
+pad 0 - 0.7 0.7
+wait 12
+pad 0 - 0 1
+wait 23
+pad 0 -
+tile 4 6 13
+pad 0 - 0.7 0.7
+wait 25
+pad 0 - 0.7 -0.7
+wait 74
+pad 0 - -1 0
+wait 48
+pad 0 -
+wait 41
+pad 0 - 0.7 -0.7
+wait 14
+pad 0 - 0.7 -0.7
+wait 63
+pad 0 - -0.7 0.7
+wait 80
+pad 0 - -0.7 0.7
+wait 21
+pad 0 - 0 1
+wait 30
+pad 0 - 0.7 -0.7
+wait 57
+pad 0 - 0 -1
+wait 47
+pad 0 -
+tile 4 6 13
+pad 0 A
+wait 4
+pad 0 - 0.7 -0.7
+wait 31
+pad 0 B
+wait 4
+pad 0 CL
+wait 3
+pad 0 - -1 0
+wait 61
+pad 0 - -0.7 0.7
+wait 68
+pad 0 - 0 -1
+wait 59
+pad 0 - 1 0
+wait 76
+pad 0 - -1 0
+wait 64
+pad 0 - -0.7 -0.7
+wait 56
+pad 0 - -1 0
+wait 74
+pad 0 -
+tile 4 6 13
+pad 0 - -0.7 0.7
+wait 63
+pad 0 -
+wait 44
+pad 0 - -0.7 0.7
+wait 68
+pad 0 - -1 0
+wait 32
+pad 0 - 1 0
+wait 21
+pad 0 - 0.7 0.7
+wait 14
+pad 0 - 0 1
+wait 20
+pad 0 - -0.7 -0.7
+wait 11
+pad 0 - 0.7 0.7
+wait 41
+pad 0 -
+wait 49
+pad 0 B
+wait 4
+pad 0 -
+wait 20
+pad 0 B
+wait 4
+pad 0 - 1 0
+wait 44
+pad 0 - 0.7 0.7
+wait 65
+pad 0 -
+tile 4 6 13
+pad 0 - -0.7 -0.7
+wait 70
+pad 0 A
+wait 4
+pad 0 -
+wait 31
+pad 0 - -1 0
+wait 43
+pad 0 A
+wait 4
+pad 0 - -1 0
+wait 65
+pad 0 - 0 -1
+wait 38
+pad 0 A
+wait 4
+pad 0 A
+wait 4
+pad 0 - 1 0
+wait 67
+pad 0 - 0.7 -0.7
+wait 79
+pad 0 - -0.7 -0.7
+wait 38
+pad 0 - 0 -1
+wait 53
+pad 0 -
+tile 4 6 13
+pad 0 - -0.7 0.7
+wait 64
+pad 0 A
+wait 4
+pad 0 -
+wait 23
+pad 0 - 0.7 0.7
+wait 19
+pad 0 - 0.7 0.7
+wait 48
+pad 0 - 0.7 -0.7
+wait 42
+pad 0 A
+wait 4
+pad 0 - 0 -1
+wait 37
+pad 0 - -0.7 -0.7
+wait 31
+pad 0 - 0 -1
+wait 58
+pad 0 B
+wait 4
+pad 0 A
+wait 4
+pad 0 - 0.7 -0.7
+wait 34
+pad 0 - 0.7 -0.7
+wait 47
+pad 0 - 0 -1
+wait 51
+pad 0 - 0.7 -0.7
+wait 30
+pad 0 -
+tile 4 6 13
+probe end
+end

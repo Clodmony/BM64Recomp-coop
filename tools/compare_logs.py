@@ -18,7 +18,11 @@ What it reports, and what makes it fail (exit 1):
   (needs BM64_COOP_LOG_HASH=N on both sides; neither side logging any is a
   note, not a failure, since a playtest build runs without it);
 - coop: session desync, lost or refused before the scripted run ended
-  (FAILED);
+  (FAILED); a desync names the parts of the state that differ (#75);
+- the snapshot lines both sides logged for the same frame (each side logs its
+  values of the first desynced frame, or every N frames with
+  BM64_COOP_LOG_STATE=N): the first frame whose lines differ, and those
+  lines, side by side (#75);
 - per side, for the record: the overlay loads, and from coop: frame lines
   (BM64_COOP_LOG_FRAMES=N) the frames a second and the audio skips.
 
@@ -36,6 +40,7 @@ BUILD = re.compile(r"coop: session build (0x[0-9A-Fa-f]+)")
 OVERLAY = re.compile(r"coop: overlay (0x[0-9A-Fa-f]+)")
 EVENT = re.compile(r"coop: session (?:desync|lost|refused)\b.*")
 FRAME = re.compile(r"coop: frame (\d+) (\d+) (\d+) (\d+) (\d+) (\d+)\s*$")
+SNAPSHOT = re.compile(r"coop: snapshot frame=(\d+) (.*?)\s*$")
 
 
 def read(path):
@@ -58,6 +63,36 @@ def rate(lines):
     skips = int(last.group(6)) - int(first.group(6))
     speed = f"{count * 1000 / passed:.1f}" if passed else "?"
     return f"{count} frames in {passed / 1000:.1f} s, {speed} a second, {skips} audio skips"
+
+
+def snapshots(lines):
+    """The snapshot lines by frame, each frame's in the order logged."""
+    frames = {}
+    for match in found(SNAPSHOT, lines):
+        frames.setdefault(int(match.group(1)), []).append(match.group(2))
+    return frames
+
+
+def compare_snapshots(host, client):
+    """The first frame both sides took a snapshot of whose lines differ, and
+    those lines: what parted the two games (#75)."""
+    sides = [snapshots(host), snapshots(client)]
+    both = sorted(set(sides[0]) & set(sides[1]))
+    if not both:
+        return ["snapshots: none of the same frame on both sides"], []
+    for frame in both:
+        mine, theirs = sides[0][frame], sides[1][frame]
+        if mine == theirs:
+            continue
+        out = [f"snapshots: {len(both)} frames on both sides, first that differs {frame}:"]
+        for line in mine:
+            if line not in theirs:
+                out.append(f"  host   {line}")
+        for line in theirs:
+            if line not in mine:
+                out.append(f"  client {line}")
+        return out, [f"snapshot of frame {frame} differs"]
+    return [f"snapshots: {len(both)} frames on both sides, all equal"], []
 
 
 def main():
@@ -94,6 +129,10 @@ def main():
     events = [match.group(0) for lines in sides.values() for match in found(EVENT, lines)]
     print("events: " + ("; ".join(events) if events else "no desync, lost or refused"))
     failed += events
+
+    report, differ = compare_snapshots(sides["host"], sides["client"])
+    print("\n".join(report))
+    failed += differ
 
     for line in failed:
         print(f"FAILED {line}")

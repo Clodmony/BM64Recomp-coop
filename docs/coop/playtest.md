@@ -110,8 +110,11 @@ when something went wrong, and the time.
 two side by side and says whether the two games agreed (building.md,
 *Comparing the logs of two machines*). In the logs, look for:
 
-- `coop: session desync frame=…`: the two games no longer agree (the most
-  important line).
+- `coop: session desync frame=… parts=…`: the two games no longer agree
+  (the most important line). `parts` names what differs first (`scene`,
+  `random`, `players`, `enemies`, `save`), and the `coop: snapshot` lines
+  after it hold that game's values of the frame; the other PC's log has its
+  own, and `compare_logs.py` shows the two side by side.
 - `coop: session lost …`: the connection ended, and why.
 - `coop: session refused …`: the join was refused, and why.
 - `coop: crash: …`: a crash on Windows, with its place in the program

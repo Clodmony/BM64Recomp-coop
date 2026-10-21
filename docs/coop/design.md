@@ -1089,17 +1089,33 @@ So on one machine the game is deterministic given the seed and the pads per
 frame: nothing else (the audio thread, the scheduler's timings, the 50 Hz
 pacing of the Europe build) reached the hashed state in these runs.
 
-The **state hash** (FNV-1a, `coop_state_hash`) covers the scene (overlay,
-flow flags, lives, S), the random generator's state, the five player records
-and command records, the players' actor positions and the save data (#26:
-the EEPROM mirror `D_80063000`, the live progress block `D_8008E570` with the
-stage-local flags, the current file `D_802A1DB4`). Enemies, bombs and
-the room's tiles are not in it: a divergence there shows once it reaches a
-player or the random generator (inferred). Each machine sends its hash with
-its pad; a different hash for the same frame logs `coop: session desync`
-on both sides (once, then a count every 600 frames). In `session-desync` a
-tile step on the client alone moves player 1 there; both games log the
-desync for the same frame (366), and the session goes on.
+The **state hash** (FNV-1a, `coop_state_hash`) has five parts, each hashed
+on its own (#75): the **scene** (overlay, flow flags, lives, S), the
+**random** generator's state (`g_RandomIndex`, a word and the 55-entry
+table, US 0x802ACFE0, Europe 0x802ACFD0; until #75 the hash started 0x10
+bytes early, the Europe address taken as the US one, and missed the table's
+last word), the **players** (the five player records and command records and
+the players' actor positions), the **enemies** (#75: the 16 enemy records as
+they are, and the actor position of each enemy the enemy process table runs)
+and the **save** data (#26: the EEPROM mirror `D_80063000`, the live progress
+block `D_8008E570` with the stage-local flags, the current file
+`D_802A1DB4`). Bombs and the room's tiles are not in it: a divergence there
+shows once it reaches a player, an enemy or the random generator (inferred).
+
+Each machine sends its hash with its pad, and the five parts with it
+(protocol 6). A different hash for the same frame logs `coop: session desync
+frame=F local=… peer=… parts=…` on both sides, with the parts that differ,
+and right after it that machine's **snapshot** of frame F: `coop: snapshot
+frame=F …` lines with the scene (and the generator's index and the game
+thread's FPU control word, MXCSR's control bits), each player with a control
+type, the enemy records' states and each enemy in the room, positions in
+world units and as their bits. The other side logs its own snapshot of the
+same frame, and the host keeps the client's log (#57), so the two values
+that parted are in one folder; `tools/compare_logs.py` prints them side by
+side. Then a count every 600 frames. In `session-desync` a tile step on the
+client alone moves player 1 there; both games log the desync for the same
+frame (366) with `parts=players`, and the snapshots show player 1 at x 500
+on the host and 600 on the client; the session goes on.
 
 ### Ending
 
@@ -1144,7 +1160,7 @@ The **build identity** in the hello is FNV-1a over the patches' sources
 configures, by `tools/build_id.py` (`src/coop/version.cmake`). Either side refuses another
 identity: `coop: session refused: another build (the other's 0x…)`, and
 both play alone (`session-build`, with `BM64_COOP_BUILD_ID` faking the
-client's). The protocol was 2 then (3 since #33's frame message, 4 since #29's logs, 5 since #57's log stream); the first 8 bytes of the hello (magic,
+client's). The protocol was 2 then (3 since #33's frame message, 4 since #29's logs, 5 since #57's log stream, 6 since #75's hash parts); the first 8 bytes of the hello (magic,
 protocol, role, game) stay the same in every version, so an older peer is
 refused for its protocol rather than misread. Not covered by the identity:
 host code (`src/`), librecomp, and mods; a difference there still shows

@@ -410,9 +410,13 @@ It cuts both logs at `coop: input end` (once one game is stopped the other
 loses the session), and reports the build identity of each side, the state
 hash of every frame both logged with the first one that differs, the overlay
 loads, the frames a second and audio skips of each side
-(`BM64_COOP_LOG_FRAMES`), and any `coop: session desync`, `lost` or `refused`.
-Exit 0 only when the identities agree, no frame differs and no such event was
-logged; two logs without `BM64_COOP_LOG_HASH` (a playtest build) still give
+(`BM64_COOP_LOG_FRAMES`), and any `coop: session desync`, `lost` or `refused`
+(a desync names the parts of the state that differ, #75). It then pairs the
+`coop: snapshot` lines both sides logged for the same frame (each side's of
+the first desynced frame, or every N frames with `BM64_COOP_LOG_STATE=N`)
+and prints the lines of the first frame that differ, the host's and the
+client's. Exit 0 only when the identities agree, no frame differs, no such
+event was logged and no snapshot differs; two logs without `BM64_COOP_LOG_HASH` (a playtest build) still give
 the rest. Either side's `game.log`, `coop.log` or captured stderr will do,
 with Unix or Windows line ends.
 
@@ -745,6 +749,10 @@ The session's own switches (`src/coop/session.cpp`):
   a session, where two runs of the same script then hash the same frames.
 - `BM64_COOP_LOG_HASH=N`: log `coop: hash frame=… hash=…` every N frames
   (the state hash of `patches/coop_session.c`).
+- `BM64_COOP_LOG_STATE=N`: log the values behind the hash, the `coop:
+  snapshot frame=…` lines a desync logs (#75, [design.md](design.md),
+  *Determinism and the shared seed*), every N frames; also without a session,
+  so two runs of one script can be compared with `tools/compare_logs.py`.
 - `BM64_COOP_BUILD_ID=N`: claim build identity N in the hello (a test of the
   build check, `session-build`).
 
