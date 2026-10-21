@@ -1137,18 +1137,23 @@ frames differed. After it both load the used file 0, hash the same 265
 frames, the client's copy equals the host's file and the client left no
 save of its own.
 
-The **build identity** in the hello is FNV-1a over the patches' binary
-(`mm_patches_bin`, what librecomp runs) and a SHA-256 prefix of the game's
-recompiler config `bm64.<version>.toml`, which holds the hooks, taken when
-CMake configures (`src/coop/version.cmake`). Either side refuses another
+The **build identity** in the hello is FNV-1a over the patches' sources
+(`patches/*.c`, `*.h`, `*.ld`, the `Makefile`), their recompiler config
+`patches.toml` and a SHA-256 prefix of the game's one,
+`bm64.<version>.toml`, which holds the hooks: all of it taken when CMake
+configures, by `tools/build_id.py` (`src/coop/version.cmake`). Either side refuses another
 identity: `coop: session refused: another build (the other's 0x…)`, and
 both play alone (`session-build`, with `BM64_COOP_BUILD_ID` faking the
 client's). The protocol was 2 then (3 since #33's frame message, 4 since #29's logs, 5 since #57's log stream); the first 8 bytes of the hello (magic,
 protocol, role, game) stay the same in every version, so an older peer is
 refused for its protocol rather than misread. Not covered by the identity:
 host code (`src/`), librecomp, and mods; a difference there still shows
-only as a desync. Two builds of one commit with different compilers may
-differ in the patches' binary and be refused (not tried; #29).
+only as a desync. Two builds of one commit with different compilers **were**
+refused, because the identity used to hash the compiled patches: the fork's
+two machines measured `0xFC44BFB4` (clang 18) against `0x7F5EB1B6` (clang
+23) at the same commit. Since #67 it hashes the sources, so they agree;
+behaviour that really differs is left to the per-frame state hash
+(building.md, *The build identity across platforms*).
 
 ### The camera (#27)
 

@@ -52,7 +52,9 @@ Read before working:
 - `tools/`: `verify.sh` (the check of a branch), `run.sh` (unattended runs),
   `scenario.py` and `scenarios/` (scripted runs of the game with checks),
   `unpack_rom.py` (decompressed image from either ROM), `europe.py` (Europe
-  configs and their check), `n64recomp.sh`, `build-windows.sh` (the Windows
+  configs and their check), `build_id.py` (the build identity two players'
+  builds must share), `compare_logs.py` (two machines' `coop.log` files),
+  `n64recomp.sh`, `build-windows.sh` (the Windows
   build, cross-compiled) and `playtest-kit.sh` (portable folders for a
   playtest, docs/coop/playtest.md).
 - `lib/N64ModernRuntime` (librecomp, ultramodern), `lib/rt64` (renderer),
@@ -190,5 +192,6 @@ tools/verify.sh --full --version eu --scenarios
 
 python3 -I tools/unpack_rom.py <rom>     # decompressed image into scratch
 python3 -I tools/europe.py check <image> # the Europe map on the image
+python3 -I tools/build_id.py --version eu # the identity two players compare (#67)
 tools/n64recomp.sh         # N64Recomp/RSPRecomp at upstream CI's pinned commit
 ```

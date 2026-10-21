@@ -4,8 +4,8 @@
 #
 #   tools/verify.sh [--quick] [--full] [--version us|eu] [--scenarios]
 #
-#   --quick     only the fast gates: submodules, configs, harness, patches,
-#               europe
+#   --quick     only the fast gates: submodules, configs, buildid, harness,
+#               patches, europe
 #   --full      a decompressed ROM is required; without one the recomp and
 #               link stages fail instead of being skipped
 #   --version   the game version to build (BM64_VERSION, src/coop/version.cmake);
@@ -18,6 +18,9 @@
 #   submodules  every submodule checked out at the commit the branch records
 #   configs     `tools/europe.py configs`, then the US and Europe configs
 #               (bm64/patches/aspMain/data_dump) parse as TOML
+#   buildid     tools/build_id.py check: the build identity two machines
+#               compare at a session's hello covers the patches' sources and
+#               the configs, and nothing a compiler decides (#67)
 #   harness     tools/test_scenario.py: scenario.py's checks on fake runs'
 #               logs, garbled ones too (#46); no game, no ROM
 #   n64recomp   N64Recomp/RSPRecomp at upstream CI's pinned commit
@@ -132,6 +135,9 @@ PY
 }
 stage configs configs
 
+# coop: the identity two machines compare at the hello, and the properties that
+# keep it the same on both of them (#67)
+stage buildid python3 -I tools/build_id.py check --version "$version"
 stage harness python3 -I tools/test_scenario.py
 
 stage n64recomp tools/n64recomp.sh

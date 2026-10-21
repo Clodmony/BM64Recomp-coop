@@ -67,8 +67,10 @@
 // this machine's for the same frame logs "coop: session desync" (once, then a
 // count every 600 frames). A peer that closes, or sends nothing for 10 s,
 // ends the session: "coop: session lost", and the game reads the local pads
-// again. The build identity (build_id) is a hash of the patches' binary and
-// of the game's recompiler config, which holds the hooks (src/coop/version.cmake).
+// again. The build identity (build_id) is a hash of the patches' sources and
+// of the recompiler configs of the patches and the game, which hold the hooks;
+// it is taken when configuring, so two machines whose compilers differ still
+// agree (#67, tools/build_id.py, src/coop/version.cmake).
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -116,10 +118,6 @@ static void close_socket(socket_t s) { close(s); }
 #include "session.h"
 #include "zelda_config.h"
 
-// The patches' binary, as librecomp loads it (RecompiledPatches/patches_bin.c).
-extern "C" const char mm_patches_bin[];
-extern "C" const size_t mm_patches_bin_size;
-
 namespace {
 
 // 5 (#57): the messages after the save got a kind and a size, for the log's
@@ -142,8 +140,10 @@ constexpr uint8_t game_version = 1;
 constexpr uint8_t game_version = 0;
 #endif
 
-#ifndef BM64_COOP_HOOKS_ID
-#define BM64_COOP_HOOKS_ID 0 // src/coop/version.cmake defines it
+// The number src/coop/version.cmake hashes when configuring (#67); not to be
+// confused with the BM64_COOP_BUILD_ID switch above, which fakes it in a test.
+#ifndef BM64_COOP_BUILD_IDENTITY
+#define BM64_COOP_BUILD_IDENTITY 0
 #endif
 
 enum class Role { None, Host, Client };
@@ -518,23 +518,15 @@ void start_log_stream(Session& s) {
     }
 }
 
-// This build's identity: FNV-1a of the patches' binary, then of the hash of
-// the recompiler config (bm64.<version>.toml, with the hooks) taken when
-// configuring. Another build of the same commit with another compiler may
-// differ (not tried).
+// This build's identity, hashed when configuring from the patches' sources and
+// the two recompiler configs (tools/build_id.py, src/coop/version.cmake), so a
+// build of the same commit made with another compiler reports the same number:
+// measured on the fork's two machines, clang 18 and clang 23 compiled the
+// patches to binaries of different lengths, and hashing that binary (what this
+// did until #67) made their hellos refuse each other. A difference that
+// reaches the game's behaviour is caught by the per-frame state hash instead.
 uint32_t build_id() {
-    uint32_t hash = 2166136261u;
-    auto add = [&hash](uint8_t byte) {
-        hash ^= byte;
-        hash *= 16777619;
-    };
-    for (size_t i = 0; i < mm_patches_bin_size; i++) {
-        add(static_cast<uint8_t>(mm_patches_bin[i]));
-    }
-    for (int i = 0; i < 4; i++) {
-        add(static_cast<uint8_t>(static_cast<uint32_t>(BM64_COOP_HOOKS_ID) >> (i * 8)));
-    }
-    return hash;
+    return static_cast<uint32_t>(BM64_COOP_BUILD_IDENTITY);
 }
 
 // The size of librecomp's save buffer for the game's save type (pi.cpp's
