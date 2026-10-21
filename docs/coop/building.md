@@ -420,6 +420,50 @@ event was logged and no snapshot differs; two logs without `BM64_COOP_LOG_HASH` 
 the rest. Either side's `game.log`, `coop.log` or captured stderr will do,
 with Unix or Windows line ends.
 
+### Replaying a session's record (#87)
+
+Each side of a session writes a record of it next to the other side's log,
+`coop-logs/<time>-host.replay` (or `-client.replay`) in its app folder: the
+seed, the delay, the build identity and the save it started from, then for
+every frame both pads as the game read them, the two cameras' angles that
+turned the sticks, and that machine's state hash with its parts (68 bytes a
+frame, 3.4 KB a second at 50 frames, 2 MB for ten minutes; the format is in
+`src/coop/session.cpp`). The log line `coop: session record coop-logs/…`
+names it.
+
+One game plays such a record again, alone, from either PC:
+
+```bash
+tools/run.sh --version eu --env BM64_COOP_REPLAY=<record> \
+    --until-log "coop: replay end" --timeout 900
+```
+
+It plays on a copy of the record's save (`saves/coop-replay/` in its run
+folder) with the record's seed and pads, and compares its state hash with
+the record's on every frame: `coop: replay desync frame=… parts=…` and its
+`coop: snapshot` lines at the first that differs, and at the end `coop:
+replay end frames=N desyncs=D camera=C`. The camera follows the player the
+recording side's camera followed (a client's record: player 2);
+`--env BM64_COOP_CAMERA=4` (or `0`) plays it with the other side's camera
+instead. Each frame the replay compares its camera's angles with those the
+side it follows recorded (`camera=C` frames differed, the first one logged
+as `coop: replay camera …`). A record of the other game (US or Europe) or of
+another format is refused; one of another build plays, with its build named
+(`… build=0x… (this build 0x…)`). A record holds only the lockstep's inputs:
+a harness step or a warp the recording run had must be given again
+(`tools/scenario.py`'s `#replay` passes the side's environment and script).
+The replay takes as long as the session did.
+
+What it answers, with the two records of one session:
+
+- The host's record replayed on the host's build: its hashes are the
+  host's, or the host's game is not deterministic on its own inputs.
+- One record replayed on the other side's build (the same build identity):
+  where its hashes part from the record's, that build computes differently
+  from the one that recorded it, given the same inputs.
+- One record replayed with the other side's camera (`BM64_COOP_CAMERA`):
+  whether the camera alone parts the games (#75).
+
 ## Running the game: tools/run.sh
 
 The game keeps saves, config and mods in `~/.config/BM64Recompiled` on
@@ -755,6 +799,8 @@ The session's own switches (`src/coop/session.cpp`):
   so two runs of one script can be compared with `tools/compare_logs.py`.
 - `BM64_COOP_BUILD_ID=N`: claim build identity N in the hello (a test of the
   build check, `session-build`).
+- `BM64_COOP_REPLAY=FILE`: play a session's record in one game, in place of
+  a session (#87; *Replaying a session's record* below).
 
 A session's client plays on a copy of the host's save,
 `saves/coop-session/<game id>.bin` in its own folder; its own save file is
@@ -780,6 +826,17 @@ logs are cut at their `coop: input end`, since the session is lost as soon
 as one game is stopped; both scripts should end on the same frame. A tile
 step runs on one side only, outside the lockstep: `session-desync` uses one
 to part the two games on purpose.
+
+After the session, `#replay NAME SIDE [NAME=VALUE]...` lines replay a side's
+record of it (#87, *Replaying a session's record* below), each in a game of
+its own (`--name replay-NAME`), all at once, with the scenario's `#env`, that
+side's `#env-host` or `#env-client`, the line's own environment (e.g.
+`BM64_COOP_CAMERA=4`) and that side's script: the replay reads its pads from
+the record, but the script's other steps, a probe or a tile step, run
+outside the record as they ran outside the lockstep. `#replay-step STEP`
+lines give the replays a script of their own instead (`session-replay-desync`
+moves player 1 with one), and `#check-replay NAME CHECK` checks replay NAME's
+log. A replay runs until `coop: replay end`.
 
 ```bash
 tools/scenario.py --version eu session-lockstep   # both games, about 15 s
