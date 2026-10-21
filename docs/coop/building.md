@@ -455,31 +455,35 @@ Debug switches, all off unless set (`src/coop/debug.cpp`):
   refresh-rate hint back to 60, *Presenting 50 game frames a second*).
 - `BM64_COOP_CRASH=1`: crash on purpose when the title loads (a test of the
   crash log, #29).
-**Z skips the intro** (#77). It is not a switch and needs nothing set: press
-**Z on the controller** while the intro runs and the game starts a new file
-and goes straight to the world map (overlay 0x21), instead of the logos, the
-attract demo and the opening cutscene. It works in the title overlay 0x20
-(the logos and the main menu), in the demo 0x1B and the stages the demo plays,
-and in a new file's opening cutscene 0x1A. Everywhere else **Z stays the
-game's own button**: in a room nothing happens (`skip-intro-room`), and in an
-**online session** the skip is refused (`coop: skip intro: not in an online
-session`), since the step is one machine's alone and the other game would
-play on ([design.md](design.md), *The session core*).
 
-Not to be confused with `BM64_COOP_SKIP_INTRO`'s neighbour
-`BM64_COOP_NO_DEMO=1` (#49, #51, above): that one keeps the attract demo from
-ever starting, so a *scripted* run's warped room plays with its enemies. Z is
-for the runs by hand, and it works whether or not the demo has started.
+**Z skips the story intro** (#77). It is not a switch and needs nothing set:
+start a new game the normal way — title, main menu, Adventure, **pick a
+file** — and then press **Z on the controller** while that file's opening
+cutscene (overlay 0x1A) plays. The game goes to the world map (0x21) at once.
+
+Where it deliberately does **nothing** (the person running the session,
+2026-10-21): before a file is picked. In the logos, in the attract demo and in
+the title's main menu, Z is ignored, so the file select and the Co-op menu are
+reached the normal way and **the file picked is the file played**
+(`skip-intro-title`). In a room Z stays the game's own button
+(`skip-intro-room`), and in an **online session** the skip is refused
+(`coop: skip intro: not in an online session`), since the step is one
+machine's alone and the other game would play on ([design.md](design.md),
+*The session core*).
+
+Not to be confused with `BM64_COOP_NO_DEMO=1` (#49, #51, above), which keeps
+the attract demo from ever starting so a *scripted* run's warped room plays
+with its enemies. Z is for the runs by hand.
 
 Two things about how it works. The button is read where the game reads its
 pads (`recomp::get_n64_input`, `src/game/controls.cpp`), not from this
 machine's keyboard, so a scenario presses it with an ordinary `pad 0 Z` step.
-And the step itself is the warp's (`coop_warp`, `patches/coop_harness.c`) with
-the world map as its target, so nothing new runs inside the game — but one
-step does not always arrive: pressed inside the demo, the demo's own scene
-change wins, so the skip keeps asking while the intro runs (at most 6 steps,
-60 frames apart) until the world map loads. Each step logs
-`coop: skip intro: a new file, to the world map (step N, from overlay 0xID)`.
+And the step is the input script's `scene` step (`func_8023AE6C`) **in the
+running session**, not `BM64_COOP_WARP`'s: the warp starts a new file
+(`func_8023DA04`) and would throw away the file the person picked. A cutscene
+can still win a scene change of its own, so the skip keeps asking while the
+intro plays (at most 6 steps, 60 frames apart) until the world map loads. Each
+step logs `coop: skip intro: to the world map, keeping the file (step N)`.
 
 A run's own `general.json` turns background input off, so a controller in
 use elsewhere does not press the test game's buttons; a key or button
@@ -556,8 +560,10 @@ Everything is off unless a switch asks for it:
   file select (0x1F). In a run without saves, A picks the first file and A
   again starts it: the new file's opening cutscene (0x1A). A tap is
   `pad 0 START`, `wait 4`, `pad 0 -`. Nothing in the game's own menus cuts
-  that path short; what skips it is **Z** (*Z skips the intro*, above, and the
-  `skip-intro` scenarios), which lands in the world map of a new file (#77).
+  that path short, and the menus have to be driven as above. What can be cut
+  is the **opening cutscene** at the end of it: **Z** there goes to the world
+  map (*Z skips the story intro*, above, and the `skip-intro` scenarios, which
+  drive exactly this path and then press Z, #77).
 - `BM64_COOP_WARP=ID[:ENTRY[:FILE]]`: 30 frames after the title (overlay
   0x20) loads, start a story session as the file select does, for a new file
   (`func_8023DA04(0)`) or, with FILE, by loading file 0–2

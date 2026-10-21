@@ -1,0 +1,40 @@
+# Z before a file is picked does nothing (#77, the person running the session,
+# 2026-10-21): held in the logos, in the attract demo and in the title's main
+# menu, it must not skip anything - the file select and the Co-op menu are
+# reached the normal way. The run ends in the title's menu, where the script
+# left it.
+#check no-log "^coop: skip intro"
+#check no-log "^coop: overlay 0x21$"
+#check no-log "^coop: warp "
+# the demo ran and the title came back, as it does without any key
+#check after "^coop: overlay 0x20$" "^coop: overlay 0x1B$"
+#check after "^coop: overlay 0x1B$" "^coop: overlay 0x20$"
+# Z in the logos
+overlay 0x20
+wait 35
+pad 0 Z
+wait 10
+pad 0 -
+# Z in the attract demo
+overlay 0x1B
+wait 60
+pad 0 Z
+wait 10
+pad 0 -
+wait 30
+# START brings the title back; Z in its main menu
+pad 0 START
+wait 4
+pad 0 -
+overlay 0x20
+wait 60
+pad 0 START
+wait 4
+pad 0 -
+wait 60
+pad 0 Z
+wait 10
+pad 0 -
+wait 60
+probe menu
+end

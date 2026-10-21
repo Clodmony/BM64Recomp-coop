@@ -1,17 +1,42 @@
-# The intro skip (#77): Z during the logos takes a new file straight into the
-# world map (0x21), instead of the attract demo (0x1B) and the opening
-# cutscene (0x1A). Z comes from the pads the game reads, so this scenario
-# presses it the way a person does.
-#check log "^coop: skip intro: a new file, to the world map \(step 1, from overlay 0x20\)$"
-#check no-log "^coop: skip intro: a new file, to the world map \(step 2"
+# The story intro skip (#77): the menus are driven the normal way (title, main
+# menu, file select, a file picked and started, as `title-menu` does), and then
+# **Z during the opening cutscene** (0x1A) goes to the world map (0x21) in the
+# running session. The file picked stays the file played, so the step is the
+# `scene` one (func_8023AE6C), not the warp's new file.
+#check log "^coop: skip intro: to the world map, keeping the file \(step 1\)$"
 #check no-log "^coop: skip intro: gave up"
-# the world map follows the title's first load, with no demo in between
-#check after "^coop: overlay 0x20$" "^coop: overlay 0x21$"
-#check no-log "^coop: overlay 0x1B$"
-#check no-log "^coop: overlay 0x1A$"
-# and the game is there and running (the probe reads the live state)
+# the cutscene was reached through the file select, and the world map follows it
+#check after "^coop: overlay 0x1F$" "^coop: overlay 0x1A$"
+#check after "^coop: overlay 0x1A$" "^coop: overlay 0x21$"
+# no new file was started for it (that is the warp's line, and it must not appear)
+#check no-log "^coop: warp "
+# and the game is live in the world map
 #check log "^coop: state overlay=0x21 "
 overlay 0x20
+overlay 0x1B
+wait 60
+pad 0 START
+wait 4
+pad 0 -
+overlay 0x20
+wait 60
+pad 0 START
+wait 4
+pad 0 -
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+overlay 0x1F
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+overlay 0x1A
 wait 35
 pad 0 Z
 wait 4
