@@ -37,7 +37,10 @@ Last updated 2026-10-19 (#47: notes split for two people).
   Xvfb runs comparable? a follow-up of #63, for a machine with both
   wrappers)
   and #89 (a file-less `BM64_COOP_WARP` leaves the current save file at -1,
-  found while closing #84's review, measured). #63 is done and merged
+  found while closing #84's review, measured).
+  **#91** (`session-hud` crashes a game with SIGSEGV when the scenario suite
+  runs in lanes; found 2026-10-21 reviewing #88, happens with and without
+  that branch, never when the scenario runs alone). #63 is done and merged
   (pull request #65), so `run.sh` picks gamescope or Xvfb by itself.
   #29's Windows side is answered (both platforms `0xFC44BFB4`) and the
   Windows build and the Linux build have played against each other, both
@@ -75,7 +78,7 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 |-------|--------|--------|-------|
 | #75 (the playtest's desync with enemies, Linux against Windows) | owner | `coop/75-enemy-desync` (merged) | pull request #88 **merged** 2026-10-21 (owner's one-off exception, no review), part of #75: the state hash covers the enemies, a desync names the parts that differ and both sides log their values of that frame (`coop: snapshot`), `compare_logs.py` shows them side by side; the random generator hashed at its real address. Not reproduced on one machine (ten sessions, Linux and Wine, enemies, cameras apart). Next (owner, 2026-10-21): the next playtest with a kit from `bm64recomp-coop` (#88 is in), then #87 (replay) |
 | #87 (record the agreed pads, so a desync can be replayed on one machine) | owner | `coop/87-session-replay` | taken 2026-10-21 (owner's word), in the place of #78 |
-| #78 (a downed player plays no death animation) | collaborator | not pushed yet | the collaborator works on the death animation (owner, 2026-10-21); assign yourself on GitHub when you start |
+| #78 (a downed player plays no death animation) | collaborator | `coop/78-death-anim` | done 2026-10-22, draft pull request **#92** (`Closes #78`), the owner's review asked for. The animation is played on the dying actor the way the death process does it, the dying player frozen for 60 frames, the ghost after it; a fall keeps the old path. Verify 10/10 stages, 597/597. **No run with a window**, so the eye check is open |
 
 ## Project decisions (bind both people)
 
