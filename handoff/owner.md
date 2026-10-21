@@ -6,7 +6,57 @@ each issue found, the decisions taken in those sessions and the cleanup still
 to approve. Decisions that bind both people are also listed in `HANDOFF.md`,
 *Project decisions*.
 
-Last updated 2026-10-19 (#22: downed players are ghosts).
+Last updated 2026-10-21 (#75: the desync with enemies; #84 reviewed twice and merged).
+
+## #75: the playtest's desync with enemies (2026-10-20/21)
+
+- Branch `coop/75-enemy-desync` (rebased onto `bm64recomp-coop` after #74),
+  draft PR #88, **part of #75, not closing it**. Worktree
+  `~/dev-scratch/BM64Recomp-coop/wt/75-enemy-desync`, build folders
+  `build/75-enemy-desync-eu` and `build/75-enemy-desync-win-eu` (the
+  Windows build of the branch, cross-compiled).
+- Found: the state hash covered no enemy, the desync line named only the
+  whole hash, and the random generator was hashed 0x10 bytes early (US
+  `D_802ACFD0` used where the Europe code's 0x802ACFD0 is US 0x802ACFE0,
+  `g_RandomIndex`). Now five parts (scene, random, players, enemies, save)
+  sent with the pad (protocol 6); a desync names the parts and each side
+  logs its snapshot of the frame (`coop: snapshot` lines);
+  `BM64_COOP_LOG_STATE=N`; `compare_logs.py` prints the first differing
+  snapshot. Red on the playtest build: `session-desync` 5/10; green 10/10.
+- **Not reproduced on one machine:** ten sessions (five Linux–Linux, five
+  Linux–Wine), enemies hashed, the two cameras apart and turned, random
+  walks of 3673 frames: all frames equal. FPU control word 0x1F80 on Linux
+  and in Wine. Kept: `session-enemy-cameras`.
+- Leads, none shown: `func_8027CE10` hides an object between the camera and
+  the player from this machine's camera (bit 0x1 of its model's flags,
+  ~12 objects a frame in room 0x29); `func_802441F4` steers a bounce by this
+  machine's yaw (never called in the runs); Wine uses its own `ucrtbase`, so
+  native Windows is untested.
+- **Owner decisions (end of #75's session):** request the collaborator's
+  review of #88 (done); the next playtest with a kit from
+  `bm64recomp-coop` once #88 is merged (its desync line and snapshots say
+  where), then #87 (record the agreed pads for a replay); the #56 lane
+  worktrees, their build folders and branches and scratch `i22/`, `i56/`
+  removed (done, #74 merged).
+- The playtest logs stay in the playtest kit folder on the owner's machine
+  (they hold local paths); read, not changed.
+
+## Review of #84 (#77, Z skips the intro), 2026-10-21
+
+- Changes requested (owner's word): after the skip no save file is current
+  (boot sets `D_802A1DB4` to -1) and the stage clear's save
+  (`func_8023FD08` → `func_802947AC`) indexes the EEPROM mirror with it,
+  0x88 bytes before it (read, not run). The rest approved; the merged
+  result ran 8/8 stages and 20/20 checks here.
+- **Owner decision:** Z stays always on (not behind a switch).
+- **Second review, approved and merged** (2026-10-21, the owner's word:
+  check and merge). The collaborator solved the save file by acting only in
+  a picked file's opening cutscene with the `scene` step (`coop: file
+  current=0`), and added PRESS Z TO SKIP on screen. Checked here: the hint's
+  free cannot free twice (the pool is set up once at boot, the game's free
+  zeroes +0x3C); the merge at `f5c7fd5` ran 9/9 stages, 576/576 checks; a
+  local capture shows the hint over the cutscene. One non-blocking doc nit
+  in the review (when the hint goes away).
 
 ## #22: downed players are ghosts (2026-10-19)
 
@@ -294,4 +344,6 @@ main checkout. The issue worktrees and their build folders are removed.
   `build/prepare-project-according-a3ceb80a-eu` in scratch): remove it in
   Superset.
 - `eu-disasm/`, `xref/`, `scripts/`, `venv/`, `audit/`, `ref/` in scratch:
-  when the player 2 follow-ups are done; `i22/` with #49.
+  when the player 2 follow-ups are done (#75 used them; `i22/` is gone).
+- When #88 is merged: the worktree `wt/75-enemy-desync` and its build
+  folders `build/75-enemy-desync-eu` and `build/75-enemy-desync-win-eu`.

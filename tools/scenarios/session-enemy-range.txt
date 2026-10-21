@@ -1,0 +1,68 @@
+# enemy-range in an online session (#51): the range that keeps an enemy in
+# the room counts both players from game state alone, so both games keep and
+# take out the same enemies on the same frames. The host's pad walks player
+# 1 off; both scripts put player 2 next to it on the same frame (a tile step
+# runs on its own side only). Both games log the same enemy lines and hash
+# the same state on every frame.
+#session
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_LOG_HASH=1
+#env BM64_COOP_SEED=1
+#env BM64_COOP_NO_DEMO=1
+#
+#check no-log ^coop: session (desync|lost|refused)
+#check-client no-log ^coop: session (desync|lost|refused)
+#check same-hashes
+#check log "^coop: enemy spawn rec=7 type=0x0 "
+#check moved joined far 0 2000
+#check still joined still 4 5
+#check near far 0 4 3000 2000
+#check not-after "^coop: probe joined$" "^coop: enemy despawn rec=7 .* near=0$"
+#check after "^coop: tile slot=4 " "^coop: enemy despawn rec=7 .* near=4$"
+#check near both 0 4 200
+#check-client log "^coop: enemy spawn rec=7 type=0x0 "
+#check-client moved joined far 0 2000
+#check-client still joined still 4 5
+#check-client near far 0 4 3000 2000
+#check-client not-after "^coop: probe joined$" "^coop: enemy despawn rec=7 .* near=0$"
+#check-client after "^coop: tile slot=4 " "^coop: enemy despawn rec=7 .* near=4$"
+#check-client near both 0 4 200
+#
+# The client's script: the same frames, the same tile step.
+#client overlay 0x29
+#client wait 600
+#client probe start
+#client wait 80
+#client probe joined
+#client wait 30
+#client wait 130
+#client wait 240
+#client wait 10
+#client probe far
+#client wait 200
+#client probe still
+#client tile 4 28 22
+#client wait 200
+#client probe both
+#client end
+overlay 0x29
+wait 600
+probe start
+wait 80
+probe joined
+pad 0 - 0 -1
+wait 30
+pad 0 - -1 0
+wait 130
+pad 0 - 0 -1
+wait 240
+pad 0 -
+wait 10
+probe far
+wait 200
+probe still
+tile 4 28 22
+wait 200
+probe both
+end

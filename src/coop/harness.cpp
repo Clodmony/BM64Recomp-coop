@@ -9,6 +9,9 @@
 //                                file 0-2 loaded as the file select does) and
 //                                go to overlay ID (entry default 0x10, as the
 //                                world map starts a stage)
+//   BM64_COOP_NO_DEMO=1          the title never starts the attract demo, so
+//                                the warp's room plays as a game's does, with
+//                                its enemies (coop_harness_no_demo)
 //   BM64_COOP_P2=1|4             a second human player in that slot in story
 //                                rooms (patches/coop_player2.c): slot 1 reads
 //                                pad 1, slot 4 reads its command record, which
@@ -21,6 +24,10 @@
 //   BM64_COOP_LOG_PLAYERS=1      one line per room init, spawn (and its model
 //                                asset), placement, bomb, hit, the item a hit
 //                                knocks out, a pickup, death and room teardown
+//
+// One thing here is not a switch and is always on: **Z during the story intro
+// skips it** (#77, *the story intro skip* below), from a picked file's opening
+// cutscene straight to the world map.
 //
 // Input script: one step per line, '#' starts a comment.
 //   overlay <ID>        wait for the next load of overlay ID (the n-th
@@ -321,6 +328,85 @@ struct Warp {
     int32_t file = -1; // a new file
 };
 
+// The story intro skip (#77): Z **after a file has been picked**, while the
+// new file's opening cutscene (overlay 0x1A) plays, goes to the world map at
+// once. Deliberately not before that (the person running the session,
+// 2026-10-21): in the logos, the title's menu and the attract demo, Z does
+// nothing, so the file select and the Co-op menu are reached the normal way
+// and the file the person picked is the file that is played.
+//
+// The step is the input script's `scene` step (func_8023AE6C) in the **running**
+// session, not the warp's: the warp would start a new file
+// (func_8023DA04) and throw the picked one away. The button is taken from the
+// pads the game reads (coop::note_pad), not from this machine's keyboard, so a
+// scenario can press it like any other button.
+constexpr int32_t world_map_overlay = 0x21;
+constexpr int32_t world_map_entry = 0x10;    // the code the world map is started with
+constexpr int32_t story_intro_overlay = 0x1A; // a new file's opening cutscene
+constexpr uint32_t no_overlay = 0xFFFFFFFF;
+constexpr uint16_t pad_z = 0x2000;           // the N64 Z button (parse_buttons)
+constexpr uint64_t skip_settle_frames = 30;  // as the warp waits, for the overlay to settle
+constexpr uint64_t skip_retry_frames = 60;   // ... before trying again
+constexpr int skip_tries = 6;                // ... and how often at most
+
+bool skip_intro_asked = false; // Z was pressed during the story intro
+int skip_tried = 0;            // steps asked for so far
+uint64_t skip_frame = 0;       // the frame of the last one
+uint16_t pad0_buttons = 0;     // pad 0 the frame before, for the press edge
+int hint_shown = 0;            // whether the hint's draw object is registered
+
+// Whether the story intro is playing, the one state Z acts in.
+bool in_story_intro() {
+    return last_overlay == story_intro_overlay;
+}
+
+// The skip's step, under the lock: whether the hook should ask for the world
+// map this frame. The request stays until the world map is loaded, since a
+// cutscene may win a scene change of its own, and is dropped in an online
+// session (whose other game would play on and part ways), once the game left
+// the intro, and after `skip_tries` steps that did not arrive.
+bool take_skip_intro(int32_t* args) {
+    if (!skip_intro_asked) {
+        return false;
+    }
+    if (coop::session_connected()) {
+        skip_intro_asked = false;
+        std::fprintf(stderr, "coop: skip intro: not in an online session\n");
+        return false;
+    }
+    if (last_overlay == world_map_overlay) {
+        skip_intro_asked = false; // arrived
+        return false;
+    }
+    if (last_overlay == no_overlay) {
+        return false;
+    }
+    if (!in_story_intro()) {
+        skip_intro_asked = false;
+        std::fprintf(stderr, "coop: skip intro: only during the story intro, not in overlay 0x%02X\n",
+                     last_overlay);
+        return false;
+    }
+    if (frames - last_overlay_frame < skip_settle_frames) {
+        return false; // let the overlay settle, as the warp does
+    }
+    if (skip_tried > 0 && frames - skip_frame < skip_retry_frames) {
+        return false; // give the last step time to arrive
+    }
+    if (skip_tried >= skip_tries) {
+        skip_intro_asked = false;
+        std::fprintf(stderr, "coop: skip intro: gave up after %d steps (overlay 0x%02X)\n", skip_tried,
+                     last_overlay);
+        return false;
+    }
+    skip_tried++;
+    skip_frame = frames;
+    args[9] = world_map_overlay;
+    args[10] = world_map_entry;
+    std::fprintf(stderr, "coop: skip intro: to the world map, keeping the file (step %d)\n", skip_tried);
+    return true;
+}
+
 Warp read_warp() {
     Warp warp;
     const char* value = std::getenv("BM64_COOP_WARP");
@@ -379,6 +465,23 @@ bool coop::scripted_input(int pad, uint16_t* buttons, float* x, float* y) {
     return true;
 }
 
+void coop::note_pad(int pad, uint16_t buttons) {
+    if (pad != 0) {
+        return;
+    }
+    std::lock_guard lock{mutex};
+    const uint16_t pressed = static_cast<uint16_t>(buttons & ~pad0_buttons);
+    pad0_buttons = buttons;
+    // Z asks for the story intro skip (#77), and only while that intro runs:
+    // everywhere else - the logos, the title's menu, the attract demo, and a
+    // room - Z is the game's own button and must stay it. A fresh press gets
+    // the full number of steps again.
+    if ((pressed & pad_z) != 0 && in_story_intro()) {
+        skip_intro_asked = true;
+        skip_tried = 0;
+    }
+}
+
 void coop::note_overlay_load(uint32_t id) {
     std::lock_guard lock{mutex};
     id &= 0xFFFF;
@@ -393,7 +496,7 @@ void coop::note_overlay_load(uint32_t id) {
 // args[3], args[4]), bit 3 coop_harness_save(args[6]), bit 4
 // coop_harness_hearts(args[7], args[8]), bit 5 coop_harness_scene(args[9],
 // args[10]), bit 6 coop_harness_drop(args[11]), bit 7
-// coop_harness_freeze(args[12]).
+// coop_harness_freeze(args[12]), bit 8 coop_intro_hint(args[13]).
 extern "C" uint32_t coop_harness_frame(int32_t* args) {
     static Warp warp = read_warp();
     std::lock_guard lock{mutex};
@@ -415,6 +518,25 @@ extern "C" uint32_t coop_harness_frame(int32_t* args) {
     args[12] = -1;
     if (run_script(&args[2], &args[7], &args[6], &args[11], &args[9], &args[12])) {
         requests |= 2;
+    }
+    // The story intro skip (#77) asks for the same scene step as the script's
+    // `scene`, so only when the script did not ask for one this frame.
+    if (args[9] < 0) {
+        take_skip_intro(args);
+    }
+    // The "PRESS Z TO SKIP" hint (#77, patches/coop_intro_hint.c) shows while
+    // the story intro plays and Z would act on it, so never in an online
+    // session, where the skip is refused and the hint would only promise a
+    // button that does nothing. Only a change is passed on, since the patch
+    // registers and frees a draw object for it.
+    {
+        const int hint = in_story_intro() && !coop::session_connected() ? 1 : 0;
+
+        if (hint != hint_shown) {
+            hint_shown = hint;
+            args[13] = hint;
+            requests |= 256;
+        }
     }
     if (args[2] >= 0) {
         requests |= 4;
@@ -483,6 +605,16 @@ extern "C" int32_t coop_camera_slot(void) {
 // 4 (the client of a live session, or BM64_COOP_CAMERA=4), else pad 0.
 extern "C" int32_t coop_camera_pad(void) {
     return coop_camera_slot() == 4 ? 1 : 0;
+}
+
+// BM64_COOP_NO_DEMO=1 (#49, #51): the attract demo never starts. The title
+// starts it as it is left (func_80297ADC, from its teardown), also when a warp
+// leaves it, so a warped room ran as the demo: story flag 0x4, its enemy
+// tiles made start points of slots 1-3 (func_8026F5E8), no timer, START back
+// to the title. A hook skips the demo's setup when this says so.
+extern "C" int32_t coop_harness_no_demo(void) {
+    static const bool enabled = env_flag("BM64_COOP_NO_DEMO");
+    return enabled;
 }
 
 // Hooks in bm64.us.toml report player events here (BM64_COOP_LOG_PLAYERS=1):

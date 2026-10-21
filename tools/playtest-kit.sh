@@ -42,13 +42,14 @@ common() { # folder
 if [ -x "$linux_exe" ]; then
 	common "$out/linux"
 	cp "$linux_exe" "$out/linux/"
+	# the game keeps its own log (#57): start.sh only starts it from the folder
 	cat > "$out/linux/start.sh" <<'EOF'
 #!/bin/sh
-# Starts the game from this folder and keeps its log in coop.log, the run
-# before's in coop.prev.log (a session sends it to the other side).
+# Starts the game from this folder. The game shows its log here and keeps it
+# in coop.log, the run before's in coop.prev.log (a session sends both to
+# the other side).
 cd "$(dirname "$0")" || exit 1
-[ -f coop.log ] && mv -f coop.log coop.prev.log
-./BM64Recompiled 2>&1 | tee coop.log
+exec ./BM64Recompiled "$@"
 EOF
 	chmod +x "$out/linux/start.sh"
 	echo "linux:   $out/linux"

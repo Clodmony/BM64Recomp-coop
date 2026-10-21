@@ -165,7 +165,8 @@ tools/verify.sh --scenarios      # also the game's test scenarios (below);
 ```
 
 Stages: `submodules`, `configs` (`tools/europe.py configs`, then the US and
-Europe configs parse), `n64recomp`, `patches`, `europe` (Europe only:
+Europe configs parse), `harness` (`tools/test_scenario.py`, `scenario.py`'s
+checks on fake runs' logs, #46), `n64recomp`, `patches`, `europe` (Europe only:
 `tools/europe.py check` on the image), `recomp`, `build`, and with
 `--scenarios` `scenarios` (*The test harness*, below). Logs and
 `summary.txt` go to `~/dev-scratch/BM64Recomp-coop/verify/<stamp>/`, the
@@ -222,7 +223,8 @@ together (`tools/windows-cross.cmake`):
   Windows CI. Windows finds headers and libraries in any case; the script
   links the four spellings the sources use that the SDK lacks.
 - The patches are built by the Linux clang as in the Linux build, so both
-  builds have the same build identity and can play together.
+  builds have the same build identity and can play together: measured on one
+  machine, both `0xFC44BFB4` (*The build identity across platforms*, below).
 - Build-time tools built for Windows (`file_to_c`) run in Wine. The shaders
   are compiled by RT64's Windows `dxc.exe` (1.7, what upstream's Windows
   builds use) in Wine through `tools/dxc-wine.sh`, which turns the Unix paths
@@ -231,18 +233,163 @@ together (`tools/windows-cross.cmake`):
   which Wine's D3D12 takes but a real Windows' might not.
 - RT64's SDL 2.26.3 headers define `_m_prefetch`, a builtin in newer clang;
   the toolchain sets their guard `__PRFCHWINTRIN_H`.
+- The MSVC STL stops a compiler it holds too old (`error STL1000`): the CRT
+  xwin splats from the release channel (14.44) asks for clang 19, Ubuntu
+  24.04 packages clang 18, and the channel offers no older CRT. For a clang
+  below 19 the toolchain sets the STL's own switch,
+  `_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH`, and says so when configuring
+  (#29). Installing a newer clang instead would also change the clang that
+  builds the patches, and with it the build identity.
+
+What the cross build needs beyond the Linux build, and what it does not have
+on a fresh Ubuntu 24.04: `clang-cl` (the clang package ships the driver but
+not that name: `ln -s "$(command -v clang)" ~/.local/bin/clang-cl`), `wine64`,
+`xwin` (a release binary from its repository, kept outside the checkout) and
+the splat itself:
+
+```bash
+xwin --accept-license --cache-dir ~/dev-scratch/BM64Recomp-coop/win/xwin-cache \
+    splat --output ~/dev-scratch/BM64Recomp-coop/win/sdk    # ~630 MB, a few minutes
+```
+
+`tools/build-windows.sh` names what of this is missing and stops with exit 4
+before it builds anything.
 
 `tools/run.sh --exe <…>.exe` runs it in Wine with its own prefix
 (`~/dev-scratch/BM64Recomp-coop/win/prefix`, never the owner's), and
 `tools/scenario.py --exe-client <…>.exe` makes it a session's client
 (`--exe` the host): the Linux and Windows builds against each other on one
-machine. Its log lines end in CR LF; `run.sh` and `scenario.py` take both. A
-Windows build started without a console (from Explorer) writes its log to
-`coop.log` in its app folder.
+machine. Its log lines end in CR LF; `run.sh` and `scenario.py` take both.
+Every build writes its log to `coop.log` in its app folder as well (#57,
+[design.md](design.md), *The playtest's logs*): a Windows build started
+without a console (from Explorer) there alone, one with a redirect (the
+harness in Wine) to both. `WIN_BUILD=<folder>` builds into another folder
+than `build/win-<version>/`, which belongs to the checkout that configured it
+first (a worktree of its own needs its own).
 
 `tools/playtest-kit.sh` makes portable folders of both builds for a playtest
 on two PCs (`docs/coop/playtest.md`): builds of the game, copied by hand,
 never uploaded.
+
+### The build identity across platforms
+
+A session's hello refuses a peer whose build identity differs (#26), so two
+players need builds that agree. It is FNV-1a over the patches' binary and
+over the first 8 hex digits of the SHA-256 of the game's recompiler config
+(`src/coop/version.cmake`, `src/coop/session.cpp`, `build_id`). Neither part
+comes from the host compiler of the C++ code, so the Linux build and the
+cross-compiled Windows build of one checkout must match — and do:
+
+- **Measured** (#29, 2026-10-20, one Windows machine with WSL2, Ubuntu 24.04,
+  clang 18, Europe): the Linux build reports `coop: session build 0xFC44BFB4`
+  and the cross-compiled Windows build, run **natively on Windows 11**, the
+  same `0xFC44BFB4`. Both sides of each session then reached
+  `coop: session lockstep from frame 0`.
+- The Windows pair played 3600 frames in lockstep (two portable folders on
+  127.0.0.1): the same state hash at frame 0 (`199C12E7`) and at frame 3600
+  (`AE6DD052`), no `coop: session desync` and no `coop: session lost`, the
+  same twelve overlay loads on both sides, about 49 frames a second at PAL
+  50. The Windows runs logged no audio skips, where the same machine's WSL2
+  runs log them (#66).
+- The Windows build and the Linux build **played against each other** on one
+  machine, both ways (*A session between the Windows and the Linux build*,
+  below).
+- **Not tested:** a build made with Visual Studio (upstream's `BUILDING.md`),
+  and whether another clang version changes the patches' binary and with it
+  the identity (#67).
+
+The identity is logged only when a hello happens, so a game that boots alone
+never prints it. Two ways to read it without playing:
+
+```bash
+# in a session (what the hello compared), from either side's log
+grep "coop: session build" <run folder>/game.log
+
+# offline, from the checkout the build was made from
+python3 - <<'PY'
+import hashlib, pathlib
+version = "eu"
+data = pathlib.Path("patches/patches.bin").read_bytes()
+hooks = int(hashlib.sha256(pathlib.Path(f"bm64.{version}.toml").read_bytes()).hexdigest()[:8], 16)
+h = 2166136261
+for byte in list(data) + [(hooks >> (i * 8)) & 0xFF for i in range(4)]:
+    h = ((h ^ byte) * 16777619) & 0xFFFFFFFF
+print("build id 0x%08X" % h)
+PY
+```
+
+Both gave `0xFC44BFB4` for the build above, so the offline sum is a way for
+two players to compare their builds before a playtest.
+
+To run the Windows build **natively on Windows** rather than in Wine, make a
+portable folder of it on the Windows side (as `tools/playtest-kit.sh` does,
+plus the stored ROM): `BM64Recompiled.exe`, `SDL2.dll`, `dxcompiler.dll`,
+`dxil.dll`, `assets/`, `recompcontrollerdb.txt`, an empty `portable.txt` and
+the ROM as `bm64_<version>.z64`. The switches `tools/run.sh` would set are
+plain environment variables (`BM64_COOP_AUTOSTART=1`,
+`BM64_COOP_LOG_OVERLAYS=1`, `BM64_COOP_SESSION=…`), and the folder keeps
+everything the run writes, so no setting of the person's own is touched. Such
+a run opens a window: Windows has no headless wrapper here.
+
+### A session between the Windows and the Linux build
+
+The playtest's real pair is one player on Windows and one on Linux (#29). On a
+Windows machine with WSL2 both builds are there, so the pair can be played
+without a second PC: the native Windows build in a portable folder on the
+Windows side, the Linux build through `tools/run.sh` inside WSL2. The two go
+through different network stacks, WSL2's NAT between them.
+
+- The **Windows side joins the WSL2 host** at `127.0.0.1`: WSL2's localhost
+  relay carries it to the listening game inside WSL2.
+- The **WSL2 side joins the Windows host** at the address of WSL2's default
+  route (`ip route | grep default`, the Windows host on the NAT network).
+  This needed no firewall rule of its own here, so it says nothing about what
+  a host on a real LAN needs: there, Windows asks (`playtest.md`, *Start a
+  session*).
+
+Each side is started on its own, as a playtest player would be, with the same
+switches `tools/scenario.py` would set (*The test harness*): the scripts of
+`tools/scenarios/session-lockstep.txt`, its host part on the host and its
+`#client` steps on the client, `BM64_COOP_WARP=0x29:0x13`,
+`BM64_COOP_LOG_HASH=1` and `BM64_COOP_LOG_FRAMES=300` on both. Afterwards the
+two logs are compared with `tools/compare_logs.py` (below). A game started
+without a console keeps its log in `coop.log` in its folder; started with its
+output redirected, as a script does, the log is on **stderr**.
+
+**Measured** (#29, 2026-10-20, Europe, one Windows machine with WSL2 on
+Ubuntu 24.04):
+
+- Both ways, 448 frames of the `session-lockstep` scripts: the same build
+  identity `0xFC44BFB4` on both sides, `coop: session lockstep from frame 0`,
+  the same state hash on **every** frame both logged, the same two overlay
+  loads, no `coop: session desync` and no `coop: session lost` before the
+  scripts ended.
+- A longer run with the WSL2 build hosting, 3551 frames hashed by both: all
+  equal. About **49.4 frames a second** on either side at PAL 50. Audio: 4
+  skips on the WSL2 side, which runs with SDL's dummy driver (`run.sh`
+  without `--audio`), 0 on the Windows side, which plays on the real device.
+- **Still not run:** two real machines on a LAN, the internet with a
+  forwarded port, and macOS.
+
+### Comparing the logs of two machines: tools/compare_logs.py
+
+`tools/scenario.py` compares the two sides itself (`#check same-hashes`), but
+only for two games it starts on one machine. A session across machines leaves
+one log on each PC instead:
+
+```bash
+python3 -I tools/compare_logs.py <host log> <client log>
+```
+
+It cuts both logs at `coop: input end` (once one game is stopped the other
+loses the session), and reports the build identity of each side, the state
+hash of every frame both logged with the first one that differs, the overlay
+loads, the frames a second and audio skips of each side
+(`BM64_COOP_LOG_FRAMES`), and any `coop: session desync`, `lost` or `refused`.
+Exit 0 only when the identities agree, no frame differs and no such event was
+logged; two logs without `BM64_COOP_LOG_HASH` (a playtest build) still give
+the rest. Either side's `game.log`, `coop.log` or captured stderr will do,
+with Unix or Windows line ends.
 
 ## Running the game: tools/run.sh
 
@@ -261,7 +408,8 @@ that holds everything it writes: an empty `portable.txt` (so
 and mods there), the stored ROM `bm64_<version>.z64` (what the launcher writes
 after a ROM is chosen; taken from `bm64.<version>.z64` in scratch), links to
 `assets/` and `recompcontrollerdb.txt` in the checkout, `game.log` (stdout and
-stderr) and `summary.txt`. The script stops only the process it started
+stderr, gamescope's and Wine's lines among them), the game's own `coop.log`
+(its lines only, #57) and `summary.txt`. The script stops only the process it started
 (TERM, then KILL) and afterwards checks that nothing under
 `~/.config/BM64Recompiled` was created or changed.
 
@@ -271,13 +419,24 @@ TEXT), `--timeout` (default 60 s), `--exe`, `--rom`, `--env NAME=VALUE`
 (repeatable), `--input FILE` (an input script, copied into the run folder;
 *The test harness*, below), `--saves DIR` (start with a copy of DIR, e.g. an
 earlier run's `saves/`, as the run's save folder), `--audio` (sound on the default device; by
-default SDL's dummy driver, which consumes audio at the real rate). Exit
+default SDL's dummy driver, which consumes audio at the real rate),
+`--window` and `--wrapper gamescope|xvfb` (the headless display, below). Exit
 status: 0 overlay reached or log line seen (or ran until the timeout
 without either), 1 timeout before them, 2 the game exited or crashed, 3 the
-owner's config folder changed, 4 bad setup. The game runs headless, inside
-`gamescope --backend headless` (640x480), so no window opens on the desktop
-(owner, 2026-10-18); `--window` opens one. Each run is its own process group,
-which the stop ends whole (gamescope and Wine start children of their own).
+owner's config folder changed, 4 bad setup. The game runs headless, in a
+640x480 display of its own, so no window opens on the desktop (owner,
+2026-10-18); `--window` opens one. Each run is its own process group, which
+the stop ends whole (the wrapper and Wine start children of their own).
+
+Which wrapper gives that display is chosen per machine (#63): `gamescope
+--backend headless` when `gamescope` is on `PATH`, else `env -u
+WAYLAND_DISPLAY xvfb-run -a -s "-screen 0 640x480x24"` (Ubuntu 24.04 packages
+no gamescope, `apt install xvfb` gives the other), else the run fails with
+exit 4 naming both. `--wrapper gamescope|xvfb` forces one, which is how a
+machine with both compares them; the run's summary line names the one used
+(`display: xvfb`, or `window`). Under Xvfb, `WAYLAND_DISPLAY` must go: with
+it SDL takes the desktop's Wayland display and opens a window there instead
+of drawing into Xvfb.
 
 Debug switches, all off unless set (`src/coop/debug.cpp`):
 
@@ -297,6 +456,55 @@ Debug switches, all off unless set (`src/coop/debug.cpp`):
 - `BM64_COOP_CRASH=1`: crash on purpose when the title loads (a test of the
   crash log, #29).
 
+**Z skips the story intro** (#77). It is not a switch and needs nothing set:
+start a new game the normal way — title, main menu, Adventure, **pick a
+file** — and then press **Z on the controller** while that file's opening
+cutscene (overlay 0x1A) plays. The game goes to the world map (0x21) at once.
+
+Where it deliberately does **nothing** (the person running the session,
+2026-10-21): before a file is picked. In the logos, in the attract demo and in
+the title's main menu, Z is ignored, so the file select and the Co-op menu are
+reached the normal way and **the file picked is the file played**
+(`skip-intro-title`). In a room Z stays the game's own button
+(`skip-intro-room`), and in an **online session** the skip is refused
+(`coop: skip intro: not in an online session`), since the step is one
+machine's alone and the other game would play on ([design.md](design.md),
+*The session core*).
+
+Not to be confused with `BM64_COOP_NO_DEMO=1` (#49, #51, above), which keeps
+the attract demo from ever starting so a *scripted* run's warped room plays
+with its enemies. Z is for the runs by hand.
+
+Two things about how it works. The button is read where the game reads its
+pads (`recomp::get_n64_input`, `src/game/controls.cpp`), not from this
+machine's keyboard, so a scenario presses it with an ordinary `pad 0 Z` step.
+And the step is the input script's `scene` step (`func_8023AE6C`) **in the
+running session**, not `BM64_COOP_WARP`'s: the warp starts a new file
+(`func_8023DA04`) and would throw away the file the person picked. A cutscene
+can still win a scene change of its own, so the skip keeps asking while the
+intro plays (at most 6 steps, 60 frames apart) until the world map loads. Each
+step logs `coop: skip intro: to the world map, keeping the file (step N)`.
+
+**The hint on screen.** Nobody can guess the button, so while the story intro
+plays the game shows **PRESS Z TO SKIP**, low and centred
+(`patches/coop_intro_hint.c`). It is drawn the way the co-op HUD draws its
+icons (#53, `coop_hud.c`): the text is painted once into an RGBA5551 texture
+from a 5×7 pixel font, white with a black outline so it reads over any scene,
+and a draw object of the game's own pool (`func_8022A328`) puts it on screen
+at twice that size. It only draws — no game state is written, so the
+lockstep's hash is untouched.
+
+When it shows is decided on the host side, in the same place as the skip
+itself (`in_story_intro()` and no online session, `src/coop/harness.cpp`), and
+only a *change* is passed to the patch (the per-frame hook's bit 8), which
+registers the draw object and frees it again. So it appears with the opening
+cutscene, goes away when the world map loads or Z was pressed, and **never
+appears in an online session**, where the skip is refused anyway. It logs
+`coop: hint on x=68 y=196` and `coop: hint off` (and
+`coop: hint none: no free draw object` if the pool is full), which is what the
+scenarios check: `skip-intro` wants the pair around the cutscene,
+`skip-intro-title` and `skip-intro-room` that it never appears.
+
 A run's own `general.json` turns background input off, so a controller in
 use elsewhere does not press the test game's buttons; a key or button
 pressed while a test game has the focus still reaches it.
@@ -304,7 +512,11 @@ pressed while a test game has the focus still reaches it.
 Captures (screenshots, clips) are fine for debugging but stay in the run
 folder: never in commits, issues or pull requests.
 Capture only the game's window: a capture of the active window takes
-whatever window has the focus once the game loses it.
+whatever window has the focus once the game loses it. A headless run is
+captured through its own gamescope: the game process (its working folder is
+the run folder) has `GAMESCOPE_WAYLAND_DISPLAY` in its environment, and
+`XDG_RUNTIME_DIR=/run/user/$(id -u) GAMESCOPE_WAYLAND_DISPLAY=<that display>
+gamescopectl screenshot <run folder>/shot.png` saves what it shows (#53).
 
 ## The test harness
 
@@ -321,7 +533,10 @@ Everything is off unless a switch asks for it:
     `START`, `L`, `R`, `DU` `DD` `DL` `DR`, `CU` `CD` `CL` `CR`, joined with
     `+`, or `-` for none) and the stick at X, Y in −1..1;
   - `probe LABEL`: log `coop: probe LABEL`, a `coop: state` line (overlay,
-    S, flow flags, lives), the stick reading of pads 0 and 1, a `coop:
+    S, flow flags, lives), a `coop: file current=N` line (the file the game
+    would save into, `D_802A1DB4`: 0–2, or −1 from the boot until the file
+    select sets it — a save takes it unchecked, so −1 writes below the EEPROM
+    mirror, which is what `skip-intro` checks, #77), the stick reading of pads 0 and 1, a `coop:
     camera` line (its eye, its yaw and pitch in tenths of a degree and its
     distance from the point it looks at) and one `coop: player slot=…` line per player in play
     (controlType, hearts, bombs, fire, flags, position in tenths of a world
@@ -333,8 +548,9 @@ Everything is off unless a switch asks for it:
     the floor level it stands on (`func_802511EC`, as a room entry does), and
     log `coop: tile slot=… from=… to=…`. With player 2 on, a tile step of
     slot 0 is a room entry: player 2 stays frozen and cannot be hurt until
-    player 1's next step places it (#36); walk player 1 instead when player
-    2 must stay where it is;
+    it is placed next to player 1 (#36; at once once player 1 has been free
+    for 60 frames, #55); walk player 1 instead when player 2 must stay where
+    it is;
   - `hearts SLOT N`: set the player's hearts to N (0–9), as a heart pickup
     does, and log `coop: hearts slot=… from=… to=…`;
   - `save FILE`: save the live progress block into file 0–2 and the EEPROM,
@@ -366,7 +582,11 @@ Everything is off unless a switch asks for it:
   menu and A (60 frames later) takes its first entry, Adventure, into the
   file select (0x1F). In a run without saves, A picks the first file and A
   again starts it: the new file's opening cutscene (0x1A). A tap is
-  `pad 0 START`, `wait 4`, `pad 0 -`.
+  `pad 0 START`, `wait 4`, `pad 0 -`. Nothing in the game's own menus cuts
+  that path short, and the menus have to be driven as above. What can be cut
+  is the **opening cutscene** at the end of it: **Z** there goes to the world
+  map (*Z skips the story intro*, above, and the `skip-intro` scenarios, which
+  drive exactly this path and then press Z, #77).
 - `BM64_COOP_WARP=ID[:ENTRY[:FILE]]`: 30 frames after the title (overlay
   0x20) loads, start a story session as the file select does, for a new file
   (`func_8023DA04(0)`) or, with FILE, by loading file 0–2
@@ -377,6 +597,20 @@ Everything is off unless a switch asks for it:
   0x28 opens with the tutorial's dialogue, which waits for A; room 0x29 with
   entry 0x13 (room 0x28's exit) starts with player 1's short entry walk and
   then plays.
+  The title, as the warp leaves it, starts the attract demo
+  (`func_80297ADC`, #49, #51): the warped room runs as the demo, story flag
+  0x4 set, so the map's enemy tiles become start points for slots 1–3
+  (`func_8026F5E8`: no enemies), the timer is off and START goes back to
+  the title.
+- `BM64_COOP_NO_DEMO=1`: the attract demo's setup is skipped (a hook at
+  `func_80297ADC`), so a warped room plays as a game's does: its enemies
+  spawn, and player 1 is held longer at the start (room 0x29: still frozen
+  345 frames after the load, free at 600; as the demo, 300 were enough).
+  The enemy scenarios use it (`enemy-ghost`,
+  `enemy-range`, `session-enemy-range`); the older ones run without enemies.
+  The enemy lines (`coop: enemy aim|spawn|despawn|clear …`) come from
+  `patches/coop_enemy.c` whenever player 2 is on ([design.md](design.md),
+  *Enemies and two players*).
 - `BM64_COOP_LOG_PLAYERS=1`: one line per room init, spawn (and the model
   asset it gets), placement on a tile, bomb, hit, the heart a hit knocks
   out (`drop … item=4`), an item picked up (`pickup … item=T`), an item a
@@ -455,6 +689,14 @@ REGEX` (such a file has a matching line). The output is
 one line per check, `N/M checks passed`
 and a RESULT line; exit 0 only if all passed. A scenario takes 15–35 s.
 
+A log line the checks read that does not parse (a probe's `coop: player` or
+`coop: camera eye=` line, a `coop: hash` line), as when two games wrote into
+one `game.log`, is a failed check `log line parses` that names the line; a
+check that raises (a text field compared with a number) or a scenario that
+crashes `scenario.py` is a failed check with the error, and the run goes on
+with the next scenario (#46). `tools/test_scenario.py` tests this on fake
+runs' logs without the game (`tools/verify.sh`'s `harness` stage).
+
 ### Session scenarios: two games on one machine
 
 An online session ([design.md](design.md), *The session core*) is tested
@@ -498,7 +740,9 @@ A scenario with a `#session` line runs both games at once (`tools/run.sh
 is the host's script; `#client STEP` lines are the client's script (its pad
 0 is pad 1, player 2, in both games), `#env-host` and `#env-client` set one
 side's environment, `#check-client` checks the client's log, and `#check
-same-hashes` compares the two logs' `coop: hash` lines frame by frame. Both
+same-hashes` compares the two logs' `coop: hash` lines frame by frame (for a
+session across two machines, which this cannot start, there is
+`tools/compare_logs.py` instead: *Comparing the logs of two machines*). Both
 logs are cut at their `coop: input end`, since the session is lost as soon
 as one game is stopped; both scripts should end on the same frame. A tile
 step runs on one side only, outside the lockstep: `session-desync` uses one
@@ -507,6 +751,15 @@ to part the two games on purpose.
 ```bash
 tools/scenario.py --version eu session-lockstep   # both games, about 15 s
 ```
+
+**One gamepad, two games** (#29, read in the code, not played): the game sets
+SDL's `JOYSTICK_ALLOW_BACKGROUND_EVENTS` and its own *background input* option
+is on by default (`src/main/main.cpp`, `src/ui/ui_config.cpp`), so two games
+on one machine both take the events of the same controller — one stick would
+move both players. `tools/run.sh` writes a `general.json` with the option off
+for that reason, and a hand test of two games on one machine (#33) has to do
+the same in each game: then only the game whose window has the focus reads the
+pad.
 
 ## Europe speed
 

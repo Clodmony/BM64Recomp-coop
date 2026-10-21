@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <string>
 
 namespace coop {
@@ -19,11 +20,15 @@ namespace coop {
     // reported by the frame log (BM64_COOP_LOG_FRAMES).
     void note_audio(size_t frames, uint64_t queued_us, bool skipped);
 
-    // A playtest's log (#29): on Windows, a crash writes its exception and
-    // stack to the log, and without a console stdout and stderr go to
-    // coop.log in the app folder, the run before's kept as coop.prev.log
-    // (the Linux kit's start.sh does the same). Called once at startup.
+    // The game's own log (#29, #57): stdout and stderr go to coop.log in the
+    // app folder too, on every platform (to it alone on Windows without a
+    // console), the run before's kept as coop.prev.log; on Windows a crash
+    // writes its exception and stack to the log. Called once at startup.
     void start_log();
+
+    // coop.log, which a session streams to the other side; empty when
+    // start_log could not make it.
+    std::filesystem::path log_path();
 
     // The last `limit` bytes of the run before's log (coop.prev.log in the
     // app folder), empty without one; a session sends it to the other side.

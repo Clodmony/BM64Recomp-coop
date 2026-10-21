@@ -17,6 +17,16 @@ namespace coop {
     // The overlay loader's hook reports each load here (the script's
     // `overlay` steps and the warp wait for loads).
     void note_overlay_load(uint32_t id);
+
+    // The pads the game reads, reported by recomp::get_n64_input
+    // (src/game/controls.cpp) once a frame. The story intro skip (#77) watches
+    // pad 0 for Z: pressed while a new file's opening cutscene (overlay 0x1A)
+    // plays - so after the file was picked - the next per-frame hook goes to
+    // the world map (overlay 0x21) in the running session, keeping that file.
+    // Z anywhere else is the game's own button, the logos, the title's menu
+    // and the attract demo included, and in an online session the skip is
+    // refused, whose two games would otherwise part ways.
+    void note_pad(int pad, uint16_t buttons);
 }
 
 #endif

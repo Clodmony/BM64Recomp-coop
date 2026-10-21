@@ -1,0 +1,86 @@
+# The co-op HUD (#53, owner's layout 2026-10-19): in a co-op game a corner per
+# player under the story HUD's clock and gems, player 1 top left and player 2
+# top right, each with its battle face, hearts, bombs and fire
+# (patches/coop_hud.c logs what a corner shows whenever it changes). The story
+# HUD, and the co-op HUD with it, shows only in a stage entered the game's way:
+# a BM64_COOP_WARP from the title's logos leaves the session in the attract
+# demo's mode, which has no HUD. So the run goes through the menus (as
+# title-menu) into file 0 of save-file, the world map, then room 0x29 (entry
+# 0x13). Player 1 steps once the room's opening is over, so player 2 joins.
+# Player 2's corner follows its hearts, and shows the dead face once player 2
+# is down (#22: its own bomb with one heart left); a stage start (room 0x2D)
+# frees the HUD with the room, registers it anew and revives player 2, whose
+# face comes back.
+#saves-host save-file
+#env BM64_COOP_P2=4
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_SEED=1
+#
+#check log ^coop: story hud slot=-1$
+#check log ^coop: hud on p2=4$
+#check log "^coop: hud slot=0 corner=left x=28 y=44 face=0 hearts=1 bombs=2 fire=2 type=0x200$"
+#check log "^coop: hud slot=4 corner=right x=188 y=44 face=2 hearts=2 bombs=\d fire=\d type=0x[0-9A-F]+$"
+#check after "^coop: hearts slot=4 from=2 to=1$" "^coop: hud slot=4 corner=right x=188 y=44 face=2 hearts=1 "
+#check after "^coop: down slot=4 cause=1 lives=2 ghost$" "^coop: hud slot=4 corner=right x=188 y=44 face=10 hearts=1 "
+#check not-after "^coop: down slot=4" "^coop: hud slot=0 .* face=8 "
+#check after "^coop: scene overlay=0x2D" "^coop: hud off$"
+#check after "^coop: hud off$" "^coop: hud on p2=4$"
+#check after "^coop: revive slot=4 why=stage" "^coop: hud slot=4 corner=right x=188 y=44 face=2 hearts=2 "
+overlay 0x20
+overlay 0x1B
+wait 60
+pad 0 START
+wait 4
+pad 0 -
+overlay 0x20
+wait 60
+pad 0 START
+wait 4
+pad 0 -
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+overlay 0x1F
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+wait 60
+pad 0 A
+wait 4
+pad 0 -
+overlay 0x21
+wait 60
+scene 0x29 0x13
+overlay 0x29
+wait 700
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+wait 10
+pad 1 - 1 0.05
+wait 15
+pad 1 -
+wait 10
+probe start
+hearts 4 1
+wait 10
+pad 1 A
+wait 2
+pad 1 -
+wait 200
+probe down
+scene 0x2D
+overlay 0x2D
+wait 400
+pad 0 - 1 0.05
+wait 15
+pad 0 -
+wait 10
+probe stage
+end

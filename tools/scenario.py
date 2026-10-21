@@ -82,9 +82,13 @@ SCENARIO is a file or a name in tools/scenarios/ (without .txt). Each runs
 with tools/run.sh --input SCENARIO --until-log "coop: input end" in its own
 run folder under ~/dev-scratch/BM64Recomp-coop/runs/. The result is one line
 per check, "N/M checks passed" and a RESULT line; exit 0 only if every check
-of every scenario passed. --env adds environment after the scenario's own, so
-it overrides a scenario's #env (e.g. --env BM64_COOP_P2=0 for a run without
-player 2).
+of every scenario passed. A log line the checks read (a probe's player or
+camera line, a hash line) that does not parse, as when two games wrote into
+one log, is a failed check "log line parses" that names it; a check or a
+scenario that raises is a failed check with the error, and the next scenario
+still runs (#46; tools/test_scenario.py). --env adds environment after the
+scenario's own, so it overrides a scenario's #env (e.g. --env BM64_COOP_P2=0
+for a run without player 2).
 """
 import argparse
 import concurrent.futures
@@ -104,27 +108,66 @@ OPS = {"=": operator.eq, "!=": operator.ne, "<": operator.lt, ">": operator.gt,
        "<=": operator.le, ">=": operator.ge}
 
 
-def parse_probes(lines):
+def parse_fields(text):
+    """The key=value fields of a probe line: numbers, (x, y, z) for pos, eye
+    and angles (tenths), a word (actor=none). ValueError for anything else,
+    such as another game's line written into this one (#46)."""
+    fields = {}
+    for token in text.split(" "):
+        key, eq, value = token.partition("=")
+        if not eq or not re.fullmatch(r"\w+", key):
+            raise ValueError(f"not key=value: {token!r}")
+        if key in ("pos", "eye", "angles"):
+            parts = value.split(",")
+            if len(parts) != 3 or not all(re.fullmatch(r"-?\d+", v) for v in parts):
+                raise ValueError(f"not x,y,z: {token!r}")
+            fields[key] = tuple(int(v) / 10 for v in parts)
+        elif re.fullmatch(r"-?\d+", value):
+            fields[key] = int(value)
+        elif re.fullmatch(r"0x[0-9A-Fa-f]+", value):
+            fields[key] = int(value, 16)
+        elif re.fullmatch(r"[a-z]+", value):
+            fields[key] = value
+        else:
+            raise ValueError(f"not a value: {token!r}")
+    return fields
+
+
+def parse_probes(lines, bad=None):
     """{label: {slot or "camera": {field: int or (x, y, z)}}} from the probe
-    lines."""
+    lines. A player or camera line that does not parse is left out and
+    appended to `bad`."""
     probes, current = {}, None
     for line in lines:
         m = re.match(r"coop: probe (\S+)$", line)
         if m:
             current = probes.setdefault(m.group(1), {})
             continue
-        m = re.match(r"coop: (?:player slot=(\d+)|(camera)) (.*)", line)
+        # "coop: camera follows slot=N" is not a probe's camera line
+        m = re.match(r"coop: (?:player slot=(\d+) |camera (?=eye=))(.*)", line)
         if m and current is not None:
-            fields = {}
-            for key, value in re.findall(r"(\w+)=(\S+)", m.group(3)):
-                if key in ("pos", "eye", "angles"):
-                    fields[key] = tuple(int(v) / 10 for v in value.split(","))
-                elif re.fullmatch(r"-?\d+|0x[0-9A-Fa-f]+", value):
-                    fields[key] = int(value, 0)
-                else:
-                    fields[key] = value
+            try:
+                fields = parse_fields(m.group(2))
+            except ValueError:
+                if bad is not None:
+                    bad.append(line)
+                continue
             current[int(m.group(1)) if m.group(1) else "camera"] = fields
     return probes
+
+
+def parse_hashes(lines, bad=None):
+    """{frame: hash} from the "coop: hash" lines; one that does not parse is
+    left out and appended to `bad`."""
+    hashes = {}
+    for line in lines:
+        if line.startswith("coop: hash "):
+            m = re.fullmatch(r"coop: hash frame=(\d+) hash=([0-9A-F]{8})", line)
+            if m:
+                hashes[m.group(1)] = m.group(2)
+            elif bad is not None:
+                bad.append(line)
+    return hashes
 
 
 def camera_target(camera):
@@ -250,7 +293,12 @@ def read_run(proc, label, results, folder=None, said=None):
     m = re.search(r"folder (\S+)$", summary)
     if proc.returncode != 0 or not m:
         results.append((False, "run", f"run.sh exit {proc.returncode}"))
-    lines = (Path(m.group(1)) / "game.log").read_text(errors="replace").splitlines() if m else []
+    lines = []
+    if m:
+        try:
+            lines = (Path(m.group(1)) / "game.log").read_text(errors="replace").splitlines()
+        except OSError as err:
+            results.append((False, "run", f"no game.log: {err}"))
     if m and folder is not None:
         folder.append(Path(m.group(1)))
     errors = [line for line in lines if line.startswith("coop: input error")]
@@ -278,9 +326,7 @@ def free_port():
 
 
 def same_hashes(host, client):
-    pattern = re.compile(r"coop: hash frame=(\d+) hash=(\S+)$")
-    a = dict(m.groups() for m in map(pattern.match, host) if m)
-    b = dict(m.groups() for m in map(pattern.match, client) if m)
+    a, b = parse_hashes(host), parse_hashes(client)
     both = sorted(set(a) & set(b), key=int)
     if not both:
         return False, "no frame hashed by both"
@@ -288,6 +334,16 @@ def same_hashes(host, client):
     if differ:
         return False, f"{len(differ)}/{len(both)} frames differ, first {differ[0]}"
     return True, f"{len(both)} frames"
+
+
+def unparsable(lines, results, side=""):
+    """Each line the checks read that does not parse (#46: two games wrote
+    into one log) is a failed check that names it."""
+    bad = []
+    parse_probes(lines, bad)
+    parse_hashes(lines, bad)
+    for line in bad:
+        results.append((False, f"{side}log line parses", line if len(line) <= 200 else line[:200] + " ..."))
 
 
 def run_checks(checks, lines, probes, results, other=None, folder=None):
@@ -299,6 +355,8 @@ def run_checks(checks, lines, probes, results, other=None, folder=None):
                 ok, detail = check(text, lines, probes, folder)
         except (LookupError, ValueError, IndexError, re.error) as err:
             ok, detail = False, str(err)
+        except Exception as err:  # a check that raises fails; the run goes on (#46)
+            ok, detail = False, f"{type(err).__name__}: {err}"
         results.append((ok, text, detail))
 
 
@@ -360,6 +418,7 @@ def run_scenario(path, version, timeout, extra_envs, folder=None, said=None):
                               capture_output=True, text=True)
         ran = folder if folder is not None else []
         lines = read_run(proc, path.stem, results, ran, said)
+        unparsable(lines, results)
         run_checks(checks, lines, parse_probes(lines), results, folder=ran[-1] if ran else None)
     else:
         port = free_port()
@@ -387,6 +446,8 @@ def run_scenario(path, version, timeout, extra_envs, folder=None, said=None):
         host_dir, client_dir = [], []
         host = until_end(read_run(procs[0], f"{path.stem} host", results, host_dir, said))
         client = until_end(read_run(procs[1], f"{path.stem} client", results, client_dir, said))
+        unparsable(host, results)
+        unparsable(client, results, "client: ")
         run_checks(checks, host, parse_probes(host), results, client, host_dir[0] if host_dir else None)
         client_results = []
         run_checks(client_checks, client, parse_probes(client), client_results, host,
@@ -437,10 +498,14 @@ def main():
     # one lane per scenario, but the output of each is printed whole and in
     # the order they were named (#71)
     with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
-        running = [(pool.submit(run_scenario, path, args.version, args.timeout, args.env, None, said), said)
+        running = [(pool.submit(run_scenario, path, args.version, args.timeout, args.env, None, said), path, said)
                    for path, said in ((path, []) for path in paths)]
-        for future, said in running:
-            results += future.result()
+        for future, path, said in running:
+            try:
+                results += future.result()
+            except Exception as err:  # this lane fails, the other scenarios still run (#46)
+                said.append(f"{path.stem}:\n  FAILED scenario.py  ({type(err).__name__}: {err})")
+                results.append((False, f"{path.stem}: scenario.py", f"{type(err).__name__}: {err}"))
             print("\n".join(said), flush=True)
     passed = sum(ok for ok, _, _ in results)
     print(f"{passed}/{len(results)} checks passed")
