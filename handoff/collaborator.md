@@ -98,11 +98,18 @@ screen* under the Z paragraph and the `coop: file current` line under the
 
 ## Next step
 
-- **Ask the owner for the review of #84** (done, asked again this session) and
-  **resolve the conflicts on #72 and #73** so they can be merged — that is
-  the next session's obvious work, and each review says what the resolution
-  must keep (above). Merge only when the person running the session says so,
-  locally with `git merge --no-ff`, never `gh pr merge`.
+- **The next session resolves the conflicts on #72 and #73** (the person
+  running the session, 2026-10-21), so the two approved pull requests can be
+  merged; each review says what the resolution must keep (above). #72 first
+  is the useful order: it takes the scenario stage from about 13 minutes to
+  about 3, which every later session pays for otherwise. Merge only when the
+  person says so, locally with `git merge --no-ff`, never `gh pr merge`.
+- **#84 stays a draft** and waits for the owner's second review (the person
+  running the session, 2026-10-21); it is requested and the comment on it
+  explains what changed. No further nudge.
+- **#89 keeps both ways open** (the person running the session, 2026-10-21):
+  which one holds binds both people, so the issue lays both before the owner
+  with their consequences instead of recommending one.
 - **Review #88** (#75, the owner's): it waits for this side, and the owner's
   next playtest step waits on its merge.
 - **#89** is open and unstarted, found this session.
