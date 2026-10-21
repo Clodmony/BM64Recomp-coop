@@ -173,5 +173,6 @@ The playtest guide, [playtest.md](playtest.md), covers two PCs on one
 network. Over the internet (two homes), the host's port 7777 (TCP) must be
 reachable: a forwarded port on the host's router, or both PCs in one virtual
 network (Tailscale, ZeroTier) and the host's address in it. Not run yet
-(#29). After a session, both `coop.log` files go to whoever files the issue;
-read a log for local paths and names before pasting it into an issue.
+(#29). After a session the host has both logs (its `coop.log` and the
+other's in `coop-logs/`, #57); they go to whoever files the issue. Read a
+log for local paths and names before pasting it into an issue.

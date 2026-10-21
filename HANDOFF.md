@@ -33,13 +33,14 @@ Last updated 2026-10-19 (#47: notes split for two people).
   (leftover checks), #19 (their group), #24 (follow-ups of #19), #29
   (two machines, Windows/macOS), #46 (scenario.py and a garbled log line), #49 (enemy targeting),
   #51–#55 (playtest findings; #55 urgent), #56 (their group), #57 (live client log),
-  #63 (`run.sh`'s headless default needs gamescope, which Ubuntu 24.04 does
-  not package; found by #58, merged as pull request #65) and #66 (are
-  gamescope and Xvfb runs comparable? a follow-up of #63, for a machine with
-  both wrappers). #67 is **answered**: the two machines' identities differed
-  (clang 18 against clang 23), so the identity is now hashed from the
-  patches' sources (collaborator, pull request below).
-  #29's Windows side is answered (both platforms the same identity) and the
+  #66 (are gamescope and
+  Xvfb runs comparable? a follow-up of #63, for a machine with both
+  wrappers) and #67 (do the two machines' builds have the same build
+  identity? the patches' clang, a follow-up of #29 the playtest depends on)
+  and #89 (a file-less `BM64_COOP_WARP` leaves the current save file at -1,
+  found while closing #84's review, measured). #63 is done and merged
+  (pull request #65), so `run.sh` picks gamescope or Xvfb by itself.
+  #29's Windows side is answered (both platforms `0xFC44BFB4`) and the
   Windows build and the Linux build have played against each other, both
   ways (pull request #68); #29 is now only **two real machines on a LAN**
   (the playtest), its other leftovers split off as #69 (the internet, with a
@@ -49,10 +50,15 @@ Last updated 2026-10-19 (#47: notes split for two people).
   #58 (the collaborator's setup) is done and merged.
   The owner's last step of #47 is done: the collaborator has write access on
   the fork (checked 2026-10-20).
-- Open pull requests: #72 (#71, the scenarios run in parallel, collaborator)
-  and the one of #67 (the build identity hashed from the patches' sources,
-  collaborator), both drafts waiting for the owner's review. #65 (#63) and
-  #68 (#29's Windows side) were merged by the owner 2026-10-20; #58's (#64) was
+- Open pull requests of the collaborator, all drafts: **#72** (#71, the
+  scenarios in parallel) and **#73** (#67, the build identity from the
+  patches' sources), both **approved by the owner** but **conflicting** with
+  `bm64recomp-coop` since #74 and #59 went in — they need their conflicts
+  resolved before they can be merged, each review says how. **#84** (#77,
+  Z skips the story intro, with PRESS Z TO SKIP on screen) is merged
+  (2026-10-21, after the owner's second review). #65 (#63) and #68 (#29)
+  are merged.
+  #58's (#64) was
   merged 2026-10-19 by the owner. #50 (#22, downed players are ghosts) merged 2026-10-19
   without a review (owner's one-off exception).
 
@@ -63,8 +69,9 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 
 | Issue | Person | Branch | State |
 |-------|--------|--------|-------|
-| #56 (group: #55, #52, #49, #51, #53, #46, #57) | owner | `coop/56-playtest` (lanes `coop/56-a-player2`, `-b-enemies`, `-c-hud`, `-d-harness`) | four lane agents started 2026-10-19, worktrees under scratch `wt/` |
-| #67 | collaborator | `coop/67-build-identity` | done 2026-10-20, draft pull request #73: the identity is hashed from the patches' sources (`tools/build_id.py`, a `buildid` verify stage) instead of the compiled `patches.bin`, so the two machines' clang versions no longer part the builds; verify 9/9 and 383/383, every session logging the same number; waiting for the owner's review |
+| #75 (the playtest's desync with enemies, Linux against Windows) | owner | `coop/75-enemy-desync` | draft pull request #88, part of #75: the state hash covers the enemies, a desync names the parts that differ and both sides log their values of that frame (`coop: snapshot`), `compare_logs.py` shows them side by side; the random generator hashed at its real address. Not reproduced on one machine (ten sessions, Linux and Wine, enemies, cameras apart). Next (owner, 2026-10-21): the next playtest with a kit from `bm64recomp-coop` once #88 is merged, then #87 (replay); review requested from the collaborator |
+| #71 | collaborator | `coop/71-fast-scenarios` | done, draft pull request #72, **approved**; conflicts with `bm64recomp-coop` since #59 went in (`tools/scenario.py`, the notes) — the review says the `except` guard has to wrap `future.result()`, or #46's bug is back. Not resolved yet |
+| #67 | collaborator | `coop/67-build-identity` | done, draft pull request #73, **approved** (both machines `0x6738F333`, clang 18 and 23); conflicts since #74 went in (`src/coop/session.cpp`, `tools/verify.sh`) — keep protocol 5 and both stages. Not resolved yet |
 
 ## Project decisions (bind both people)
 
@@ -72,14 +79,11 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
   once the other has reviewed it on GitHub (an approving review). Merge
   locally under the Claude identity, never with `gh pr merge` (AGENTS.md,
   *Workflow*).
-- **The build identity (#67, collaborator 2026-10-20, the owner confirms
-  with the review):** it is hashed from the patches' **sources** and the
-  recompiler configs, not from the compiled `patches/patches.bin`, so two
-  machines with different clang versions can play (they measured
-  `0xFC44BFB4` against `0x7F5EB1B6` at one commit and would have refused
-  each other). The price: a real difference in generated code is left to the
-  per-frame state hash. The other two ways out — pinning the patches' clang,
-  or dropping the identity from the hello for the playtest — were not taken.
+- **Build identity (#67, owner, 2026-10-20):** hashed from the patches'
+  sources (#73), not the compiled binary and not a pinned clang; the same
+  number on clang 18 and 23 (measured).
+- **Intro skip (#77, owner, 2026-10-21):** Z stays always on (only in the
+  intro, refused in a session), not behind a switch.
 - Local split-screen co-op is on hold (owner, 2026-10-18); the co-op is
   played online.
 - Heart items (#36): shared, but a full player does not take one.
@@ -107,6 +111,14 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 
 A shared pool: take one by claiming it under *In progress*.
 
+0. **New playtest findings (collaborator, 2026-10-20), nobody on them:**
+   **#78** a downed player plays no death animation (a consequence of #22:
+   the story death path is skipped whole, so the animation goes with it; it
+   needs a decision on how the animation runs on the dying actor, since the
+   death process always takes slot 0), **#81** player 2 does not dance after
+   a stage clear (the clear works on slot 0's actor only; it also needs a
+   scripted way to clear a stage, which nothing has today) and **#83** the
+   intro skip inside an online session, the part #77 left out.
 0. **Group #56, next (owner, 2026-10-19):** the playtest findings and the
    #22 follow-ups in four parallel lanes, one agent each, merged in the
    order D, A, B, C: lane A #55 (urgent: player 2 cannot walk before
@@ -120,16 +132,16 @@ A shared pool: take one by claiming it under *In progress*.
 1. **The playtest = #29** (both people, two PCs: one Linux, one Windows): the
    kit from `tools/playtest-kit.sh`, guide in `docs/coop/playtest.md`;
    afterwards both `coop.log` files, which `tools/compare_logs.py` reads side
-   by side. What breaks becomes an issue (a desync line first). **#67 is out
-   of the way**: the two machines' builds of one commit now report the same
-   identity by construction, so the join no longer depends on either
-   person's clang. Both sides build the same commit and compare
-   `python3 -I tools/build_id.py --version eu` before starting. **Taken by
-   the collaborator's next session** (the person running it, 2026-10-20): it
-   needs a date with the owner, since both people must play at once.
+   by side. What breaks becomes an issue (a desync line first). **#67 comes
+   first**: whether the two machines' builds agree on the identity at all.
 2. ~~**#71**~~ (the scenario stage takes about 13 minutes): done by the
-   collaborator 2026-10-20, pull request #72 (the scenarios run in parallel:
-   the stage 2:44 instead of 11:47).
+   collaborator, pull request #72, approved — it only waits for its conflicts
+   to be resolved, see *In progress*.
+2. **#89** (a file-less `BM64_COOP_WARP` leaves the current save file at -1,
+   so a save the game does itself writes below the EEPROM mirror): found and
+   measured while closing #84's review, nobody on it. Small, but it wants a
+   decision the issue names — whether the warp picks a file or the save
+   refuses -1.
 3. **#46** (scenario.py and a garbled log line): a small harness fix, a good
    first issue for a session with a smaller plan.
 3. ~~**#63**~~ (`run.sh`'s headless wrapper): taken by the collaborator
@@ -147,10 +159,10 @@ A shared pool: take one by claiming it under *In progress*.
    more than one machine: **two machines on a LAN** (candidate 1, the
    playtest), the **internet** with a forwarded port, and **macOS** (nobody
    here has one; upstream builds none either). The owner decides whether
-   those become their own issues (done: #69 the internet, #70 macOS).
-   ~~**#67**~~ is answered and fixed (collaborator 2026-10-20): the identity
-   comes from the patches' sources, so the two people's clang versions no
-   longer part their builds.
+   those become their own issues. **#67** comes before the playtest: whether
+   the two people's own builds agree on the identity at all (the patches'
+   clang) — the offline sum in `docs/coop/building.md` answers it without a
+   build or a session.
 6. **Rest of #14 and #16**: a story teleport (`func_802512C0` from a room
    script, beyond Green Garden stage 1) and a scene with player 2 already in
    the room, then a check that pad 1 does not move a frozen player 2.

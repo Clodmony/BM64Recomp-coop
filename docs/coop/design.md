@@ -305,7 +305,8 @@ same icon sheet (asset 0x130, "dead" variant at +8).
 per-player panel (face, hearts) as a **second draw object** registered next to
 the story HUD in `func_8023D0F8` (`func_8022A328`, the same call the game
 uses), using the battle faces. Upstream already patches `func_80242270`
-(widescreen), so co-op does not edit it. Cheap to moderate.
+(widescreen), so co-op does not edit it. Cheap to moderate. (Done in #53:
+*The co-op HUD*, below.)
 
 ### 7. Hearts, lives, credits, game over
 
@@ -403,7 +404,8 @@ Moderate. Rivals: rewrite their target fields every frame (cheap, inferred to
 work). Overlay bosses stay on player 1 at first. A later option is a director
 that switches S to the other player outside cutscenes (for instance when
 player 1 is down), cheap but only safe where no overlay keeps S-derived
-pointers across frames.
+pointers across frames. Done for the main-code enemies, their targets and
+their ranges (#49, #51): *Enemies and two players*, below.
 
 ### 10. Cutscenes and warps
 
@@ -595,7 +597,7 @@ path reads it plus buttons, no camera state needed on the sender's side
 (inferred: the receiver adds its own camera's yaw, the same on both sides
 while the camera follows player 1).
 
-### Placement: player 2 joins at player 1's first step (#14)
+### Placement: player 2 joins once the room's opening is over (#14, #55)
 
 Placements of player 2 around player 1's entry walk that failed (room 0x29,
 entry 0x13, `p2-entry-walk`):
@@ -604,7 +606,7 @@ entry 0x13, `p2-entry-walk`):
 - held frozen at the room's spawn point (the origin in room 0x29) and placed
   when the walk is over: after about 6 s its placement no longer holds, and
   released it takes a hit of cause 3 and dies (the update deals cause 3 for
-  player flag 0x40000000);
+  bit 0x40000000 of the actor's +0x10);
 - on the tile player 1 left last during the walk (4,14): blocked once the
   walk is over (the game pushes player 2 to 5,15), and placed just before
   that, player 2 dies there (cause 3);
@@ -612,25 +614,66 @@ entry 0x13, `p2-entry-walk`):
   origin on its first frames, whatever was placed; spawned at the origin and
   placed a few frames later, it died (cause 3) after player 1's retry.
 
-The rule now: the room's init does **not** spawn player 2. Player 1's
-placement (`func_802511EC(0, …)`: room entries, story teleports) makes player
-2's placement pending. Only player 1's **own steps** count: a step along x or
-z (a fall to a lower floor is not one) taken once player 1 has been free of
-walks (flag 0x400) and freezes (0x2010000) for 60 frames (room 0x29 still
-changes the tiles behind its walk right after it). At such a step player 2 is
-put on the tile player 1 just left: player 1 stood there, so it is floor, and
-it is next to player 1. The first time in a room this spawns player 2 there
-(the spawn point set by `func_802511EC` without an actor, then
-`g_SpawnPlayer`, as the battle respawn `func_8023EB28` spawns), holds it
-frozen and places it again 3 frames later; afterwards (a teleport, a respawn)
-it moves the actor and releases it.
+From #14 to #55 player 2 joined at player 1's first own step, on the tile
+player 1 had just left. That kept player 2 out of the room until player 1
+moved (#55), and in the first two-PC playtest player 2 fell (cause 3) right
+after its placement in room 0x28, twice. The cause (run, #55): the
+collision pass (`func_80232FF8`) keeps each actor's position of the frame
+before at actor +0x58..+0x60 and puts an actor whose move ends inside another
+back there. A player's body has radius 30 (`g_SpawnPlayer`), so two players
+less than 60 apart overlap. Player 1 just past the edge of the tile it left is
+about 50 from that tile's centre: player 2 put there overlapped it and went
+back to its last position, which for a new actor is the origin
+(`g_InitLevelClass` zeroes it; `g_SpawnPlayer` sets only the model's
+position). Room 0x28's origin is inside a wall (tile 0,0,0 is 0x1F): in the
+playtest player 2 fell (cause 3) right after such a placement; in the scripted
+runs it stayed at the origin. The same explains the old "put back at the
+origin on its first frames".
 
-Checked: room 0x29 after its entry walk and after a retry (`p2-entry-walk`,
-`p2-p1-death-freeze`), room 0x28 after its opening dialogue (`p2-room28`) and when
-entered through room 0x29's floor exit, where player 1 falls in (`p2-exit`).
+The rule now (#55): the room's init does **not** spawn player 2, and player 1's
+placement (`func_802511EC(0, …)`: room entries, story teleports) makes player
+2's placement pending, as before. Once player 1 has been free of walks (flag
+0x400) and freezes (0x2010000) for 60 frames (the room's opening is over:
+an entry walk, a dialogue; room 0x29 still changes the tiles behind its walk
+right after it), player 2 is placed at once, whether player 1 moves or not:
+
+- **on a free floor tile next to player 1** (`coop_find_tile`): one of the
+  four tiles beside player 1's on its floor level, read from the room's tile
+  map (`func_8026D7D8(x, y, z)`, a 16-bit cell per tile and level): the
+  cell's low nibble is 1, a plain floor at that level (0 is air, F a wall or
+  block, 2, 9, A and B event and damage tiles, the others ramps and doors),
+  and bits 0x20 and 0x40 are clear (something stands on it; the battle
+  respawn's random spot, `func_8023E8FC`, refuses them too). Room 0x29 turns
+  the tile behind its entry walk (4,14) into a wall (0x1F) when it closes it,
+  so that tile is not free. The tile's centre must be 80 or more from player
+  1's actor, so the bodies cannot overlap; of the tiles left the one
+  farthest from player 1 (on a tie the first along −z, +z, −x, +x), else a
+  tile two away along a free one. While there is none, player 2 waits (player
+  1 moves on sooner or later).
+- The placement also sets the actor's last position (+0x58) to the tile, so
+  that a blocked move puts it back there, not at the origin.
+
+The first time in a room this spawns player 2 there (the spawn point set by
+`func_802511EC` without an actor, then `g_SpawnPlayer`, as the battle respawn
+`func_8023EB28` spawns); afterwards (a room entry, a teleport, a revive) it
+moves the actor and releases it. No hold of a few frames is needed any more.
+A scene's release leaves a player 2 that joined during the scene alone (room
+0x28 releases player 1 twice after its dialogue; before, the second release
+made player 2's placement pending again).
+
+Checked (Europe, scenarios): room 0x29 after its entry walk with player 1
+standing still, and player 2 walking (`p2-join-still`; before #55 player 2
+never joined there), the same in an online session (`session-join`), room 0x28
+after its opening dialogue with player 1 standing still, then stepping just
+past its tile's edge as in the playtest (`p2-join-room28`; before #55 player 2
+joined at that step and ended at the origin, 1608 from player 1), room 0x28
+entered through room 0x29's floor exit, where player 1 falls in and slides
+down a slope (`p2-exit`: player 2 joins on the slope behind it), after a retry
+(`p2-p1-death-freeze`, `ghost-retry`) and at revives (`p2-ghost`, `ghost-*`).
 Not checked: a story teleport by `func_802512C0` from a room script (none was
-found in these rooms); the same hook covers it. Cost: player 2 appears only
-once player 1 moves.
+found in these rooms; the same hook covers it), enemies (not in the tile map:
+a tile next to player 1 may hold one), and rooms other than 0x28, 0x29 and
+0x2D.
 
 ### Cutscenes (#16)
 
@@ -638,8 +681,8 @@ The freeze and release wrappers of S (`func_802452E8`, with the idle
 animation, and `func_80245280`) apply to player 2 too when S is player 1,
 the way `func_8023C170` freezes every player: hooks after they load S call
 `coop_freeze_partner` (log `coop: freeze partner`). A release when player 1
-was moved during the scene makes player 2's placement pending again (it
-joins player 1 at its next step). Scripted walks (`func_802506B8`) and facing
+was moved during the scene makes player 2's placement pending again (it is
+placed next to player 1 once player 1 has settled, #55). Scripted walks (`func_802506B8`) and facing
 (`func_80245F74`) stay player 1's. Seen in the runs: room 0x28's opening
 dialogue and room 0x29's entry walk freeze player 1 before player 2 has
 joined; with player 2 in the room, the exit (`p2-exit`) and player 1's death
@@ -722,6 +765,12 @@ How it is done (`patches/coop_player2.c`):
 - **No damage:** a hook at `func_80248148`'s entry skips the handler for a
   ghost (`coop: ghost hit`). A fall (cause 3, the update's pit) puts the
   ghost back next to the living player (`coop: ghost fell`, `ghost-fall`).
+  A ghost player 1 can come through a room change and fall before player 2
+  has joined the new room: there is no partner to go next to, so it goes
+  back on the last free floor tile it stood on in the room (`place slot=0
+  … last floor`, `ghost-pit-join`, room 0x2D, #55). Before, it stayed in the
+  pit, fell again every frame, and player 2 never found a tile next to it
+  to join on.
 - **Exits and triggers:** the three rectangle tests skip a downed S and a
   downed player 2 (`p1-ghost`: player 1's ghost stands in room 0x29's floor
   exit, no room change; player 2 takes it).
@@ -756,9 +805,10 @@ How it is done (`patches/coop_player2.c`):
   rooms 0x28, 0x29 and 0x2D; `ghost-scene` freezes and releases S with the
   harness's `freeze` step (the same wrapper) instead.
 - **Placement at a revive:** player 2 by its pending placement (held
-  frozen until player 1's next own step, as at a room entry); player 1 on
-  the tile player 2 left last (a trail kept in player 1's update hook, as
-  player 1's is), with the placement hook told to leave player 2 alone.
+  frozen until it is placed next to player 1, as at a room entry); player 1
+  on a free floor tile next to player 2 found the same way (#55; with none,
+  player 2's own tile), with the placement hook told to leave player 2
+  alone.
 - **Player 2's story death** (player 1 down) plays on player 1's actor
   (section 7): `coop_story_death` freezes player 1's ghost for it.
 
@@ -773,8 +823,9 @@ read: rivals skip a ghost as a target, and the win test only refuses
 controlType 3, which a ghost is not); a ghost carried by, or carrying, the
 partner at its death (the handler releases carry links only in battle);
 stale hit bits at a revive; what a ghost looks like on screen (only the
-fields were probed); enemies still aim at a ghost S (#49); the host's
-camera follows S, a downed player 1 too.
+fields were probed); overlay enemies and bosses still aim at a ghost S
+(the main-code enemies no longer do: *Enemies and two players*, #49); the
+host's camera follows S, a downed player 1 too.
 
 ### The knocked-out heart (#36)
 
@@ -800,15 +851,173 @@ Not covered: `func_802308B8` returns one actor that touches the item, so a
 full player standing on a heart may keep a partner on the same spot from
 getting it (not run).
 
+### Player 2's power-ups (#52)
+
+Until #52 every stage room's init (`coop_stage_init`) set player 2's bombs and
+fire to player 1's and its bomb type to 0x200: in the playtest player 2 lost
+its power-ups at every room change. Read in the Europe disassembly: the
+game's only reset of bombs, fire and bomb type is `func_80277E1C`, which sets
+**all five slots** to bomb type 0x200, 2 bombs and 2 fire. It runs at boot
+(`func_8023DB0C`), at a story session's start (`func_8023DA04`, the file
+select and the harness's warp), at a battle's start (`func_8023CA94`,
+`func_80297ADC`), at the pause menu's retry (`func_802968BC`, which also sets
+player 1's hearts to 1) and in `func_802967A4`, which 63 overlay sites call
+through their own function tables (not traced to a scene; it resets every
+slot, so player 1 and player 2 alike). A story death and the room's reload
+(`func_8023F26C`, `func_8023D0F8`) reset no slot's bombs or fire; player 1
+loses only its remote bombs there (`func_80277DF4`, slot 0 only: #24). The
+continue (`func_8023E1D8`) sets player 1's hearts only. Pickups
+(`func_802797BC`) and `func_80277D20` (a slot's bomb type, from seven
+overlays) work per slot. Only the session start's debug branch (session
+block +0x40 set: player 1 gets 8 more bombs and fire, and no slot is reset)
+treats player 1 alone; nothing sets that flag in normal play (inferred).
+
+So the init no longer touches them: player 2 keeps its own bombs, fire and
+bomb type across room changes and retries, and the game's own resets give it
+the same values as player 1 wherever player 1's are reset, its first join of
+a session included (both get 2 and 2 at the session's start). Its hearts are
+still set to 2 at each room's init (as since #19).
+
+Runs (Europe, seed 3): `p2-power-rooms` (player 2 bombs the block on room
+0x29's tile 7,16, picks up the bomb-up it leaves, 3 bombs, takes the floor
+exit and has 3 bombs in room 0x28; before #52 it had 2 there) and
+`p2-power-retry` (the same bomb-up, then player 2 is downed and player 1's
+death reloads the room: player 2 comes back with 3 bombs; before #52 2). Not
+run: a fire-up (no scripted one found: the block's item is the seed's), a
+stage start from the world map, the pause menu's retry and a continue (read
+only), and a scene inside a room calling `func_802967A4`.
+
+### Enemies and two players (#49, #51)
+
+Read in the Europe disassembly and run on the Europe build (2026-10-20,
+scenarios `enemy-ghost`, `enemy-range`, `session-enemy-range`). The code is
+`patches/coop_enemy.c`, the hooks are lane B's block in `bm64.us.toml`.
+
+**The rooms' enemies.** A story room's ordinary enemies are main code: the
+room fills `g_EnemySlots` (`g_EnemyAllocate`), and the map loader turns the
+map's enemy tiles into 16 records at 0x800BA900 (US and Europe, 0xA4 bytes
+each; `func_80286CA8`, `func_80286400`), each run by an enemy process
+`func_80285F8C`. All of it asks for S (`func_80243DDC`) and reads S's position
+(`func_80250338`):
+
+- **Spawn** (`func_80285A9C`, the scan of an idle enemy process): a record
+  waiting to spawn (state 2) brings its enemy in when S is 1050–1150 units
+  from it along x (and within 1100 along z) or along z: enemies appear at the
+  edge of the view, not in front of the player. A record's countdown (+0x4;
+  1200 frames after its enemy was defeated, inferred) runs only while S is
+  outside the 1100-unit square around it.
+- **Range** (`func_80285F8C`, an enemy in play): an enemy more than 1300
+  units from S along x or z is taken out of the room (`func_80282598`: state
+  2, countdown 0), not killed; it spawns again where it was once S comes back
+  to its band. Types 0x19 and 0x1C stay. **This is #51**: with player 1 far
+  away, the enemies around player 2 went, and came back only with player 1
+  (`enemy-range` before the fix: enemy 7 taken out right after player 1 was
+  put 2300 units away by a tile step, `coop: enemy despawn rec=7 type=0x0
+  x=1400 z=1049 near=0`). The test reads S's position, game state, not a camera: before
+  the fix too, both games of a session hashed the same frames and logged the
+  same enemy lines (`session-enemy-range`, no desync).
+- **Targets:** the chase on the same floor (`func_80283CF0`), the line-up
+  tests (`func_8028854C`, `func_80288654`) and the aimed moves
+  (`func_80289F04`, `func_80289DB8`, `func_802881A0`) aim at S's position,
+  with no ghost or controlType test (**#49**: `enemy-ghost` before the fix,
+  `coop: enemy aim rec=8 slot=0 ghost=1` once player 1 was down).
+- **Clear** (`func_80282934`): takes out the enemies within 200 units of S,
+  with a puff; rooms call it as a cutscene starts (16 overlay calls), S's
+  update every 4 frames of a warp move (`func_8024D8C4`).
+
+**The rules now** (hooks where each function has just asked for S, only
+while player 2 is on and S is player 1):
+
+| Where | Before | Now |
+|---|---|---|
+| chase, line-up tests, aimed moves | S | the nearest living co-op player (along the floor, x and z), one on the enemy's floor level (`func_8026EE18`) first; never a ghost (owner, #22) |
+| range (1300) | S | the co-op player nearest along the larger axis, ghosts included: an enemy stays while either player is within range |
+| spawn band, countdown | S | per record, the same nearest player: an enemy spawns when the nearer player reaches its band, so never in front of the other, and counts down while both are outside |
+| clear (200) | around S | around S, then around player 2 if it plays and is not a ghost |
+
+Why per function:
+
+- **Targets, nearest living, own floor first:** the chase and the aimed move
+  act only on a target on their floor level; aimed at a nearer player on
+  another floor they would wander while the other player is in reach.
+- **Ranges, the larger axis:** the game's tests compare |dx| and |dz| with the
+  range separately, so the player nearest by the larger of the two is exactly
+  the one that decides: an enemy is taken out only when both players are out
+  of range, and spawns only at the edge of the nearer one's view.
+- **Ghosts count for ranges** (a choice, open for the owner): each machine's
+  camera follows its own player, a ghost too, so the room around a ghost is
+  on its player's screen; enemies there stay, and aim at the living player.
+- **Clear around both:** player 2 is frozen with player 1 for a scene and
+  released with it; enemies next to it would hit it as the scene ends. A
+  ghost takes no damage.
+- Ties go to player 1. Player 2 counts once it has joined the room
+  (controlType 2 and an actor), also while held frozen for its placement.
+
+**Determinism.** The choice reads positions and flags from RDRAM in a fixed
+order, nothing of a machine's own (camera, pads before the lockstep). In
+`session-enemy-range` (two games on one machine, Linux) both games hashed the
+same 1561 frames, logged no desync and the same 12 `coop: enemy` lines.
+
+**Runs** (Europe, seed 1, room 0x29, `BM64_COOP_NO_DEMO`): before the fix
+17 of 28 checks passed, after it 28 of 28, with the scenarios' first
+versions. Player 2's new join (#55: it joins once player 1's entry walk is
+over, without its step, and a tile step of player 1 makes it join player 1
+again) moved them to what follows; on #55's code they pass, 36 of 36 checks.
+
+- `enemy-ghost` (#49): enemy 8 (type 0x17) aims at player 1 as the room
+  starts; once player 1 is down, it aims at player 2 (`coop: enemy aim rec=8
+  slot=4 ghost=0`) and no enemy aims at the ghost. The ghost walks off, and
+  with both players out of range enemy 8 is taken out; player 2 walking
+  towards it alone brings it back (`coop: enemy spawn rec=8 … near=4`), aimed
+  at player 2. Before the fix the ghost stayed the target and the enemy came
+  back only with player 1.
+- `enemy-range` (#51): player 1 walks off along the room's upper corridor to
+  x 28, about 1400 units from enemy 7 along x; player 2 stays at the start:
+  enemy 7 (type 0) stays. With player 2 then put next to player 1 (tile 28,
+  22), it is taken out, tested against player 2, the nearer one (`near=4`).
+  On the way enemy 8 aims at player 2 while player 2 is the nearer (#49).
+- `session-enemy-range`: the same online, the host's pad walking player 1,
+  both sides' tile step on the same frame.
+
+**Logs**, whenever player 2 is on: `coop: enemy aim rec=R slot=S ghost=G x=…
+z=…` (an enemy record's target, when it or its ghost flag changes, and after
+a spawn), `coop: enemy spawn|despawn rec=R type=T x=… z=… near=S` (the player
+whose range decided), `coop: enemy clear slot=4 … taken=N`.
+
+**Not changed:** S when it is not player 1 (rival code switches it briefly)
+and battle; rivals (`func_80251708`, slots 0–2); the main functions that read
+S's position for a boss's reward drop and the camera (`func_80233830`,
+`func_80233E3C`, `func_80237664`, `func_80240F34`); and every overlay enemy and
+boss that keeps its own copy of S's position (about 112 call sites, section
+2): they still aim at player 1, a ghost too, and their own ranges, if any,
+still count player 1 alone. By need, later.
+
+**Not run:** the US build; two PCs and a Windows client (the session ran two
+Linux games on one machine); hand play; the clear around player 2 taking an
+enemy out (no run had an enemy within 200 units of player 2 at a clear; a
+run through room 0x2D's warp move called it without one); a ghost keeping
+enemies in range; the floor-level preference deciding a target (both players
+stood on one floor level in the runs); rooms other than 0x29 in a scenario
+(0x2D, 0x28 and others only in exploration runs).
+
+| Hook (lane B's block) | Does |
+|---|---|
+| `func_80283CF0` at 0x80283D00, `func_8028854C` at 0x8028855C, `func_80288654` at 0x8028869C, `func_80289F04` at 0x80289F18, `func_80289DB8` at 0x80289DCC, `func_802881A0` at 0x802881E4 | v0 = S, after `func_80243DDC`: the target slot (`coop_enemy_aim`) |
+| `func_80285F8C` at 0x80286074 | v0 = S for the range test: the nearest player (`coop_enemy_range`) |
+| `func_80285A9C` at 0x80285AD8 (top of its loop) | a record in state 2: the nearest player's position into the tested one at sp+0xA8 (`coop_enemy_band`) |
+| `func_80285A9C` at 0x80285D54, `func_80285F8C` at 0x80286140 | spawn and take-out logged |
+| `func_80282934` at 0x80282968 (its end) | the clear around player 2 (`coop_enemy_clear`) |
+| `func_80297ADC` entry | the attract demo's setup skipped with `BM64_COOP_NO_DEMO=1` ([building.md](building.md)) |
+
 ### Hooks and patches
 
 | Where | Does |
 |---|---|
 | `func_8023D0F8` entry (scene load) | counted: a room change or a stage start (#22) |
-| `func_80245CDC` entry (room player init) | player 2's stats (2 hearts, player 1's bombs and fire, bomb type 0x200); not spawned by the room, placement pending; downed players kept or revived (#22) |
+| `func_80245CDC` entry (room player init) | player 2's hearts (2; its bombs, fire and bomb type stay its own, #52); not spawned by the room, placement pending; downed players kept or revived (#22) |
 | `func_80245CDC` at 0x80245D68 (after its spawn loop) | a downed player 1: ghost flag and look again (#22) |
 | `func_802511EC` entry (put a slot on a tile) | slot 0 placed: player 2's placement pending (held frozen if it is in the room) |
-| `func_8024E088` entry (player update) | slot 0: both players' trails, player 2's placement; slot 4: its command record from pad 1 |
+| `func_8024E088` entry (player update) | slot 0: player 2's pending placement, next to player 1 once the room's opening is over (#55); slot 4: its command record from pad 1 |
 | `func_802452E8` at 0x80245300, `func_80245280` at 0x80245294 | S = 0: freeze or release player 2 with player 1; a scene's release revives (#22) |
 | `func_8023A870` entry (death) | either player while the other lives: down, a ghost; the function skipped, 0 returned (#22) |
 | `func_80248148` entry (damage) | a ghost: skipped; a fall puts it next to the living player (#22) |
@@ -935,7 +1144,7 @@ The **build identity** in the hello is FNV-1a over the patches' sources
 configures, by `tools/build_id.py` (`src/coop/version.cmake`). Either side refuses another
 identity: `coop: session refused: another build (the other's 0x…)`, and
 both play alone (`session-build`, with `BM64_COOP_BUILD_ID` faking the
-client's). The protocol was 2 then (3 since #33's frame message); the first 8 bytes of the hello (magic,
+client's). The protocol was 2 then (3 since #33's frame message, 4 since #29's logs, 5 since #57's log stream); the first 8 bytes of the hello (magic,
 protocol, role, game) stay the same in every version, so an older peer is
 refused for its protocol rather than misread. Not covered by the identity:
 host code (`src/`), librecomp, and mods; a difference there still shows
@@ -1091,26 +1300,94 @@ Start there). A game that reaches its first pad read more than 10 s after
 the other's would lose the session at its first step (inferred from the
 lockstep's 10 s wait; not seen in the runs).
 
-### The playtest's logs (#29)
+### The playtest's logs (#29, #57)
 
-A playtest on two PCs needs the logs of both, the crashed one's most. Each
-game keeps its log in `coop.log` in its app folder (a Windows build without a
-console redirects its stdout and stderr there, `coop::start_log`; the Linux
-kit's `start.sh` tees it) and the run before's in `coop.prev.log`. A Windows
-crash writes its exception, place and stack to the log first, as
+A playtest on two PCs needs the logs of both, the crashed one's most.
+
+**The game's own log** (#57). Every game writes its stdout and stderr to
+`coop.log` in its app folder, on every platform, and keeps the run before's
+as `coop.prev.log` (`coop::start_log`, `src/coop/debug.cpp`, called early in
+`main`). On Linux and macOS a child process of the game copies the pipe both
+now write into to `coop.log` and to where stdout went before (the terminal,
+`run.sh`'s `game.log`): a process of its own, so a crash or a kill of the game
+loses no line, since the child reads the pipe to its end; it ignores the
+terminal's and the run's stop signals for that reason, and exits with the
+pipe. The game ignores SIGPIPE, so a child killed by hand does not end it.
+stdout is line-buffered, so the patches' lines and the host's stay in
+order. The kit's `start.sh` only starts the game now (it used to tee into
+`coop.log` itself, which would double every line). A Windows build started
+from Explorer has no console: both go straight to `coop.log`, as since #29;
+with somewhere to go (a redirect, the harness in Wine) a thread copies them
+to both, and a crash or the exit waits for it to write what the pipe holds.
+A Windows crash writes its exception, place and stack to the log first, as
 `BM64Recompiled.exe+0x…`, which the kit's `.pdb` resolves
 (`llvm-symbolizer --obj=BM64Recompiled.exe 0x140000000+offset`); an invalid
-parameter to the C runtime and an abort too. Right after the hellos, before
+parameter to the C runtime and an abort too. The lines `main` prints before
+`start_log` (on Linux "Failed to preload executable!") are not in the file.
+
+**The run before's log, at connect** (#29). Right after the hellos, before
 the save, each side sends its `coop.prev.log` (its last 256 KiB; the host
 first, so neither waits on a full socket buffer), and the other keeps it in
-`coop-logs/<time>-<host|client>.log`. A crash, a restart and a join so bring
-the crashed run's log to the other PC (`session-logs`; protocol 4).
+`coop-logs/<time>-<host|client>.prev.log` (`.log` before #57). A crash, a
+restart and a join so bring the crashed run's last lines to the other PC
+(`session-logs`).
 
-Run (Europe, 2026-10-18): `session-logs` passes; the Windows build crashed on
-purpose (`BM64_COOP_CRASH`) logs the exception, `BM64Recompiled.exe+0x74EE5`
-and 12 frames, which the `.pdb` names (`coop_log_overlay_load`,
-`func_8022691C`, …). Not run: the redirect on a real Windows PC (in Wine a
-game started from a terminal has a console).
+**This run's log, live** (#57). During the session each side streams its
+`coop.log` to the other, which appends it to
+`coop-logs/<time>-client.log` (the host) or `<time>-host.log` (the client)
+as it comes, flushed after each piece: the text is there when the other
+crashes or the session is lost later, and the host has both logs of the
+session that just ended. Both directions, since the code is the same on
+both sides (#57's option 3, at no extra cost). In the stream:
+
+- What the log held before the lockstep (the run so far, from the game's
+  start) goes at the lockstep's start, before frame 0.
+- Then each frame message is followed, in the same packet, by at most 512
+  bytes of whole lines (25 KiB/s at 50 frames a second; more only for one
+  longer line, in pieces). A frame so waits behind no more than that, and
+  the stream needs no thread or lock of its own: it is read from the file
+  in the lockstep's step, which owns the socket.
+- Nothing is sent when a game stops: what the other has came while the
+  session was live. Lines a game logs in the frame it crashes in (its crash
+  line among them) come with the next connect's `.prev.log`.
+
+The messages after the save now carry a kind and a size (frame or log;
+`session.cpp`), so the **protocol is 5**: a protocol 4 peer would read a log
+message as a frame. The build identity does not cover host code (`src/`), so
+without the bump an older build of the same patches would connect and then
+misread the stream; with it, either side refuses the other ("another
+protocol version (4, this 5)").
+
+Run (Europe, 2026-10-19, Linux, two games on one machine):
+
+| Scenario or probe | What it showed |
+|---|---|
+| `game-log` | a run's `coop.log` holds the overlay, input and probe lines |
+| `session-log-stream` | both games write `coop.log`; the host's `coop-logs/<time>-client.log` holds the client's lines from its start (its connect line, two markers) and the client's `<time>-host.log` the host's marker; no desync. The host's copy was the client's `coop.log` byte for byte |
+| `session-log-lost` | the client's game is stopped at frame 200 (as `session-lost`); the host's copy holds its marker logged 20 frames before, and the host plays on alone |
+| `session-logs` | the run before's log as `<time>-client.prev.log` (#29) |
+| client crashed on purpose (`BM64_COOP_CRASH` at its first title load, by hand) | the client's own `coop.log` ends with its crash line; the host's copy holds the client's lines up to the step before it (`coop: seed …`), and the host loses the session at frame 2 and plays on |
+| the kit's `start.sh`, run twice (by hand, headless) | `coop.log` holds the game's lines once, in the terminal's order; the second run kept the first's as `coop.prev.log`; no tee process left |
+| the tee child killed (by hand) | the game runs on |
+
+Red on the build before (the same scenarios): 17 of 29 checks failed (no
+`coop.log` on Linux, no stream, the `.prev.log` name).
+
+The Windows build (cross-compiled, in Wine on the same machine, where it
+always has somewhere to write, so through the thread): `game-log` alone;
+`session-log-stream`, `session-log-lost` and `session-logs` with it as the
+client of the Linux build, and `session-log-stream` with it as the host;
+all pass, and the Linux host's copy was the Windows client's `coop.log`
+byte for byte. Crashed on purpose as a client, its `coop.log` has all 16
+crash lines (the exception, the place and the stack), as the run's
+`game.log` does; the host's copy ends at the client's `coop: seed` line, as
+on Linux (Wine kept the crashed game open, so the host lost the session
+after 10 s without data).
+
+Not run: two PCs (a LAN, the internet), where the 512 bytes a frame meet a
+real link; a real Windows PC, and so the build without a console, which
+writes straight to `coop.log` as since #29; macOS (the POSIX code of Linux,
+not compiled).
 
 ### Not done
 
@@ -1123,6 +1400,109 @@ game started from a terminal has a console).
 - (#33) The other readers of the camera's angles and eye (*Cameras that
   turn*).
 - A fixed delay: a slow or lost message stalls both games, with no rollback.
+
+## The co-op HUD (#53)
+
+**Rule (owner, 2026-10-19):** a corner per player, not one shared panel,
+with the player's face, hearts, bomb count and fire; the same on both
+machines, player 1 first (top left) and player 2 second (top right), on the
+host and the client alike; a downed player (#22) shows the "dead" face. A
+solo game keeps the game's own HUD only. Run on the **Europe** build
+(2026-10-19); the code is `patches/coop_hud.c`.
+
+**What the game has** (read from a dump of the two sheets the scene load
+loads, in a run; the dump code is not kept). Both sheets start with `64`,
+a count and 12-byte entries {format, width << 16 | height, offset}; image n
+is entry n and its palette entry n + 1:
+
+| Sheet | Images |
+|---|---|
+| 0x130 (`D_802A0758`) | 0, 2, 4, 6: the battle faces, white, black, red, blue (16×16, 4-bit); 8–14 the same faces with crossed eyes ("dead"); 16 a gold card (24×24, 8-bit); 18 the blue gem; 20 the clock; 22 the red gem |
+| 0x131 (`D_802A075C`) | 0–18: the digits 0–9 (10×18), the clock's palette at entry 1; 20 a colon, 22 a dash, 24 a red 0 |
+
+No sheet has a heart, a bomb or a flame, so the co-op HUD brings its own:
+16×16 pixel art made for this fork (heart, bomb, red bomb, flame, remote),
+written as characters in `coop_hud.c` and turned into RGBA 5551 textures at
+the first registration. Faces and digits are the game's.
+
+**How it is drawn.** The scene load (`func_8023D0F8`) registers the story HUD
+(`func_8022A328(func_80242270, 0x3F, 1, 0, 0)`, flags |= 0x210) only when the
+story session block's flags (+0, US 0x802AC610) have neither 0x2 nor 0x4. A
+hook right after that call (0x8023D694) registers, in a co-op game
+(`coop_p2_slot()`), a second draw object the same way with
+`coop_hud_draw`; the stage teardown (`func_8023D8A0`) frees it with
+`func_8022A1E8` at 0x8023D9C0, where it frees the story HUD. Draw objects
+come from the game's pool of 160 (0x50 bytes each, `D_800A0D00`); one of kind
+1 is called as `draw(object, &gfx)` once a frame. Each frame the callback
+reads the two players' records and draws, on a row at y 44–62 (the clock and
+gems row is 22–40):
+
+- player 1's corner from x 28 (under the clock), anchored to the left edge,
+  player 2's ending at x 292 (under the gem count), anchored to the right
+  edge, as upstream's widescreen patch of `func_80242270` anchors the clock
+  and the gems;
+- the face: white (0) for player 1, black (2) for player 2, who wears slot
+  1's model (0x4B); + 8, the crossed eyes, for a slot that is out
+  (controlType 3) or a ghost (bit 0x200 of +0x68), as the battle HUD
+  `func_80241BB0` tells them;
+- a heart and the hearts (+0x14), a bomb and the bombs (+0x1C), a flame and
+  the fire (+0x20), each count in the clock's digits, two digits from 10 (99
+  at most); the bomb red with red bombs (bit 0x1 of the bomb type, +0x18, as
+  upstream's cheats name it), and a remote icon at the end with remote bombs
+  (0x2).
+
+A corner shows while its slot is a player (controlType not 0; player 2's from
+the room's init, before it has joined); nothing draws while the story HUD
+object is hidden (its flag 0x1). The callback only reads game state; the
+draw object comes from the game's pool, the same on both machines, so the
+lockstep's hash is not touched. Nothing in it depends on which machine it
+runs on. It logs what a corner shows whenever that changes: `coop: hud on
+p2=4` at the registration, `coop: hud slot=S corner=left|right x=… y=44
+face=F hearts=H bombs=B fire=F type=0x…` (x in the 320-wide screen before
+the anchoring), `coop: hud slot=S hidden`, `coop: hud off` at the teardown;
+with `BM64_COOP_LOG_PLAYERS=1` the hook also logs `coop: story hud` for every
+registration of the story HUD, co-op or not.
+
+**The warp has no HUD.** `BM64_COOP_WARP` starts its session while the
+title is in its logos phase. Leaving that phase, the title's event handler
+calls `func_80297ADC`, the attract demo's start, which sets 0x4 and 0x8 of
+the session block's flags and starts the demo's process (read). In a warp
+run the flags were 0xC at the scene load (logged at 0x8023D650 in a test
+build), so no story HUD is registered; read, not seen: the stage title card
+is skipped too (`func_8023C374` tests the same 0x2 and 0x4). The HUD scenarios therefore go in through the menus, as
+`title-menu` does, into file 0 of `save-file`'s save and the world map
+(flags 0), then a `scene` step to room 0x29 (entry 0x13). A scene step from
+the world map leaves the world map's own sprites on the screen (its *World
+Select* box, the play time and the world's name, seen in a capture over room
+0x29); pressing A on the world map, the game's way, does not.
+
+Runs (Europe, scenarios):
+
+- `hud-corners`: player 1's corner (face 0, hearts 1, bombs 2, fire 2,
+  x 28) and player 2's (face 2, x 188); a `hearts` step to 1 shows in its
+  corner; player 2 downed by its own bomb shows face 10; a stage start (room
+  0x2D) frees and registers the HUD again, and the revive brings face 2 back.
+- `hud-solo`: the same way in without player 2: the story HUD is
+  registered, no `coop: hud` line.
+- `session-hud`: the menus and the scene step in both games of an online
+  session on one machine: both show the same corners (player 1 left, player 2
+  right), player 1 downed shows face 8 in both, the same hashes on all 2018
+  frames, no desync.
+
+Looked at (headless gamescope screenshots of runs, kept in their run
+folders): at 640×480 (4:3) and at 854×480 with the game's aspect ratio set
+to *Expand* the two corners sit under the clock and the gems, at the screen's
+edges at 16:9; player 2's dead face; the red bomb and the remote icon with
+upstream's red- and remote-bomb cheats on; room 0x28's tutorial dialogue box
+sits at the bottom of the screen, clear of the corners.
+
+Not run or not covered: the US build; two PCs; a real display and hand play
+(sizes and colours by the owner's eye); Windows; bosses, rival stages and the
+three rooms that never call `func_80245CDC` (whether the story HUD shows
+there was not checked, and the co-op HUD follows it); the pause menu and
+cutscenes beyond room 0x28's dialogue. At 4:3 the two corners would touch
+only with two-digit counts in both and the remote icon on both (counts from
+10 come from upstream's max cheats, which set player 1's).
 
 ## Open questions for a running build
 

@@ -11,7 +11,7 @@
 #check log ^coop: place slot=1 tile=
 #check field start 0 flags = 0
 #check field start 1 controlType = 1
-#check near start 0 1 150 50
+#check near start 0 1 200 50
 # the same stick moves both players the same way (camera-relative): down is
 # +x, right is -z in this room's camera
 #check delta down-0 down-1 0 x > 50

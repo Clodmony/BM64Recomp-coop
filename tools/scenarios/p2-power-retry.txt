@@ -1,0 +1,69 @@
+# Player 2 keeps its power-ups through a retry (#52), as player 1 keeps its
+# own: the story death and the room's reload reset no slot's bombs or fire
+# (read: func_8023F26C and func_8023D0F8 write none; player 1 loses only its
+# remote bombs, func_80277DF4, which is #24). Player 2 picks up the bomb-up of
+# p2-power-rooms (seed 3: 3 bombs), its own bombs down it (a ghost, #22),
+# then player 1's own bomb kills it: the story death, and room 0x29 reloads.
+# Player 2 comes back with 3 bombs. Before #52 the reload's init set them to
+# player 1's 2.
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_P2=4
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_SEED=3
+#check field got 4 bombs = 3
+#check after "^coop: probe got$" "^coop: down slot=4 cause=1 lives=2 ghost$"
+#check field down 4 bombs = 3
+#check after "^coop: probe down$" "^coop: death slot=0 cause="
+#check not-after "^coop: probe down$" "^coop: down slot=0"
+#check after "^coop: death slot=0" "^coop: stage init overlay=0x29 slot=4 controlType=2 hearts=2 bombs=3 fire=2$"
+#check field retry 4 bombs = 3
+#check field retry 4 ghost = 0
+#check field retry 0 bombs = 2
+overlay 0x29
+wait 320
+probe joined
+# player 2 to tile 7,15, beside the block on 7,16
+pad 1 - 0.05 -1
+wait 24
+pad 1 -
+wait 5
+pad 1 - -1 0.05
+wait 40
+pad 1 -
+wait 10
+probe at-block
+# player 1 out of the blast's reach (5,11), then player 2's bomb, and away
+pad 0 - 1 0.05
+wait 36
+pad 0 -
+pad 1 A
+wait 2
+pad 1 -
+pad 1 - 1 0.05
+wait 36
+pad 1 -
+wait 200
+probe boom
+# player 2 back along x=7 onto the bomb-up the block left
+pad 1 - -1 0.05
+wait 48
+pad 1 -
+wait 10
+probe got
+pad 1 A
+wait 2
+pad 1 -
+wait 400
+pad 1 A
+wait 2
+pad 1 -
+wait 400
+probe down
+pad 0 A
+wait 2
+pad 0 -
+wait 200
+overlay 0x29
+wait 300
+probe retry
+end
