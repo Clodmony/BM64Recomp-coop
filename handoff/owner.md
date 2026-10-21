@@ -6,8 +6,41 @@ each issue found, the decisions taken in those sessions and the cleanup still
 to approve. Decisions that bind both people are also listed in `HANDOFF.md`,
 *Project decisions*.
 
-Last updated 2026-10-21 (#88 merged without review, the owner's exception; #84 reviewed twice and merged).
-with enemies; #84 reviewed twice and merged).
+Last updated 2026-10-21 (#87: records and replays of a session, draft pull request #90).
+
+## #87: each side records the session, one game replays it (2026-10-21)
+
+- Taken in the place of #78, which the collaborator works on (owner's word).
+  Branch `coop/87-session-replay`, draft pull request #90, **part of #87**:
+  the record and the replay are built and tested on one machine; what they
+  show on a real playtest is #87's next step. Worktree
+  `~/dev-scratch/BM64Recomp-coop/wt/87-session-replay`, build folders
+  `build/87-session-replay-eu` and `build/87-session-replay-win-eu` (the
+  Windows build, cross-compiled), scratch `i87/` (logs of the red and green
+  runs, the PR body).
+- **The record:** `coop-logs/<time>-host.replay` (or `-client.replay`) in
+  each side's app folder: seed, delay, build, the starting save (128 KiB),
+  then 68 bytes a frame (both pads with the camera angles, this side's hash
+  and parts), flushed each frame. Always on; protocol stays 6. The
+  pre-commit hook refuses `.replay` (it holds a save).
+- **The replay:** `BM64_COOP_REPLAY=<file>` (building.md, *Replaying a
+  session's record*): plays the record alone from the first pad read, on a
+  copy of its save, and logs `coop: replay desync … parts=…` at the first
+  differing frame and `coop: replay end frames=N desyncs=D camera=C`.
+  `BM64_COOP_CAMERA` picks the other side's camera. A warp or a harness step
+  is outside the record (scenario.py's `#replay` passes the side's env and
+  script; a playtest has none).
+- Runs (Europe, Linux): `session-camera-turn` (three replays),
+  `session-enemy-cameras` (3676 frames, enemies, deaths, a retry) both
+  `desyncs=0 camera=0`; `session-replay-desync` finds the tile step it was
+  given at its frame (`parts=players`). Red before: 9 of 44 failed. The
+  Windows build in Wine as host or client: its records replay on Linux, and
+  Linux's on it, `desyncs=0` in all six replays. Not run: native Windows, a
+  playtest's record, US.
+- **Next with it:** the next playtest's two `.replay` files (the client's
+  copied over by hand) replayed on one machine, each with its own and the
+  other side's camera: which side's hashes the Linux build reproduces says
+  whether a machine computed differently (#87's *What that answers*).
 
 ## #72 and #73: the two approved pull requests merged (2026-10-21)
 

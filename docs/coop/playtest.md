@@ -106,6 +106,16 @@ folder:
 
 Nothing else is sent, and only to the PC you connect to. Note what you did
 when something went wrong, and the time.
+
+**Each game also records the session** (#87), and keeps the record on its
+own PC: `coop-logs/<time>-host.replay` on the host,
+`coop-logs/<time>-client.replay` on the other PC (about 2 MB for ten
+minutes). It holds both players' pads and cameras for every frame and the
+save you started from, so one PC can play the whole session again and see
+where the two games parted (building.md, *Replaying a session's record*).
+After a desync, copy the other PC's `.replay` file over by hand, with the
+logs; the game does not send it. A record holds a copy of the save, which is
+game data: keep it between the two of you, never in a GitHub issue.
 `python3 -I tools/compare_logs.py <host coop.log> <other coop.log>` reads the
 two side by side and says whether the two games agreed (building.md,
 *Comparing the logs of two machines*). In the logs, look for:

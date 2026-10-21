@@ -1405,6 +1405,76 @@ real link; a real Windows PC, and so the build without a console, which
 writes straight to `coop.log` as since #29; macOS (the POSIX code of Linux,
 not compiled).
 
+### Records and replays (#87)
+
+A desync between two PCs could only be guessed at on one: the logs hold what
+the games printed, not the inputs both played on (#75's playtest desync came
+at frame 29390, about ten minutes in). So **each side records the session**
+and one game can **play a record again**, alone, and compare its state with
+the recorded one on every frame (`session.cpp`; how to run one:
+[building.md](building.md), *Replaying a session's record*).
+
+**The record.** `coop-logs/<time>-host.replay` on the host,
+`<time>-client.replay` on the client, in the app folder next to the other
+side's streamed log (the same `<time>`). Its head holds the record format,
+the protocol, the role, the game, the delay, the seed, the build identity and
+the save the session started from (the host's file as sent, the client's
+copy of it as received: the same bytes). Then one entry of 68 bytes per
+frame from frame 0, written and flushed in the lockstep's step, so a crash
+or a lost session keeps every frame played: the frame, both pads as the game
+read them in that frame (buttons, the stick's float bits, and the camera
+angles sent with each pad, which turn that player's stick, #33) and this
+machine's hash after the frame with its five parts (#75). Frames below the
+delay hold zero pads, as the game played them. Measured: a record of 3676
+frames is 381064 bytes (the 128 KiB save once, 68 bytes a frame). Nothing on
+the wire changed, so the **protocol stays 6**.
+
+**The replay** (`BM64_COOP_REPLAY=<file>`) starts where a session connects,
+at the game's first pad read: it reads the record whole, refuses one of
+another format or the other game, writes its save to
+`saves/coop-replay/<game id>.bin` and plays on that copy (the game's own save
+file is never written, as the client's in a session), and takes the
+record's seed and delay. From there the game sees what it saw in the
+session: pads 0 and 1 are the recorded pads, pads 2 and 3 are not connected,
+`coop_session_view` turns each player's stick by the recorded camera, and
+the switches that test for a session say so (player 2 in slot 4, no intro
+skip and no hint, the camera following player 2 for a client's record,
+`BM64_COOP_CAMERA` the other side's). At the end of each frame it compares
+its hash with the record's (`coop: replay desync frame=… local=…
+recorded=… parts=…` and its `coop: snapshot` lines at the first one that
+differs, a count every 600 frames), and its camera's yaw and pitch with
+those the camera it follows sent with that frame + delay's pad (`coop:
+replay camera …` at the first that differs). After the last recorded frame
+`coop: replay end frames=N desyncs=D camera=C`, and the game reads the
+local pads again. A record of another build identity plays, with both
+numbers in its first line.
+
+A record holds the lockstep's inputs only. What a run did outside them, a
+warp (`BM64_COOP_WARP`) or a harness step, must be given to the replay again;
+`tools/scenario.py`'s `#replay` passes the side's environment and script. A
+playtest has none of those.
+
+Run (Europe, 2026-10-21, Linux, games on one machine, `tools/scenario.py`):
+
+| Scenario | What it showed |
+|---|---|
+| `session-camera-turn` | both sides write their record (`coop: session record coop-logs/…`). The host's (678 frames) replayed with its camera, the client's (677) with its own (it follows player 2) and the host's with the client's camera (`BM64_COOP_CAMERA=4`): `desyncs=0 camera=0` each; the replays' cameras end at the yaw the camera they follow had (135 the host's, 45 the client's) and the players walk by the recorded cameras |
+| `session-enemy-cameras` | the host's record of 3676 frames (enemies spawning and aiming, both players' deaths, player 1's retry and the room's reload, player 2 put back by tile steps of the host's script): `desyncs=0 camera=0` |
+| `session-replay-desync` | the host's record of 466 frames, replayed with a tile step the session did not have: `desync frame=365 … parts=players` in the frame of the step, the snapshot with player 1 at x=600, then `desyncs=101` (every frame after it), the record played to its end |
+
+Red on the build before (the same three scenarios): 9 of 44 checks failed
+(no record, so nothing to replay).
+
+The Windows build (cross-compiled, in Wine on the same machine),
+`session-camera-turn` twice: as the client of the Linux build, its record
+replayed by the Linux build; and as the host, with the Linux build as the
+client, both records and the host's with the client's camera replayed by the
+Windows build. 42/42 checks each, `desyncs=0 camera=0` in all six replays: a
+record plays to the same hashes on the other platform's build.
+
+Not run: a record of a playtest on two PCs; a replay on native Windows (Wine
+uses its own `ucrtbase`, #75); the US build.
+
 ### Not done
 
 - (#29) The Windows build (cross-compiled, building.md, *The Windows

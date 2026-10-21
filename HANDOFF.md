@@ -74,7 +74,7 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 | Issue | Person | Branch | State |
 |-------|--------|--------|-------|
 | #75 (the playtest's desync with enemies, Linux against Windows) | owner | `coop/75-enemy-desync` (merged) | pull request #88 **merged** 2026-10-21 (owner's one-off exception, no review), part of #75: the state hash covers the enemies, a desync names the parts that differ and both sides log their values of that frame (`coop: snapshot`), `compare_logs.py` shows them side by side; the random generator hashed at its real address. Not reproduced on one machine (ten sessions, Linux and Wine, enemies, cameras apart). Next (owner, 2026-10-21): the next playtest with a kit from `bm64recomp-coop` (#88 is in), then #87 (replay) |
-| #87 (record the agreed pads, so a desync can be replayed on one machine) | owner | `coop/87-session-replay` | taken 2026-10-21 (owner's word), in the place of #78 |
+| #87 (record the agreed pads, so a desync can be replayed on one machine) | owner | `coop/87-session-replay` | draft pull request **#90**, part of #87, waits for the collaborator's review: each side writes `coop-logs/<time>-<role>.replay` (seed, save, both pads and cameras, its hash every frame), `BM64_COOP_REPLAY=<file>` plays one alone and names the first frame that differs (building.md, *Replaying a session's record*). Verify 10/10, 621/621; Windows build in Wine replays and is replayed, `desyncs=0`. Next: the next playtest's two records replayed on one machine |
 | #78 (a downed player plays no death animation) | collaborator | not pushed yet | the collaborator works on the death animation (owner, 2026-10-21); assign yourself on GitHub when you start |
 
 ## Project decisions (bind both people)
@@ -139,7 +139,9 @@ A shared pool: take one by claiming it under *In progress*.
    afterwards both `coop.log` files, which `tools/compare_logs.py` reads side
    by side. What breaks becomes an issue (a desync line first). #67 is
    answered and merged (#73), and #88 is merged (2026-10-21), so the kit
-   can be built from `bm64recomp-coop`; nothing blocks it.
+   can be built from `bm64recomp-coop`; nothing blocks it. With #90 (#87)
+   merged first, each PC also keeps a `.replay` record of the session:
+   copy the other's over by hand after a desync (playtest.md).
 2. ~~**#71**~~ (the scenario stage takes about 13 minutes): done by the
    collaborator, **merged** 2026-10-21 (#72). The stage runs in lanes, about
    3 minutes instead of 12; `--jobs N` raises the count.

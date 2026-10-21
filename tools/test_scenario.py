@@ -37,20 +37,26 @@ END = ["coop: input end"]
 
 class FakeRuns:
     """Stands in for tools/run.sh: each run gets a folder with the game.log
-    given for its script (by file name; a session's client by "client")."""
+    given for its script (by file name; a session's client by "client", a
+    replay by its run name, "replay-NAME"). A session's two sides leave a
+    record in coop-logs/ (#87). `cmds` keeps each run's command by name."""
 
     def __init__(self, logs, folder):
-        self.logs, self.folder, self.count = logs, folder, 0
+        self.logs, self.folder, self.count, self.cmds = logs, folder, 0, {}
 
     def _run(self, cmd):
         name = cmd[cmd.index("--name") + 1] if "--name" in cmd else None
         script = Path(cmd[cmd.index("--input") + 1]).stem
-        log = self.logs.get("client" if name == "client" else script)
+        log = self.logs.get(name if name == "client" or (name or "").startswith("replay-") else script)
         self.count += 1
         run = self.folder / f"run{self.count}"
         run.mkdir()
+        self.cmds[name or script] = cmd
         if log is not None:
             (run / "game.log").write_text("\n".join(log) + "\n")
+        if name in ("host", "client"):
+            (run / "coop-logs").mkdir()
+            (run / "coop-logs" / f"20261021-120000-{name}.replay").write_bytes(b"CREC")
         return f"run eu: \"coop: input end\" logged after 1.0 s; overlays: 0x20; folder {run}\n"
 
     def run(self, cmd, **_):
@@ -75,7 +81,7 @@ class ScenarioTest(unittest.TestCase):
     def main(self, logs, *scenarios):
         """scenario.py's main on the scenarios, with fake runs: (exit
         status, output)."""
-        fake = FakeRuns(logs, self.folder)
+        fake = self.fake = FakeRuns(logs, self.folder)
         out = io.StringIO()
         argv = ["scenario.py", "--version", "eu", *scenarios]
         with mock.patch.object(sys, "argv", argv), \
@@ -138,6 +144,34 @@ class ScenarioTest(unittest.TestCase):
         self.assertIn("FAILED client: log line parses  (coop: hash frame=2 hash=0000coop: overlay 0x29)", out)
         self.assertIn("ok     same-hashes  (2 frames)", out)
         self.assertIn("ok     client: log ^coop: input end$", out)
+
+    def test_session_replays_each_sides_record(self):
+        # #87: a replay plays that side's record with that side's script and
+        # environment, and its own besides, until the replay's end
+        path = self.scenario("session", "#session\n#env BM64_COOP_WARP=0x29\n#env-client BM64_COOP_CAMERA=4\n"
+                             "#client wait 1\n#replay own host BM64_COOP_LOG_STATE=1\n#replay other client\n"
+                             "#check-replay own log ^coop: replay end frames=3 desyncs=0\n"
+                             "#check-replay other log ^coop: replay end\n#check-replay nobody log x\n")
+        status, out = self.main({"session": END, "client": END,
+                                 "replay-own": ["coop: replay end frames=3 desyncs=0 camera=0"]}, path)
+        self.assertEqual(status, 1, out)
+        self.assertIn("ok     replay own: log ^coop: replay end frames=3 desyncs=0", out)
+        self.assertIn("FAILED replay other: run  (no game.log", out)
+        self.assertIn("FAILED #check-replay nobody  (no #replay of that name)", out)
+        own, other = self.fake.cmds["replay-own"], self.fake.cmds["replay-other"]
+        self.assertEqual(own[own.index("--until-log") + 1], "coop: replay end")
+        self.assertEqual(own[own.index("--input") + 1], path)
+        self.assertRegex(other[other.index("--input") + 1], r"\.session-client-\d+\.txt$")
+        envs = lambda cmd: [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "--env"]
+        self.assertIn("BM64_COOP_WARP=0x29", envs(own))
+        self.assertIn("BM64_COOP_LOG_STATE=1", envs(own))
+        self.assertNotIn("BM64_COOP_CAMERA=4", envs(own))
+        self.assertIn("BM64_COOP_CAMERA=4", envs(other))
+        self.assertFalse(any(env.startswith("BM64_COOP_SESSION=") for env in envs(own) + envs(other)))
+        self.assertRegex(next(e for e in envs(own) if e.startswith("BM64_COOP_REPLAY=")),
+                         r"/run1/coop-logs/20261021-120000-host\.replay$")
+        self.assertRegex(next(e for e in envs(other) if e.startswith("BM64_COOP_REPLAY=")),
+                         r"/run2/coop-logs/20261021-120000-client\.replay$")
 
     def test_run_without_game_log_fails_and_the_next_scenario_runs(self):
         first = self.scenario("nolog", "#check log ^coop: input end$\n")

@@ -10,14 +10,15 @@ fail() {
 	echo "$1" >&2
 	echo "" >&2
 	echo "BM64Recomp needs the owner's own ROM. Keep ROMs, decompressed ROMs," >&2
-	echo "saves and captures outside the repository." >&2
+	echo "saves, session records (.replay, which hold a save) and captures outside" >&2
+	echo "the repository." >&2
 	exit 1
 }
 
 staged=$(git diff --cached --name-only --diff-filter=AM)
 [ -z "$staged" ] && exit 0
 
-blocked=$(printf '%s\n' "$staged" | grep -Ei '\.(z64|n64|v64|rom|eep|sra|fla|mpk|sav|srm)$' || true)
+blocked=$(printf '%s\n' "$staged" | grep -Ei '\.(z64|n64|v64|rom|eep|sra|fla|mpk|sav|srm|replay)$' || true)
 [ -n "$blocked" ] && fail "  blocked by extension:
 $(printf '%s\n' "$blocked" | sed 's/^/    /')"
 
