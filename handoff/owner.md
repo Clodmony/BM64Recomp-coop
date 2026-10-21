@@ -50,9 +50,16 @@ No issue of its own: this session only resolved and merged them, in the order
   file git tracks". The review called it not blocking; `git ls-files patches`
   would match the comment.
 - Branches `coop/71-fast-scenarios` and `coop/67-build-identity` deleted
-  (local and remote), the `67-build-identity` worktree removed. Its build
-  folder `build/67-build-identity-eu` (168 MB) and the two verify folders are
-  still there.
+  (local and remote), the `67-build-identity` worktree removed, and with the
+  owner's word its build folder and both verify folders deleted too — their
+  numbers are in the merge commits, in this note and in the two pull request
+  comments.
+- **Owner decisions (end of this session, 2026-10-21):** both pull requests
+  carry a comment saying how their conflicts were resolved and with which
+  verify numbers, so the collaborator reads it where they wrote them; the
+  **next session takes #78** (a downed player plays no death animation);
+  #72's and #73's scratch deleted, the `77-skip-intro` worktree and the four
+  stale local branches left standing for now.
 
 ## #75: the playtest's desync with enemies (2026-10-20/21)
 
@@ -393,10 +400,6 @@ main checkout. The issue worktrees and their build folders are removed.
   when the player 2 follow-ups are done (#75 used them; `i22/` is gone).
 - When #88 is merged: the worktree `wt/75-enemy-desync` and its build
   folders `build/75-enemy-desync-eu` and `build/75-enemy-desync-win-eu`.
-- From #72 and #73 (2026-10-21), nothing points at them any more: the build
-  folder `build/67-build-identity-eu` (168 MB) and the verify folders
-  `verify/20261021-203717` and `verify/20261021-204655` (their numbers are in
-  the merge commits and in the note above).
 - Since #84 is merged: the worktree `wt/77-skip-intro` and its build folder
   `build/77-skip-intro-eu` (the collaborator's note kept them for a further
   review point, which did not come).

@@ -111,7 +111,8 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 
 A shared pool: take one by claiming it under *In progress*.
 
-0. **New playtest findings (collaborator, 2026-10-20), nobody on them:**
+0. **New playtest findings (collaborator, 2026-10-20); #78 is next (owner,
+   2026-10-21), nobody on it yet:**
    **#78** a downed player plays no death animation (a consequence of #22:
    the story death path is skipped whole, so the animation goes with it; it
    needs a decision on how the animation runs on the dying actor, since the
