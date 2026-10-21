@@ -6,7 +6,7 @@ each issue found, the decisions taken in those sessions and the cleanup still
 to approve. Decisions that bind both people are also listed in `HANDOFF.md`,
 *Project decisions*.
 
-Last updated 2026-10-21 (#72 and #73 resolved and merged; #75: the desync
+Last updated 2026-10-21 (#88 merged without review, the owner's exception; #84 reviewed twice and merged).
 with enemies; #84 reviewed twice and merged).
 
 ## #72 and #73: the two approved pull requests merged (2026-10-21)
@@ -64,7 +64,12 @@ No issue of its own: this session only resolved and merged them, in the order
 ## #75: the playtest's desync with enemies (2026-10-20/21)
 
 - Branch `coop/75-enemy-desync` (rebased onto `bm64recomp-coop` after #74),
-  draft PR #88, **part of #75, not closing it**. Worktree
+  PR #88, **part of #75, not closing it**. **Merged 2026-10-21 without the
+  collaborator's review** (owner's one-off exception, like #50, so the next
+  playtest's kit comes from `bm64recomp-coop`): `bm64recomp-coop` (#72, #73,
+  #84) merged into the branch first, one conflict (#73's build-identity
+  comment in `session.cpp`), protocol stays 6; verify on that merge 10/10
+  stages, 588/588 checks. Worktree
   `~/dev-scratch/BM64Recomp-coop/wt/75-enemy-desync`, build folders
   `build/75-enemy-desync-eu` and `build/75-enemy-desync-win-eu` (the
   Windows build of the branch, cross-compiled).

@@ -50,8 +50,10 @@ Last updated 2026-10-19 (#47: notes split for two people).
   #58 (the collaborator's setup) is done and merged.
   The owner's last step of #47 is done: the collaborator has write access on
   the fork (checked 2026-10-20).
-- Open pull requests: **#88** (#75, the owner's, the state hash covers the
-  enemies) waits for the collaborator's review. The collaborator's **#72**
+- Open pull requests: none. **#88** (#75, the owner's, the state hash
+  covers the enemies) is **merged** 2026-10-21 **without the collaborator's
+  review** (owner's one-off exception, like #50), verify 10/10 and 588/588 on
+  the merge; a review after the fact is welcome. The collaborator's **#72**
   (#71) and **#73** (#67) are **merged** (2026-10-21, owner's session): both
   were approved and then stuck on conflicts with `bm64recomp-coop`; the
   conflicts were resolved as their reviews asked (#46's guard around
@@ -71,7 +73,7 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 
 | Issue | Person | Branch | State |
 |-------|--------|--------|-------|
-| #75 (the playtest's desync with enemies, Linux against Windows) | owner | `coop/75-enemy-desync` | draft pull request #88, part of #75: the state hash covers the enemies, a desync names the parts that differ and both sides log their values of that frame (`coop: snapshot`), `compare_logs.py` shows them side by side; the random generator hashed at its real address. Not reproduced on one machine (ten sessions, Linux and Wine, enemies, cameras apart). Next (owner, 2026-10-21): the next playtest with a kit from `bm64recomp-coop` once #88 is merged, then #87 (replay); review requested from the collaborator |
+| #75 (the playtest's desync with enemies, Linux against Windows) | owner | `coop/75-enemy-desync` (merged) | pull request #88 **merged** 2026-10-21 (owner's one-off exception, no review), part of #75: the state hash covers the enemies, a desync names the parts that differ and both sides log their values of that frame (`coop: snapshot`), `compare_logs.py` shows them side by side; the random generator hashed at its real address. Not reproduced on one machine (ten sessions, Linux and Wine, enemies, cameras apart). Next (owner, 2026-10-21): the next playtest with a kit from `bm64recomp-coop` (#88 is in), then #87 (replay) |
 
 ## Project decisions (bind both people)
 
@@ -134,8 +136,8 @@ A shared pool: take one by claiming it under *In progress*.
    kit from `tools/playtest-kit.sh`, guide in `docs/coop/playtest.md`;
    afterwards both `coop.log` files, which `tools/compare_logs.py` reads side
    by side. What breaks becomes an issue (a desync line first). #67 is
-   answered and merged (#73), so nothing blocks it from this side; the owner
-   waits on #88's merge for the kit.
+   answered and merged (#73), and #88 is merged (2026-10-21), so the kit
+   can be built from `bm64recomp-coop`; nothing blocks it.
 2. ~~**#71**~~ (the scenario stage takes about 13 minutes): done by the
    collaborator, **merged** 2026-10-21 (#72). The stage runs in lanes, about
    3 minutes instead of 12; `--jobs N` raises the count.
