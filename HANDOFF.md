@@ -74,6 +74,8 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 | Issue | Person | Branch | State |
 |-------|--------|--------|-------|
 | #75 (the playtest's desync with enemies, Linux against Windows) | owner | `coop/75-enemy-desync` (merged) | pull request #88 **merged** 2026-10-21 (owner's one-off exception, no review), part of #75: the state hash covers the enemies, a desync names the parts that differ and both sides log their values of that frame (`coop: snapshot`), `compare_logs.py` shows them side by side; the random generator hashed at its real address. Not reproduced on one machine (ten sessions, Linux and Wine, enemies, cameras apart). Next (owner, 2026-10-21): the next playtest with a kit from `bm64recomp-coop` (#88 is in), then #87 (replay) |
+| #87 (record the agreed pads, so a desync can be replayed on one machine) | owner | `coop/87-session-replay` | taken 2026-10-21 (owner's word), in the place of #78 |
+| #78 (a downed player plays no death animation) | collaborator | not pushed yet | the collaborator works on the death animation (owner, 2026-10-21); assign yourself on GitHub when you start |
 
 ## Project decisions (bind both people)
 
@@ -113,8 +115,8 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 
 A shared pool: take one by claiming it under *In progress*.
 
-0. **New playtest findings (collaborator, 2026-10-20); #78 is next (owner,
-   2026-10-21), nobody on it yet:**
+0. **New playtest findings (collaborator, 2026-10-20); #78 is the
+   collaborator's (owner, 2026-10-21), see *In progress*:**
    **#78** a downed player plays no death animation (a consequence of #22:
    the story death path is skipped whole, so the animation goes with it; it
    needs a decision on how the animation runs on the dying actor, since the
