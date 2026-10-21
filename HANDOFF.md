@@ -54,9 +54,10 @@ Last updated 2026-10-19 (#47: notes split for two people).
   scenarios in parallel) and **#73** (#67, the build identity from the
   patches' sources), both **approved by the owner** but **conflicting** with
   `bm64recomp-coop` since #74 and #59 went in — they need their conflicts
-  resolved before they can be merged, each review says how; and **#84** (#77,
-  Z skips the story intro), whose requested changes are **done and pushed**
-  (2026-10-21), review asked for again. #65 (#63) and #68 (#29) are merged.
+  resolved before they can be merged, each review says how. **#84** (#77,
+  Z skips the story intro, with PRESS Z TO SKIP on screen) is merged
+  (2026-10-21, after the owner's second review). #65 (#63) and #68 (#29)
+  are merged.
   #58's (#64) was
   merged 2026-10-19 by the owner. #50 (#22, downed players are ghosts) merged 2026-10-19
   without a review (owner's one-off exception).

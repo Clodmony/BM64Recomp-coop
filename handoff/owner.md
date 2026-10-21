@@ -6,7 +6,7 @@ each issue found, the decisions taken in those sessions and the cleanup still
 to approve. Decisions that bind both people are also listed in `HANDOFF.md`,
 *Project decisions*.
 
-Last updated 2026-10-21 (#75: the desync with enemies, and the review of #84).
+Last updated 2026-10-21 (#75: the desync with enemies; #84 reviewed twice and merged).
 
 ## #75: the playtest's desync with enemies (2026-10-20/21)
 
@@ -49,6 +49,14 @@ Last updated 2026-10-21 (#75: the desync with enemies, and the review of #84).
   0x88 bytes before it (read, not run). The rest approved; the merged
   result ran 8/8 stages and 20/20 checks here.
 - **Owner decision:** Z stays always on (not behind a switch).
+- **Second review, approved and merged** (2026-10-21, the owner's word:
+  check and merge). The collaborator solved the save file by acting only in
+  a picked file's opening cutscene with the `scene` step (`coop: file
+  current=0`), and added PRESS Z TO SKIP on screen. Checked here: the hint's
+  free cannot free twice (the pool is set up once at boot, the game's free
+  zeroes +0x3C); the merge at `f5c7fd5` ran 9/9 stages, 576/576 checks; a
+  local capture shows the hint over the cutscene. One non-blocking doc nit
+  in the review (when the hint goes away).
 
 ## #22: downed players are ghosts (2026-10-19)
 
