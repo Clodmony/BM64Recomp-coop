@@ -78,6 +78,23 @@ header lines besides:
 Both logs are cut at their "coop: input end": once one game is stopped the
 other loses the session. Both scripts should end at the same frame.
 
+A session scenario can replay a side's record of the session (#87,
+BM64_COOP_REPLAY) afterwards, in a game of its own that runs until "coop:
+replay end", with the scenario's #env, that side's #env-host or #env-client
+and that side's script: the game reads its pads from the record, but the
+script's other steps (a probe, a tile step) are outside the lockstep and run
+in the replay too.
+
+    #replay NAME SIDE [NAME=VALUE]...
+                                 a replay called NAME of SIDE's record (host
+                                 or client), with that environment besides
+                                 (e.g. BM64_COOP_CAMERA=4); repeatable, the
+                                 replays run at once
+    #replay-step STEP            a step of the replays' script, in place of
+                                 the side's (e.g. a tile step the session did
+                                 not have)
+    #check-replay NAME CHECK     a check on replay NAME's log
+
 SCENARIO is a file or a name in tools/scenarios/ (without .txt). Each runs
 with tools/run.sh --input SCENARIO --until-log "coop: input end" in its own
 run folder under ~/dev-scratch/BM64Recomp-coop/runs/. The result is one line
@@ -264,8 +281,8 @@ def check(text, lines, probes, folder=None):
 EXES = {}  # the executable of "host" (any game but a session's client) and "client"
 
 
-def run_cmd(script, version, timeout, envs, name=None, saves=None, prev_log=None):
-    cmd = [str(ROOT / "tools/run.sh"), "--input", str(script), "--until-log", "coop: input end",
+def run_cmd(script, version, timeout, envs, name=None, saves=None, prev_log=None, until="coop: input end"):
+    cmd = [str(ROOT / "tools/run.sh"), "--input", str(script), "--until-log", until,
            "--timeout", str(timeout)]
     exe = EXES.get("client" if name == "client" else "host")
     if exe:
@@ -370,11 +387,49 @@ def scenario_path(name):
     return path if path.is_file() else ROOT / "tools/scenarios" / f"{name}.txt"
 
 
+def run_replays(path, version, timeout, envs, sides, replays, steps, checks, extra_envs, port, said):
+    """A session scenario's replays (#87), all at once: each plays a side's
+    record (coop-logs/*-<side>.replay in that side's run folder) in a game
+    of its own with that side's script, or the #replay-step lines, until
+    "coop: replay end". `sides` holds each side's envs, run folders and
+    script. Their results, each named "replay NAME: ..."."""
+    results, procs = [], []
+    own_script = None
+    if steps:
+        own_script = Path.home() / f"dev-scratch/BM64Recomp-coop/runs/.{path.stem}-replay-{port}.txt"
+        own_script.write_text("\n".join(steps) + "\n")
+    for name, (side, own_envs) in replays.items():
+        if side not in sides:
+            results.append((False, f"replay {name}", f"no side {side} (host or client)"))
+            continue
+        side_envs, side_dirs, side_script = sides[side]
+        records = sorted(side_dirs[0].glob(f"coop-logs/*-{side}.replay")) if side_dirs else []
+        if len(records) != 1:
+            results.append((False, f"replay {name}: record", f"{len(records)} coop-logs/*-{side}.replay files"))
+            continue
+        cmd = run_cmd(own_script or side_script, version, timeout,
+                      envs + side_envs + own_envs + [f"BM64_COOP_REPLAY={records[0]}"] + extra_envs,
+                      f"replay-{name}", until="coop: replay end")
+        procs.append((name, subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)))
+    for _, proc in procs:
+        proc.wait()
+    if own_script:
+        own_script.unlink()
+    for name, proc in procs:
+        own, ran = [], []
+        lines = read_run(proc, f"{path.stem} replay {name}", own, ran, said)
+        unparsable(lines, own)
+        run_checks(checks.get(name, []), lines, parse_probes(lines), own, folder=ran[0] if ran else None)
+        results += [(ok, f"replay {name}: {text}", detail) for ok, text, detail in own]
+    return results
+
+
 def run_scenario(path, version, timeout, extra_envs, folder=None, said=None):
     envs, checks = [], []
     session, host_envs, client_envs, client_steps, client_checks = False, [], [], [], []
     switch = "BM64_COOP_SESSION"
     saves_from, prev_logs = {}, {"host": [], "client": []}
+    replays, replay_steps, replay_checks = {}, [], {}
     for line in path.read_text().splitlines():
         if line.startswith("#env "):
             envs.append(line[5:].strip())
@@ -398,6 +453,14 @@ def run_scenario(path, version, timeout, extra_envs, folder=None, said=None):
         elif line.startswith(("#saves-host ", "#saves-client ")):
             side, _, name = line[7:].partition(" ")
             saves_from[side] = name.strip()
+        elif line.startswith("#replay "):
+            name, side, *own_envs = shlex.split(line[8:])
+            replays[name] = (side, own_envs)
+        elif line.startswith("#replay-step "):
+            replay_steps.append(line[13:].strip())
+        elif line.startswith("#check-replay "):
+            name, _, text = line[14:].strip().partition(" ")
+            replay_checks.setdefault(name, []).append(text.strip())
     results, saves = [], {}
     said, printing = (said, False) if said is not None else ([], True)
     for side, name in saves_from.items():
@@ -440,19 +503,30 @@ def run_scenario(path, version, timeout, extra_envs, folder=None, said=None):
             procs.append(subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True))
         for proc in procs:
             proc.wait()
-        client_script.unlink()
         for prev in prev_files.values():
             prev.unlink()
         host_dir, client_dir = [], []
-        host = until_end(read_run(procs[0], f"{path.stem} host", results, host_dir, said))
-        client = until_end(read_run(procs[1], f"{path.stem} client", results, client_dir, said))
-        unparsable(host, results)
-        unparsable(client, results, "client: ")
-        run_checks(checks, host, parse_probes(host), results, client, host_dir[0] if host_dir else None)
-        client_results = []
-        run_checks(client_checks, client, parse_probes(client), client_results, host,
-                   client_dir[0] if client_dir else None)
-        results += [(ok, f"client: {text}", detail) for ok, text, detail in client_results]
+        try:  # the client's script stays for the replays of its record
+            host = until_end(read_run(procs[0], f"{path.stem} host", results, host_dir, said))
+            client = until_end(read_run(procs[1], f"{path.stem} client", results, client_dir, said))
+            unparsable(host, results)
+            unparsable(client, results, "client: ")
+            run_checks(checks, host, parse_probes(host), results, client, host_dir[0] if host_dir else None)
+            client_results = []
+            run_checks(client_checks, client, parse_probes(client), client_results, host,
+                       client_dir[0] if client_dir else None)
+            results += [(ok, f"client: {text}", detail) for ok, text, detail in client_results]
+            if replays:
+                results += run_replays(path, version, timeout, envs,
+                                       {"host": (host_envs, host_dir, path),
+                                        "client": (client_envs, client_dir, client_script)},
+                                       replays, replay_steps, replay_checks, extra_envs, port, said)
+        finally:
+            client_script.unlink()
+    if replays and not session:
+        results.append((False, "#replay", "only a session scenario has a record to replay"))
+    for name in set(replay_checks) - set(replays):
+        results.append((False, f"#check-replay {name}", "no #replay of that name"))
     for ok, text, detail in results[own:]:
         said.append(f"  {'ok    ' if ok else 'FAILED'} {text}{'  (' + detail + ')' if detail else ''}")
     if printing:

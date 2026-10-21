@@ -24,6 +24,15 @@
 #check camera end yaw = 90
 #check-client camera end yaw = 45
 #
+# The host's record replayed in a game of its own (#87), with the host's
+# script (its tile steps are outside the record): the record's frames, the
+# enemies, deaths and retry included, to the record's hashes.
+#replay host host
+#check-replay host log ^coop: replay end frames=[1-9]\d{3,} desyncs=0 camera=0$
+#check-replay host log "^coop: enemy aim "
+#check-replay host log "^coop: death slot=0 "
+#check-replay host camera end yaw = 90
+#
 # The client's script first, then the host's, the same 3608 frames each.
 #client overlay 0x29
 #client wait 600

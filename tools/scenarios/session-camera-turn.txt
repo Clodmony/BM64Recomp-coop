@@ -41,6 +41,35 @@
 #check delta hostturn end 0 z < -100
 #check-client delta hostturn end 0 z < -100
 #
+# Both records of the session replayed (#87), each in a game of its own with
+# that side's script: the host's and the client's, each with that side's
+# camera, and the host's with the client's camera (BM64_COOP_CAMERA=4). All
+# three play the record's frames to the record's hashes, and each replay's
+# camera turns as the camera it follows did, on every frame (camera=0): the
+# client's to 45, the host's to 135. The players walk by the recorded
+# cameras, whichever camera the replay follows.
+#check log ^coop: session record coop-logs/\d{8}-\d{6}-host\.replay$
+#check-client log ^coop: session record coop-logs/\d{8}-\d{6}-client\.replay$
+#replay host host
+#replay client client
+#replay other host BM64_COOP_CAMERA=4
+#check-replay host log ^coop: replay of the host's record: [1-9]\d{2,} frames, seed=0x[0-9A-F]{8} delay=2 build=0x[0-9A-F]{8}$
+#check-replay host log ^coop: replay end frames=[1-9]\d{2,} desyncs=0 camera=0$
+#check-replay host no-log ^coop: replay (desync|camera)
+#check-replay host camera turned yaw = 90
+#check-replay host camera hostturn yaw = 135
+#check-replay host delta hostturn end 0 x < -100
+#check-replay client log ^coop: replay of the client's record: [1-9]\d{2,} frames, seed=0x[0-9A-F]{8} delay=2 build=0x[0-9A-F]{8}$
+#check-replay client log ^coop: replay end frames=[1-9]\d{2,} desyncs=0 camera=0$
+#check-replay client log ^coop: camera follows slot=4$
+#check-replay client camera turned yaw = 45
+#check-replay client camera hostturn yaw = 45
+#check-replay client delta turned walked2 4 x > 100
+#check-replay other log ^coop: replay end frames=[1-9]\d{2,} desyncs=0 camera=0$
+#check-replay other camera turned yaw = 45
+#check-replay other camera hostturn yaw = 45
+#check-replay other delta hostturn end 0 x < -100
+#
 # The client's script: the same frames, its pad 0 is player 2's.
 #client overlay 0x29
 #client wait 300

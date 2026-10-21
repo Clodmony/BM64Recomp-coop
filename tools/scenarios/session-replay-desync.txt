@@ -1,0 +1,32 @@
+# A replay that leaves its record notices it (#87, docs/coop/design.md,
+# *Records and replays*): the host's record of a short session, replayed
+# with a tile step the session did not have (a harness step is outside the
+# record, as it is outside the lockstep), parts from the record at that
+# frame. The replay names the part that differs, the players', logs its own
+# values of that frame (player 1 one tile, 100 units, further along x) and
+# plays the record on to its end.
+#session
+#env BM64_COOP_WARP=0x29:0x13
+#
+#check no-log ^coop: session (desync|lost|refused)
+#check-client no-log ^coop: session (desync|lost|refused)
+#check file coop-logs/*-host.replay
+#check-client file coop-logs/*-client.replay
+#replay moved host
+#check-replay moved log ^coop: tile slot=0 from=5,1,14 to=6,1,14$
+#check-replay moved log ^coop: replay desync frame=\d+ local=[0-9A-F]{8} recorded=[0-9A-F]{8} parts=players$
+#check-replay moved after "^coop: tile slot=0" "^coop: replay desync"
+#check-replay moved after "^coop: replay desync" "^coop: snapshot frame=\d+ slot=0 control=1 .* x=600\.000 "
+#check-replay moved not-after "^coop: replay desync" "^coop: replay desync"
+#check-replay moved log ^coop: replay end frames=\d+ desyncs=[1-9]\d* camera=\d+$
+#check-replay moved no-log ^coop: session
+#replay-step overlay 0x29
+#replay-step wait 300
+#replay-step tile 0 6 14
+#
+#client overlay 0x29
+#client wait 400
+#client end
+overlay 0x29
+wait 400
+end
