@@ -22,6 +22,8 @@
 //   BM64_COOP_CONNECT_TIMEOUT=<s>         wait this long for the other (60)
 //   BM64_COOP_BUILD_ID=<n>                claim build identity n (a test of
 //                                         the hello's build check)
+//   BM64_COOP_REPLAY=<file>               play a session's record in place of
+//                                         a session (#87, below)
 //
 // The connection is made at the game's first pad read (before the random
 // generator is seeded), so both machines start the game together. A session
@@ -75,6 +77,32 @@
 // of the recompiler configs of the patches and the game, which hold the hooks;
 // it is taken when configuring, so two machines whose compilers differ still
 // agree (#67, tools/build_id.py, src/coop/version.cmake).
+//
+// Each side records the session (#87): coop-logs/<time>-<host|client>.replay
+// in the app folder, written from the lockstep's start, every frame as it is
+// played, so a desync between two machines can be played again on one.
+// Little-endian:
+//
+//   head   "CREC", u16 record version (1), u16 protocol, u8 role (0 host,
+//          1 client), u8 game, u16 delay, u32 seed, u32 build, u32 save size,
+//          then the save the session started from
+//   frame  68 bytes, from frame 0 on: u32 frame, then pad 0 and pad 1 as the
+//          game read them in that frame (each u16 buttons, u16 flags (1: the
+//          camera's angles are set), f32 x, f32 y, u32 yaw, u32 pitch: the
+//          stick and the camera that turned it), u32 hash of the state after
+//          the frame and its five parts
+//
+// BM64_COOP_REPLAY=<file> plays such a record in one game, alone: from the
+// game's first pad read on, as a session would, it plays on a copy of the
+// record's save (saves/coop-replay/<game id>.bin) with the record's seed, the
+// game reads the recorded pads and each player's stick is turned by the
+// recorded camera, and every frame's hash is compared with the record's
+// ("coop: replay desync", its parts and this game's snapshot, once). The
+// camera follows the player the recording side's camera followed (a
+// client's record: player 2), BM64_COOP_CAMERA the other side's, and its
+// angles are compared with those recorded for the camera it follows ("coop:
+// replay camera", once). At the record's end, "coop: replay end frames=N
+// desyncs=D camera=C", and the game reads the local pads again.
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -87,6 +115,7 @@
 #include <deque>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <mutex>
 #include <random>
@@ -127,6 +156,8 @@ static void close_socket(socket_t s) { close(s); }
 #include "session.h"
 #include "zelda_config.h"
 
+extern "C" int32_t coop_camera_slot(void); // src/coop/harness.cpp
+
 namespace {
 
 // 5 (#57): the messages after the save got a kind and a size, for the log's
@@ -143,6 +174,10 @@ constexpr uint16_t message_log = 2;
 constexpr size_t log_per_frame = 512; // log text after each frame, at most
 constexpr size_t log_message_max = 0xFFFF;
 constexpr auto peer_timeout = std::chrono::seconds(10);
+constexpr uint16_t record_version = 1; // the record's format (#87)
+constexpr size_t record_head = 24;
+constexpr size_t record_frame_size = 68;
+constexpr size_t record_pad_size = 20;
 
 // The state the per-frame hook hands over (patches/coop_session.c,
 // CoopStateWords): the hash, its parts, then the values the snapshot lines
@@ -200,6 +235,7 @@ struct Config {
     uint32_t log_state = 0;
     int connect_timeout = 60;
     bool launcher = false; // from the launcher's menu: wait until cancelled
+    std::string replay;    // BM64_COOP_REPLAY: the record to play (#87)
 };
 
 struct Session {
@@ -222,6 +258,8 @@ struct Session {
     std::ifstream log;        // this machine's coop.log, streamed to the other (#57)
     uint64_t log_sent = 0;    // its bytes sent so far
     std::vector<uint8_t> out; // the message being sent
+    std::vector<uint8_t> save; // the save the session started from, until the record has it
+    std::ofstream record;      // this machine's record of the session (#87)
 
     // filled by the receiver thread
     std::mutex mutex;
@@ -233,6 +271,26 @@ struct Session {
 
 Session session;
 std::atomic<uint32_t> hashed_frames{0};
+
+// A frame of a record (#87): the pads the game read in it, the recording
+// machine's hash of the state after it and the hash's parts.
+struct RecordedFrame {
+    std::array<Pad, 2> pads;
+    uint32_t hash = 0;
+    std::array<uint32_t, hash_parts> parts{};
+};
+
+// BM64_COOP_REPLAY's record, played in place of a session (#87).
+struct Replay {
+    bool on = false;
+    bool client = false; // a client's record: the camera follows player 2
+    std::vector<RecordedFrame> frames; // by frame
+    uint32_t desyncs = 0;
+    uint32_t first_desync = no_frame;
+    uint32_t camera = 0; // frames whose camera angles were not the recorded ones
+};
+
+Replay replay;
 
 std::mutex status_mutex;
 coop::SessionStatus status;
@@ -281,8 +339,16 @@ Config read_config() {
     config.log_hash = env_number("BM64_COOP_LOG_HASH", 0);
     config.log_state = env_number("BM64_COOP_LOG_STATE", 0);
     config.connect_timeout = static_cast<int>(env_number("BM64_COOP_CONNECT_TIMEOUT", 60));
+    const char* replay = std::getenv("BM64_COOP_REPLAY");
+    if (replay != nullptr && replay[0] != '\0') {
+        config.replay = replay;
+    }
     const char* value = std::getenv("BM64_COOP_SESSION");
     if (value == nullptr || value[0] == '\0') {
+        return config;
+    }
+    if (!config.replay.empty()) {
+        std::fprintf(stderr, "coop: session: BM64_COOP_REPLAY plays a record, not a session; BM64_COOP_SESSION off\n");
         return config;
     }
     if (!parse_spec(value, config) || config.delay < 1 || config.delay > 60) {
@@ -298,6 +364,11 @@ Config read_config() {
 Config& config() {
     static Config config = read_config();
     return config;
+}
+
+// Whether BM64_COOP_REPLAY asks for a replay (#87); a session is then off.
+bool replaying() {
+    return !config().replay.empty();
 }
 
 void put16(uint8_t* p, uint16_t v) {
@@ -595,12 +666,11 @@ std::vector<uint8_t> read_own_save() {
     return save;
 }
 
-// The client plays on a copy of the host's save: written to
-// saves/coop-session/<game id>.bin and loaded into librecomp's save buffer in
-// place of the client's own file, before the game reads it.
-bool use_host_save(const std::vector<uint8_t>& save) {
+// The client plays on a copy of the host's save, a replay on the record's
+// (#87): written to saves/<folder>/<game id>.bin and loaded into librecomp's
+// save buffer in place of this machine's own file, before the game reads it.
+bool use_save_copy(const std::vector<uint8_t>& save, const std::u8string& folder) {
     const std::u8string game_id = recomp::current_game_id();
-    const std::u8string folder = u8"coop-session";
     std::filesystem::path path = ultramodern::get_save_file_path().parent_path() / folder / (game_id + u8".bin");
     std::error_code error;
     std::filesystem::create_directories(path.parent_path(), error);
@@ -771,7 +841,7 @@ bool exchange_save(Session& s) {
             save.resize(save_size());
             if (!recv_all(s.sock, save.data(), save.size())) {
                 std::snprintf(refused, sizeof(refused), "the host's save was cut off");
-            } else if (!use_host_save(save)) {
+            } else if (!use_save_copy(save, u8"coop-session")) {
                 std::snprintf(refused, sizeof(refused), "the host's save could not be stored");
             }
         }
@@ -787,6 +857,7 @@ bool exchange_save(Session& s) {
                               : "coop: session client: playing on the host's save, %zu bytes\n", save.size());
     std::fprintf(stderr, "coop: session %s: connected, seed=0x%08X delay=%u\n", host ? "host" : "client", s.seed,
                  s.config.delay);
+    s.save = std::move(save); // for the record (#87)
     std::thread(receive_frames, s.sock).detach();
     return true;
 }
@@ -895,6 +966,171 @@ void compare_hashes(Session& s) {
     }
 }
 
+void put_pad(uint8_t* p, const Pad& pad) {
+    put16(p, pad.buttons);
+    put16(p + 2, pad.view ? 1 : 0);
+    put32(p + 4, float_bits(pad.x));
+    put32(p + 8, float_bits(pad.y));
+    put32(p + 12, pad.yaw);
+    put32(p + 16, pad.pitch);
+}
+
+Pad get_pad(const uint8_t* p) {
+    return Pad{get16(p), bits_float(get32(p + 4)), bits_float(get32(p + 8)), (get16(p + 2) & 1) != 0, get32(p + 12),
+               get32(p + 16)};
+}
+
+// At the lockstep's start: this machine's record of the session (#87),
+// coop-logs/<time>-<host|client>.replay in the app folder, its head with the
+// session's seed, delay, build and save. Each step adds its frame.
+void start_record(Session& s) {
+    bool host = s.config.role == Role::Host;
+    std::string name = s.stamp + (host ? "-host.replay" : "-client.replay");
+    std::filesystem::path path = zelda64::get_app_folder_path() / "coop-logs" / name;
+    std::error_code error;
+    std::filesystem::create_directories(path.parent_path(), error);
+    s.record.open(path, std::ios_base::binary | std::ios_base::trunc);
+    uint8_t head[record_head] = {'C', 'R', 'E', 'C'};
+    put16(head + 4, record_version);
+    put16(head + 6, protocol);
+    head[8] = host ? 0 : 1;
+    head[9] = game_version;
+    put16(head + 10, static_cast<uint16_t>(s.config.delay));
+    put32(head + 12, s.seed);
+    put32(head + 16, s.config.build_set ? s.config.build : build_id());
+    put32(head + 20, static_cast<uint32_t>(s.save.size()));
+    s.record.write(reinterpret_cast<const char*>(head), sizeof(head));
+    s.record.write(reinterpret_cast<const char*>(s.save.data()), static_cast<std::streamsize>(s.save.size()));
+    s.record.flush();
+    std::fprintf(stderr, "coop: session record coop-logs/%s%s\n", name.c_str(),
+                 s.record.good() ? "" : " (cannot write it)");
+    if (!s.record.good()) {
+        s.record.close();
+    }
+    s.save = {};
+}
+
+// Frame s.frame into the record: the pads it was played on and this machine's
+// hash of the state after it. Written out at once, so a crash or a lost
+// session keeps every frame played.
+void record_frame(Session& s, const State& state) {
+    if (!s.record.is_open()) {
+        return;
+    }
+    uint8_t frame[record_frame_size];
+    put32(frame, s.frame);
+    put_pad(frame + 4, s.pads[0]);
+    put_pad(frame + 4 + record_pad_size, s.pads[1]);
+    for (size_t i = 0; i < 1 + hash_parts; i++) {
+        put32(frame + 4 + 2 * record_pad_size + i * 4, state[i]);
+    }
+    s.record.write(reinterpret_cast<const char*>(frame), sizeof(frame));
+    s.record.flush();
+}
+
+// A replay's start (#87), at the game's first pad read, where a session
+// would connect: BM64_COOP_REPLAY's record read whole, its save copied and
+// played on, its seed and delay taken. False, logged, when the file is not a
+// record or one of the other game.
+bool start_replay(Session& s) {
+    const std::string& path = s.config.replay;
+    std::ifstream file(path, std::ios_base::binary);
+    std::vector<uint8_t> data((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    size_t saved = data.size() >= record_head ? get32(data.data() + 20) : 0;
+    char refused[128] = "";
+    if (!file.is_open()) {
+        std::snprintf(refused, sizeof(refused), "cannot read it");
+    } else if (data.size() < record_head || std::memcmp(data.data(), "CREC", 4) != 0) {
+        std::snprintf(refused, sizeof(refused), "not a session's record");
+    } else if (get16(data.data() + 4) != record_version) {
+        std::snprintf(refused, sizeof(refused), "a record of another version (%u, this %u)", get16(data.data() + 4),
+                      record_version);
+    } else if (data[9] != game_version) {
+        std::snprintf(refused, sizeof(refused), "a record of the other game version (US and Europe do not mix)");
+    } else if (saved != save_size() || data.size() < record_head + saved + record_frame_size) {
+        std::snprintf(refused, sizeof(refused), "its save is 0x%zX bytes, this game's 0x%zX, or it holds no frame",
+                      saved, save_size());
+    }
+    if (refused[0] == '\0') {
+        for (size_t at = record_head + saved; at + record_frame_size <= data.size(); at += record_frame_size) {
+            const uint8_t* p = data.data() + at;
+            if (get32(p) != replay.frames.size()) {
+                std::fprintf(stderr, "coop: replay: the record skips from frame %zu to %u; played up to there\n",
+                             replay.frames.size(), get32(p));
+                break;
+            }
+            RecordedFrame frame{{get_pad(p + 4), get_pad(p + 4 + record_pad_size)}, get32(p + 4 + 2 * record_pad_size)};
+            for (size_t i = 0; i < hash_parts; i++) {
+                frame.parts[i] = get32(p + 8 + 2 * record_pad_size + i * 4);
+            }
+            replay.frames.push_back(frame);
+        }
+        std::vector<uint8_t> save(data.begin() + record_head, data.begin() + record_head + saved);
+        if (replay.frames.empty()) {
+            std::snprintf(refused, sizeof(refused), "it does not start at frame 0");
+        } else if (!use_save_copy(save, u8"coop-replay")) {
+            std::snprintf(refused, sizeof(refused), "its save could not be stored");
+        }
+    }
+    if (refused[0] != '\0') {
+        std::fprintf(stderr, "coop: replay refused: %s: %s; playing alone\n", path.c_str(), refused);
+        return false;
+    }
+    replay.client = data[8] == 1;
+    s.seed = get32(data.data() + 12);
+    s.config.delay = get16(data.data() + 10);
+    s.pads = replay.frames[0].pads;
+    uint32_t build = get32(data.data() + 16);
+    char other[48] = "";
+    if (build != build_id()) {
+        std::snprintf(other, sizeof(other), " (this build 0x%08X)", build_id());
+    }
+    std::fprintf(stderr, "coop: replay of the %s's record: %zu frames, seed=0x%08X delay=%u build=0x%08X%s\n",
+                 replay.client ? "client" : "host", replay.frames.size(), s.seed, s.config.delay, build, other);
+    return true;
+}
+
+// One frame of a replay (#87), from the per-frame hook at the end of frame
+// s.frame: this game's hash of it against the record's, its camera's angles
+// against those of the side whose camera it follows (sent with that side's pad
+// for frame s.frame + delay), then the record's pads for the next frame, up
+// to the record's end.
+void replay_step(Session& s, const State& state, uint32_t yaw, uint32_t pitch) {
+    const RecordedFrame& recorded = replay.frames[s.frame];
+    if (state[0] != recorded.hash && replay.desyncs++ == 0) {
+        replay.first_desync = s.frame;
+        std::string parts;
+        for (size_t i = 0; i < hash_parts; i++) {
+            if (state[1 + i] != recorded.parts[i]) {
+                parts += std::string(parts.empty() ? "" : ",") + part_names[i];
+            }
+        }
+        std::fprintf(stderr, "coop: replay desync frame=%u local=%08X recorded=%08X parts=%s\n", s.frame, state[0],
+                     recorded.hash, parts.empty() ? "none" : parts.c_str());
+        log_snapshot(s.frame, state);
+    }
+    size_t later = s.frame + s.config.delay;
+    if (later < replay.frames.size()) {
+        const Pad& sent = replay.frames[later].pads[coop_camera_slot() == 4 ? 1 : 0];
+        if (sent.view && (sent.yaw != yaw || sent.pitch != pitch) && replay.camera++ == 0) {
+            std::fprintf(stderr, "coop: replay camera frame=%u yaw=%08X recorded=%08X pitch=%08X recorded=%08X\n",
+                         s.frame, yaw, sent.yaw, pitch, sent.pitch);
+        }
+    }
+    uint32_t next = s.frame + 1;
+    if (replay.desyncs > 0 && next % 600 == 0) {
+        std::fprintf(stderr, "coop: replay desyncs=%u since frame %u\n", replay.desyncs, replay.first_desync);
+    }
+    if (next == replay.frames.size()) {
+        std::fprintf(stderr, "coop: replay end frames=%zu desyncs=%u camera=%u\n", replay.frames.size(),
+                     replay.desyncs, replay.camera);
+        s.live = false; // the local pads from here on
+        return;
+    }
+    s.pads = replay.frames[next].pads;
+    s.frame = next;
+}
+
 // One frame of the lockstep, from the per-frame hook at the end of frame
 // s.frame: this machine's hash of it (with its parts), its pad and its
 // camera's yaw and pitch for frame s.frame + delay, and both pads of the next
@@ -903,6 +1139,7 @@ void step(Session& s, const State& state, uint32_t yaw, uint32_t pitch) {
     s.hash_frame = s.frame;
     s.hash = state[0];
     s.hashes[s.frame] = state;
+    record_frame(s, state); // before s.pads become the next frame's
     Pad mine{};
     if (!s.local(0, &mine.buttons, &mine.x, &mine.y)) {
         mine = Pad{};
@@ -975,6 +1212,10 @@ void coop::cancel_session() {
 }
 
 bool coop::configure_session(const std::string& spec, std::string& error) {
+    if (replaying()) {
+        error = "BM64_COOP_REPLAY plays a record; no session.";
+        return false;
+    }
     Config parsed = config();
     if (!parse_spec(spec, parsed)) {
         error = "Not host:<port> or join:<address>:<port>: " + spec;
@@ -1020,13 +1261,24 @@ bool coop::session_connected() {
 }
 
 bool coop::session_live_client() {
-    return session.live && session.config.role == Role::Client;
+    return session.live && (session.config.role == Role::Client || replay.client);
 }
 
 std::optional<bool> coop::session_input(int pad, uint16_t* buttons, float* x, float* y, LocalInput local) {
     Session& s = session;
-    if (!session_configured() || (s.started && !s.live)) {
+    if ((!session_configured() && !replaying()) || (s.started && !s.live)) {
         return std::nullopt;
+    }
+    if (!s.started && replaying()) {
+        // a replay starts where a session connects (#87); the game then plays
+        // as in that session, player 2 in slot 4 and no intro skip included
+        s.started = true;
+        s.config = config();
+        s.live = replay.on = start_replay(s);
+        s.connected = s.live;
+        if (!s.live) {
+            return std::nullopt;
+        }
     }
     if (!s.started) {
         // the game's first pad read, before its random generator is seeded
@@ -1048,6 +1300,7 @@ std::optional<bool> coop::session_input(int pad, uint16_t* buttons, float* x, fl
         std::fprintf(stderr, "coop: session lockstep from frame 0\n");
         std::fprintf(stderr, "coop: session fpu=0x%04X\n", fpu_control()); // the game thread's (#75)
         start_log_stream(s);
+        start_record(s);
     }
     if (pad > 1) {
         return false;
@@ -1059,7 +1312,7 @@ std::optional<bool> coop::session_input(int pad, uint16_t* buttons, float* x, fl
 }
 
 std::optional<bool> coop::session_pad_connected(int pad) {
-    if (!session_configured() || (session.started && !session.live)) {
+    if ((!session_configured() && !replaying()) || (session.started && !session.live)) {
         return std::nullopt;
     }
     return pad == 0 || pad == 1;
@@ -1080,10 +1333,10 @@ extern "C" uint32_t coop_session_seed(uint32_t seed) {
     return seed;
 }
 
-// Whether the per-frame hook should hash the state (a session, or
+// Whether the per-frame hook should hash the state (a session, a replay, or
 // BM64_COOP_LOG_HASH or BM64_COOP_LOG_STATE).
 extern "C" uint32_t coop_session_hashing(void) {
-    return coop::session_configured() || config().log_hash > 0 || config().log_state > 0;
+    return coop::session_configured() || replaying() || config().log_hash > 0 || config().log_state > 0;
 }
 
 // Hook in the player update func_8024E088 (bm64.us.toml), where it has read
@@ -1123,7 +1376,9 @@ extern "C" void coop_session_frame(const uint32_t* words, uint32_t count, uint32
     if (config().log_state > 0 && frame % config().log_state == 0) {
         log_snapshot(frame, state);
     }
-    if (s.live) {
+    if (s.live && replay.on) {
+        replay_step(s, state, yaw, pitch);
+    } else if (s.live) {
         step(s, state, yaw, pitch);
     }
 }
