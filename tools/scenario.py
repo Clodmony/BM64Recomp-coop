@@ -2,11 +2,18 @@
 """Run test scenarios of the game unattended and check their logs.
 
     tools/scenario.py [--version us|eu] [--timeout SECONDS] [--env NAME=VALUE]...
-                      [--exe PATH] [--exe-client PATH] SCENARIO...
+                      [--exe PATH] [--exe-client PATH] [--jobs N] SCENARIO...
 
 --exe runs another build (run.sh's --exe; a .exe in Wine), --exe-client
 another build as a session's client only (#29: the Windows build against the
 Linux one).
+
+--jobs runs that many scenarios at once (#71; default a third of the
+machine's cores, at most 6, and 1 with --exe, where Wine's single prefix is
+shared). Each run already has its own run folder and a free port, and the
+game's own pacing, not the CPU, sets how long a run takes, so the lanes do
+not change a check's result; the output of each scenario is printed in one
+block, in the order they were named.
 
 A scenario is an input script (format in src/coop/harness.cpp) with header
 lines the script itself ignores as comments:
@@ -84,13 +91,16 @@ scenario's own, so it overrides a scenario's #env (e.g. --env BM64_COOP_P2=0
 for a run without player 2).
 """
 import argparse
+import concurrent.futures
 import math
 import operator
+import os
 import re
 import shlex
 import socket
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -273,12 +283,13 @@ def run_cmd(script, version, timeout, envs, name=None, saves=None, prev_log=None
     return cmd
 
 
-def read_run(proc, label, results, folder=None):
+def read_run(proc, label, results, folder=None, said=None):
     """The run's game log, cut at the script's end in a session; a failed
-    run is a failed check. Its run folder is appended to `folder`."""
+    run is a failed check. Its run folder is appended to `folder`, its lines
+    of output to `said` (printed as one block, #71)."""
     out = proc.stdout.read() if hasattr(proc.stdout, "read") else proc.stdout
     summary = out.strip().splitlines()[-1] if out.strip() else ""
-    print(f"{label}: {summary}")
+    said.append(f"{label}: {summary}")
     m = re.search(r"folder (\S+)$", summary)
     if proc.returncode != 0 or not m:
         results.append((False, "run", f"run.sh exit {proc.returncode}"))
@@ -296,10 +307,22 @@ def read_run(proc, label, results, folder=None):
     return lines
 
 
+PORTS = (threading.Lock(), set())  # the ports handed out, so two lanes never
+                                   # get the same one (#71): the bind is let go
+                                   # before the game takes the port
+
+
 def free_port():
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
+    lock, taken = PORTS
+    with lock:
+        for _ in range(100):
+            with socket.socket() as sock:
+                sock.bind(("127.0.0.1", 0))
+                port = sock.getsockname()[1]
+            if port not in taken:
+                taken.add(port)
+                return port
+    raise RuntimeError("no free port")
 
 
 def same_hashes(host, client):
@@ -347,7 +370,7 @@ def scenario_path(name):
     return path if path.is_file() else ROOT / "tools/scenarios" / f"{name}.txt"
 
 
-def run_scenario(path, version, timeout, extra_envs, folder=None):
+def run_scenario(path, version, timeout, extra_envs, folder=None, said=None):
     envs, checks = [], []
     session, host_envs, client_envs, client_steps, client_checks = False, [], [], [], []
     switch = "BM64_COOP_SESSION"
@@ -376,6 +399,7 @@ def run_scenario(path, version, timeout, extra_envs, folder=None):
             side, _, name = line[7:].partition(" ")
             saves_from[side] = name.strip()
     results, saves = [], {}
+    said, printing = (said, False) if said is not None else ([], True)
     for side, name in saves_from.items():
         # the scenario that leaves the saves runs first, with its checks
         before, ran = scenario_path(name), []
@@ -383,7 +407,7 @@ def run_scenario(path, version, timeout, extra_envs, folder=None):
             results.append((False, f"#saves-{side} {name}", "no such scenario"))
             continue
         results += [(ok, f"{before.stem}: {text}", detail)
-                    for ok, text, detail in run_scenario(before, version, timeout, extra_envs, ran)]
+                    for ok, text, detail in run_scenario(before, version, timeout, extra_envs, ran, said)]
         if ran and (ran[0] / "saves").is_dir():
             saves[side] = ran[0] / "saves"
         else:
@@ -393,7 +417,7 @@ def run_scenario(path, version, timeout, extra_envs, folder=None):
         proc = subprocess.run(run_cmd(path, version, timeout, envs + extra_envs, saves=saves.get("host")),
                               capture_output=True, text=True)
         ran = folder if folder is not None else []
-        lines = read_run(proc, path.stem, results, ran)
+        lines = read_run(proc, path.stem, results, ran, said)
         unparsable(lines, results)
         run_checks(checks, lines, parse_probes(lines), results, folder=ran[-1] if ran else None)
     else:
@@ -420,8 +444,8 @@ def run_scenario(path, version, timeout, extra_envs, folder=None):
         for prev in prev_files.values():
             prev.unlink()
         host_dir, client_dir = [], []
-        host = until_end(read_run(procs[0], f"{path.stem} host", results, host_dir))
-        client = until_end(read_run(procs[1], f"{path.stem} client", results, client_dir))
+        host = until_end(read_run(procs[0], f"{path.stem} host", results, host_dir, said))
+        client = until_end(read_run(procs[1], f"{path.stem} client", results, client_dir, said))
         unparsable(host, results)
         unparsable(client, results, "client: ")
         run_checks(checks, host, parse_probes(host), results, client, host_dir[0] if host_dir else None)
@@ -430,8 +454,22 @@ def run_scenario(path, version, timeout, extra_envs, folder=None):
                    client_dir[0] if client_dir else None)
         results += [(ok, f"client: {text}", detail) for ok, text, detail in client_results]
     for ok, text, detail in results[own:]:
-        print(f"  {'ok    ' if ok else 'FAILED'} {text}{'  (' + detail + ')' if detail else ''}")
+        said.append(f"  {'ok    ' if ok else 'FAILED'} {text}{'  (' + detail + ')' if detail else ''}")
+    if printing:
+        print("\n".join(said), flush=True)
     return results
+
+
+def default_jobs(other_exe):
+    """How many scenarios to run at once (#71). A run mostly waits for the
+    game's own 50 frames a second, but each game still wants a core or two
+    and a session scenario starts two: a third of the machine's cores, at
+    most 6. --jobs raises it (on 16 cores 8 lanes still passed every check,
+    docs/coop/building.md). Another build (--exe: Wine, one prefix) runs
+    alone."""
+    if other_exe:
+        return 1
+    return max(1, min(6, (os.cpu_count() or 1) // 3))
 
 
 def main():
@@ -441,22 +479,34 @@ def main():
     parser.add_argument("--env", action="append", default=[])
     parser.add_argument("--exe")
     parser.add_argument("--exe-client")
+    parser.add_argument("--jobs", type=int, default=0, help="scenarios at once (0: pick one)")
     parser.add_argument("scenarios", nargs="+")
     args = parser.parse_args()
     EXES["host"] = args.exe
     EXES["client"] = args.exe_client or args.exe
-    results = []
+    jobs = args.jobs or default_jobs(bool(args.exe or args.exe_client))
+    paths, results = [], []
     for name in args.scenarios:
         path = scenario_path(name)
         if not path.is_file():
             print(f"FAILED no scenario {name}")
             results.append((False, name, ""))
             continue
-        try:
-            results += run_scenario(path, args.version, args.timeout, args.env)
-        except Exception as err:  # this scenario fails, the next ones still run (#46)
-            print(f"{path.stem}:\n  FAILED scenario.py  ({type(err).__name__}: {err})")
-            results.append((False, f"{path.stem}: scenario.py", f"{type(err).__name__}: {err}"))
+        paths.append(path)
+    if jobs > 1:
+        print(f"{len(paths)} scenarios, {jobs} at a time", flush=True)
+    # one lane per scenario, but the output of each is printed whole and in
+    # the order they were named (#71)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+        running = [(pool.submit(run_scenario, path, args.version, args.timeout, args.env, None, said), path, said)
+                   for path, said in ((path, []) for path in paths)]
+        for future, path, said in running:
+            try:
+                results += future.result()
+            except Exception as err:  # this lane fails, the other scenarios still run (#46)
+                said.append(f"{path.stem}:\n  FAILED scenario.py  ({type(err).__name__}: {err})")
+                results.append((False, f"{path.stem}: scenario.py", f"{type(err).__name__}: {err}"))
+            print("\n".join(said), flush=True)
     passed = sum(ok for ok, _, _ in results)
     print(f"{passed}/{len(results)} checks passed")
     print(f"RESULT {'ok' if passed == len(results) else 'FAILED'}")

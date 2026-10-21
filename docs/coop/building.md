@@ -222,9 +222,10 @@ together (`tools/windows-cross.cmake`):
   Microsoft's licence; never commit them). `RelWithDebInfo`, as upstream's
   Windows CI. Windows finds headers and libraries in any case; the script
   links the four spellings the sources use that the SDK lacks.
-- The patches are built by the Linux clang as in the Linux build, so both
-  builds have the same build identity and can play together: measured on one
-  machine, both `0xFC44BFB4` (*The build identity across platforms*, below).
+- The patches are built by the Linux clang as in the Linux build. Both builds
+  have the same build identity and can play together — since #67 that holds
+  for any compiler, because the identity is hashed from the sources
+  (*The build identity across platforms*, below).
 - Build-time tools built for Windows (`file_to_c`) run in Wine. The shaders
   are compiled by RT64's Windows `dxc.exe` (1.7, what upstream's Windows
   builds use) in Wine through `tools/dxc-wine.sh`, which turns the Unix paths
@@ -239,7 +240,8 @@ together (`tools/windows-cross.cmake`):
   below 19 the toolchain sets the STL's own switch,
   `_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH`, and says so when configuring
   (#29). Installing a newer clang instead would also change the clang that
-  builds the patches, and with it the build identity.
+  builds the patches: that changes the patches' binary, but since #67 no
+  longer the build identity.
 
 What the cross build needs beyond the Linux build, and what it does not have
 on a fresh Ubuntu 24.04: `clang-cl` (the clang package ships the driver but
@@ -274,17 +276,39 @@ never uploaded.
 ### The build identity across platforms
 
 A session's hello refuses a peer whose build identity differs (#26), so two
-players need builds that agree. It is FNV-1a over the patches' binary and
-over the first 8 hex digits of the SHA-256 of the game's recompiler config
-(`src/coop/version.cmake`, `src/coop/session.cpp`, `build_id`). Neither part
-comes from the host compiler of the C++ code, so the Linux build and the
-cross-compiled Windows build of one checkout must match — and do:
+players need builds that agree. Since #67 it is FNV-1a over the **sources**
+the patches are built from — every `patches/*.c`, `*.h`, `*.ld` and the
+`Makefile` with its flags, each with its path — then over the recompiler
+config of the patches (`patches.toml`, which functions they replace) and the
+first 8 hex digits of the SHA-256 of the game's one (`bm64.<version>.toml`,
+which holds the hooks). `tools/build_id.py` computes it, `src/coop/version.cmake`
+runs the script when configuring and compiles the number in, and
+`build_id()` in `src/coop/session.cpp` only reports it. So one commit gives
+one number on every machine, and `tools/verify.sh`'s `buildid` stage
+(`tools/build_id.py check`) keeps that property: the compiled
+`patches/patches.bin` is left out, and a change to any covered file changes
+the number.
+
+**Why the sources and not the binary** (#67): until then the identity was
+FNV-1a over `patches/patches.bin`, which `make -C patches` builds with
+whatever clang the machine has. The fork's two machines measured, at the same
+commit `18e4c8b` and the same Europe config: clang 18.1.3 a 46 312-byte
+binary and `0xFC44BFB4`, clang 23.1.3 a 46 328-byte one and `0x7F5EB1B6`. The
+hello refused the join although the code was the same, so the two people
+could not have played together at all. One machine shows it too: the same
+sources compiled with an added `-O1` gave a 32 788-byte binary and
+`0xD447083F`. A difference that reaches the game's behaviour is still caught,
+by the session's per-frame state hash (`coop: session desync`).
+
+The Linux build and the cross-compiled Windows build of one checkout match as
+well, which was measured before the change (#29) and now holds by
+construction:
 
 - **Measured** (#29, 2026-10-20, one Windows machine with WSL2, Ubuntu 24.04,
-  clang 18, Europe): the Linux build reports `coop: session build 0xFC44BFB4`
-  and the cross-compiled Windows build, run **natively on Windows 11**, the
-  same `0xFC44BFB4`. Both sides of each session then reached
-  `coop: session lockstep from frame 0`.
+  clang 18, Europe, the identity of the day `0xFC44BFB4`): the Linux build
+  reports `coop: session build <identity>` and the cross-compiled Windows
+  build, run **natively on Windows 11**, the same number. Both sides of each
+  session then reached `coop: session lockstep from frame 0`.
 - The Windows pair played 3600 frames in lockstep (two portable folders on
   127.0.0.1): the same state hash at frame 0 (`199C12E7`) and at frame 3600
   (`AE6DD052`), no `coop: session desync` and no `coop: session lost`, the
@@ -294,9 +318,9 @@ cross-compiled Windows build of one checkout must match — and do:
 - The Windows build and the Linux build **played against each other** on one
   machine, both ways (*A session between the Windows and the Linux build*,
   below).
-- **Not tested:** a build made with Visual Studio (upstream's `BUILDING.md`),
-  and whether another clang version changes the patches' binary and with it
-  the identity (#67).
+- **Not tested:** a build made with Visual Studio (upstream's `BUILDING.md`).
+  Another clang version does change the patches' binary (#67, measured on the
+  two machines); it no longer changes the identity.
 
 The identity is logged only when a hello happens, so a game that boots alone
 never prints it. Two ways to read it without playing:
@@ -305,21 +329,22 @@ never prints it. Two ways to read it without playing:
 # in a session (what the hello compared), from either side's log
 grep "coop: session build" <run folder>/game.log
 
-# offline, from the checkout the build was made from
-python3 - <<'PY'
-import hashlib, pathlib
-version = "eu"
-data = pathlib.Path("patches/patches.bin").read_bytes()
-hooks = int(hashlib.sha256(pathlib.Path(f"bm64.{version}.toml").read_bytes()).hexdigest()[:8], 16)
-h = 2166136261
-for byte in list(data) + [(hooks >> (i * 8)) & 0xFF for i in range(4)]:
-    h = ((h ^ byte) * 16777619) & 0xFFFFFFFF
-print("build id 0x%08X" % h)
-PY
+# offline, from the checkout the build was made from (the same number, since
+# the build compiles in what this prints); --number gives the value alone
+python3 -I tools/build_id.py --version eu
 ```
 
-Both gave `0xFC44BFB4` for the build above, so the offline sum is a way for
-two players to compare their builds before a playtest.
+Two players compare those numbers before a playtest: both run the offline
+command in a checkout of the same commit, with the same `--version`. They
+must be equal — if they are not, the two are not on the same commit, or one
+of them has an edit in `patches/` or in a config (the `--version eu` configs
+are generated, so `tools/europe.py configs` must have run on both).
+
+The game's build, the Windows cross build and the script all read the same
+files, so the version a player holds can be read without building anything.
+A build whose `tools/build_id.py` failed logs the identity `0x00000000` and
+CMake says so with a warning; such a build only ever matches another one in
+the same state.
 
 To run the Windows build **natively on Windows** rather than in Wine, make a
 portable folder of it on the Windows side (as `tools/playtest-kit.sh` does,
@@ -460,6 +485,55 @@ Debug switches, all off unless set (`src/coop/debug.cpp`):
 - `BM64_COOP_CRASH=1`: crash on purpose when the title loads (a test of the
   crash log, #29).
 
+**Z skips the story intro** (#77). It is not a switch and needs nothing set:
+start a new game the normal way — title, main menu, Adventure, **pick a
+file** — and then press **Z on the controller** while that file's opening
+cutscene (overlay 0x1A) plays. The game goes to the world map (0x21) at once.
+
+Where it deliberately does **nothing** (the person running the session,
+2026-10-21): before a file is picked. In the logos, in the attract demo and in
+the title's main menu, Z is ignored, so the file select and the Co-op menu are
+reached the normal way and **the file picked is the file played**
+(`skip-intro-title`). In a room Z stays the game's own button
+(`skip-intro-room`), and in an **online session** the skip is refused
+(`coop: skip intro: not in an online session`), since the step is one
+machine's alone and the other game would play on ([design.md](design.md),
+*The session core*).
+
+Not to be confused with `BM64_COOP_NO_DEMO=1` (#49, #51, above), which keeps
+the attract demo from ever starting so a *scripted* run's warped room plays
+with its enemies. Z is for the runs by hand.
+
+Two things about how it works. The button is read where the game reads its
+pads (`recomp::get_n64_input`, `src/game/controls.cpp`), not from this
+machine's keyboard, so a scenario presses it with an ordinary `pad 0 Z` step.
+And the step is the input script's `scene` step (`func_8023AE6C`) **in the
+running session**, not `BM64_COOP_WARP`'s: the warp starts a new file
+(`func_8023DA04`) and would throw away the file the person picked. A cutscene
+can still win a scene change of its own, so the skip keeps asking while the
+intro plays (at most 6 steps, 60 frames apart) until the world map loads. Each
+step logs `coop: skip intro: to the world map, keeping the file (step N)`.
+
+**The hint on screen.** Nobody can guess the button, so while the story intro
+plays the game shows **PRESS Z TO SKIP**, low and centred
+(`patches/coop_intro_hint.c`). It is drawn the way the co-op HUD draws its
+icons (#53, `coop_hud.c`): the text is painted once into an RGBA5551 texture
+from a 5×7 pixel font, white with a black outline so it reads over any scene,
+and a draw object of the game's own pool (`func_8022A328`) puts it on screen
+at twice that size. It only draws — no game state is written, so the
+lockstep's hash is untouched.
+
+When it shows is decided on the host side, in the same place as the skip
+itself (`in_story_intro()` and no online session, `src/coop/harness.cpp`), and
+only a *change* is passed to the patch (the per-frame hook's bit 8), which
+registers the draw object and frees it again. So it appears with the opening
+cutscene, goes away when the world map loads or Z was pressed, and **never
+appears in an online session**, where the skip is refused anyway. It logs
+`coop: hint on x=68 y=196` and `coop: hint off` (and
+`coop: hint none: no free draw object` if the pool is full), which is what the
+scenarios check: `skip-intro` wants the pair around the cutscene,
+`skip-intro-title` and `skip-intro-room` that it never appears.
+
 A run's own `general.json` turns background input off, so a controller in
 use elsewhere does not press the test game's buttons; a key or button
 pressed while a test game has the focus still reaches it.
@@ -488,7 +562,10 @@ Everything is off unless a switch asks for it:
     `START`, `L`, `R`, `DU` `DD` `DL` `DR`, `CU` `CD` `CL` `CR`, joined with
     `+`, or `-` for none) and the stick at X, Y in −1..1;
   - `probe LABEL`: log `coop: probe LABEL`, a `coop: state` line (overlay,
-    S, flow flags, lives), the stick reading of pads 0 and 1, a `coop:
+    S, flow flags, lives), a `coop: file current=N` line (the file the game
+    would save into, `D_802A1DB4`: 0–2, or −1 from the boot until the file
+    select sets it — a save takes it unchecked, so −1 writes below the EEPROM
+    mirror, which is what `skip-intro` checks, #77), the stick reading of pads 0 and 1, a `coop:
     camera` line (its eye, its yaw and pitch in tenths of a degree and its
     distance from the point it looks at) and one `coop: player slot=…` line per player in play
     (controlType, hearts, bombs, fire, flags, position in tenths of a world
@@ -534,7 +611,11 @@ Everything is off unless a switch asks for it:
   menu and A (60 frames later) takes its first entry, Adventure, into the
   file select (0x1F). In a run without saves, A picks the first file and A
   again starts it: the new file's opening cutscene (0x1A). A tap is
-  `pad 0 START`, `wait 4`, `pad 0 -`.
+  `pad 0 START`, `wait 4`, `pad 0 -`. Nothing in the game's own menus cuts
+  that path short, and the menus have to be driven as above. What can be cut
+  is the **opening cutscene** at the end of it: **Z** there goes to the world
+  map (*Z skips the story intro*, above, and the `skip-intro` scenarios, which
+  drive exactly this path and then press Z, #77).
 - `BM64_COOP_WARP=ID[:ENTRY[:FILE]]`: 30 frames after the title (overlay
   0x20) loads, start a story session as the file select does, for a new file
   (`func_8023DA04(0)`) or, with FILE, by loading file 0–2
@@ -597,7 +678,30 @@ each through `tools/run.sh` (until `coop: input end`) and checks the log:
 tools/scenario.py --version eu p2-slot4                       # one scenario
 tools/scenario.py --version eu tools/scenarios/*.txt          # all of them
 tools/scenario.py --version eu --env BM64_COOP_P2=0 p2-slot4  # override an #env
+tools/scenario.py --version eu --jobs 1 tools/scenarios/*.txt # one after the other
 ```
+
+**Several at a time (#71).** `--jobs N` runs N scenarios in parallel;
+without it a third of the machine's cores, at most 6, and 1 with `--exe`
+(Wine shares one prefix). Each run already has its own run folder
+(`run.sh`'s `mktemp -d`) and a session its own free port, so the lanes only
+fill the waiting: the game paces itself at 50 frames a second whatever the
+CPU could do. Measured on 16 cores, Europe build, the 32 scenarios
+(43 runs), **383/383 checks every time**:
+
+| `--jobs` | the stage | the runs' own time together | the longest run |
+|---|---|---|---|
+| 1 | 11:47 | 636 s | 38.9 s |
+| 4 | 3:14 | 653 s | 39.3 s |
+| 6 | 2:19 | 675 s | 39.7 s |
+| 8 | 1:52 | 701 s | 43.2 s |
+
+The runs themselves barely stretch (+6 % at six lanes), which is what says
+the lanes change no check's result: a check reads the game's frames, not the
+clock. Eight lanes passed here too; the default stays a third of the cores
+so a session scenario's two games and a busy machine keep their headroom.
+The output of a scenario is printed whole and in the order the scenarios
+were named, so a log reads as before.
 
 Checks: `log REGEX`, `no-log REGEX`, `after REGEX1 REGEX2` (a match of
 REGEX2 after the first match of REGEX1), `not-after REGEX1 REGEX2` (none),

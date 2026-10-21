@@ -3,6 +3,13 @@
 // probes. Both run only when the per-frame hook in bm64.us.toml asks for them.
 #include "coop.h"
 
+// The file the game would save into, set by the file select (func_80293EA0)
+// and -1 from the boot on. A probe prints it, because a save takes it without
+// checking (func_802947AC, 0x802947B0: D_80063000 + it * 0x90 + 8), so -1
+// writes below the EEPROM mirror - which is what the owner's review of #84
+// asked the intro skip to be checked against (#77).
+extern s32 D_802A1DB4;
+
 // File 0-2 in the EEPROM mirror (docs/coop/design.md, section 11): +0 the play
 // time in seconds, bit 7 of +4 "slot used".
 static u8* coop_save_slot(s32 file) {
@@ -50,6 +57,7 @@ void coop_probe(u8* item, s32 item_slot) {
 
     recomp_printf("coop: state overlay=0x%02X S=%d flags=0x%X lives=%d\n", D_802AC5D4 & 0xFFFF, D_802AC894,
                   g_LevelLoader, D_802AC624);
+    recomp_printf("coop: file current=%d\n", D_802A1DB4);
     for (slot = 0; slot < 2; slot++) {
         f32 move[3] = { 0.0f, 0.0f, 0.0f };
 
