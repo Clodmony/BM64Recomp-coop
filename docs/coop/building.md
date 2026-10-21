@@ -674,7 +674,30 @@ each through `tools/run.sh` (until `coop: input end`) and checks the log:
 tools/scenario.py --version eu p2-slot4                       # one scenario
 tools/scenario.py --version eu tools/scenarios/*.txt          # all of them
 tools/scenario.py --version eu --env BM64_COOP_P2=0 p2-slot4  # override an #env
+tools/scenario.py --version eu --jobs 1 tools/scenarios/*.txt # one after the other
 ```
+
+**Several at a time (#71).** `--jobs N` runs N scenarios in parallel;
+without it a third of the machine's cores, at most 6, and 1 with `--exe`
+(Wine shares one prefix). Each run already has its own run folder
+(`run.sh`'s `mktemp -d`) and a session its own free port, so the lanes only
+fill the waiting: the game paces itself at 50 frames a second whatever the
+CPU could do. Measured on 16 cores, Europe build, the 32 scenarios
+(43 runs), **383/383 checks every time**:
+
+| `--jobs` | the stage | the runs' own time together | the longest run |
+|---|---|---|---|
+| 1 | 11:47 | 636 s | 38.9 s |
+| 4 | 3:14 | 653 s | 39.3 s |
+| 6 | 2:19 | 675 s | 39.7 s |
+| 8 | 1:52 | 701 s | 43.2 s |
+
+The runs themselves barely stretch (+6 % at six lanes), which is what says
+the lanes change no check's result: a check reads the game's frames, not the
+clock. Eight lanes passed here too; the default stays a third of the cores
+so a session scenario's two games and a busy machine keep their headroom.
+The output of a scenario is printed whole and in the order the scenarios
+were named, so a log reads as before.
 
 Checks: `log REGEX`, `no-log REGEX`, `after REGEX1 REGEX2` (a match of
 REGEX2 after the first match of REGEX1), `not-after REGEX1 REGEX2` (none),
