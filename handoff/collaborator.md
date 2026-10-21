@@ -201,10 +201,11 @@ never the hardware itself. Recipes that hold for everyone go into
 
 ## Scratch on this machine
 
-- `~/dev-scratch/BM64Recomp-coop/i77/`: #77's pull request body, commit
-  messages and the #89 issue text. Delete once #84 is merged.
+- `~/dev-scratch/BM64Recomp-coop/i77/`: **deleted** with #84 open, as the
+  project asks; its pull request body and the #89 issue text are on GitHub.
 - `wt/77-skip-intro/`: #77's worktree, with its build folder
-  `build/77-skip-intro-eu`. Remove both once #84 is merged.
+  `build/77-skip-intro-eu`. **Kept on purpose** until #84 is merged, so a
+  further review point needs no rebuild; remove both afterwards.
 - `win/` (the xwin splat, its download cache and the Wine prefix, 2.4 GB
   together): **keep**, or the next Windows build starts with the download
   again.
@@ -215,6 +216,6 @@ never the hardware itself. Recipes that hold for everyone go into
   again without building anything.
 - `rom/`, `build/BM64Recomp-coop-eu/`, `build/win-eu/`, `n64recomp/`: keep.
   `build/win-77-eu/` is #77's Windows build; delete it with the worktree.
-- `runs/`: delete freely. `verify/`: keep the folder quoted in #84, delete
-  the rest; the ones quoted in #72 and #73 are already gone, their numbers
-  are in those pull requests.
+- `runs/`: emptied 2026-10-21 (1.9 GB of #77's test runs). `verify/`: only
+  `20261021-192532` left, the one quoted in #84; the folders quoted in #72
+  and #73 are gone, their numbers are in those pull requests.
