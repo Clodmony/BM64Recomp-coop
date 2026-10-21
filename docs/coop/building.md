@@ -533,7 +533,10 @@ Everything is off unless a switch asks for it:
     `START`, `L`, `R`, `DU` `DD` `DL` `DR`, `CU` `CD` `CL` `CR`, joined with
     `+`, or `-` for none) and the stick at X, Y in −1..1;
   - `probe LABEL`: log `coop: probe LABEL`, a `coop: state` line (overlay,
-    S, flow flags, lives), the stick reading of pads 0 and 1, a `coop:
+    S, flow flags, lives), a `coop: file current=N` line (the file the game
+    would save into, `D_802A1DB4`: 0–2, or −1 from the boot until the file
+    select sets it — a save takes it unchecked, so −1 writes below the EEPROM
+    mirror, which is what `skip-intro` checks, #77), the stick reading of pads 0 and 1, a `coop:
     camera` line (its eye, its yaw and pitch in tenths of a degree and its
     distance from the point it looks at) and one `coop: player slot=…` line per player in play
     (controlType, hearts, bombs, fire, flags, position in tenths of a world

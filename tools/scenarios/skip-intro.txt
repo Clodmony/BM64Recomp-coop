@@ -12,6 +12,10 @@
 #check no-log "^coop: warp "
 # and the game is live in the world map
 #check log "^coop: state overlay=0x21 "
+# the file the person picked is still the file the game would save into: 0, not
+# the boot's -1, which a save would write below the EEPROM mirror (the owner's
+# review of #84)
+#check log "^coop: file current=0$"
 # the "PRESS Z TO SKIP" hint (#77): on in the cutscene, off once it is over
 #check after "^coop: overlay 0x1A$" "^coop: hint on x=68 y=196$"
 #check after "^coop: hint on x=68 y=196$" "^coop: hint off$"
