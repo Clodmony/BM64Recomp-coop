@@ -6,7 +6,53 @@ each issue found, the decisions taken in those sessions and the cleanup still
 to approve. Decisions that bind both people are also listed in `HANDOFF.md`,
 *Project decisions*.
 
-Last updated 2026-10-21 (#75: the desync with enemies; #84 reviewed twice and merged).
+Last updated 2026-10-21 (#72 and #73 resolved and merged; #75: the desync
+with enemies; #84 reviewed twice and merged).
+
+## #72 and #73: the two approved pull requests merged (2026-10-21)
+
+Both had been approved and then sat on conflicts since #74 and #59 went in.
+No issue of its own: this session only resolved and merged them, in the order
+#72 first (its lanes pay for every verify after it).
+
+- **#72 (#71, the scenarios in parallel), merged `1f49d4d`.** The conflict
+  was `tools/scenario.py`: #59 (#46) had wrapped `run_scenario` in
+  `except Exception`, #71 had replaced that loop with lanes. Resolved as the
+  review asked — the guard now sits around `future.result()`, so a crashing
+  scenario is a failed check in that lane's own output block and the other
+  lanes finish. `read_run` already carried both sides (#59's missing-game.log
+  check and #71's `said` buffer), and both `unparsable()` calls stayed.
+  Verify on the merge into the branch (`1d51e85`), Europe:
+  **9/9 stages, 576/576 checks**, scenario stage about 4 minutes against the
+  12 it was (log folder `verify/20261021-203717`).
+- **#73 (#67, the build identity), merged `0967d01`.** Two conflicts:
+  `src/coop/session.cpp`, where #57's log streaming and #67's new comment had
+  landed in the same place (both kept, #67's comment replacing the old wording
+  of the same comment, **protocol stays 5**), and `tools/verify.sh`, where
+  **both stages** are kept, `buildid` and `harness`; both sit above the gate
+  `--quick` stops at, so `--quick` runs them. Verify on the merge into the
+  branch (`dfc9e0d`), Europe: **10/10 stages, 576/576 checks** (log folder
+  `verify/20261021-204655`).
+- **The identity of the merge is `0x966B544B`** here (clang 18.1.3 in WSL2),
+  not the `0x6738F333` of the review: the number follows the commit, since it
+  hashes the patches' sources and the configs, and #74 and #84 added files
+  under `patches/` after the review. That is the property the `buildid` stage
+  checks, and it is green. A number is only ever compared between two
+  machines **on the same commit** — the collaborator can confirm it on
+  `0967d01`.
+- **The notes on both branches took `bm64recomp-coop`'s side**: it held the
+  newer rewrite of `handoff/collaborator.md` (the collaborator's own note, not
+  the owner's to rewrite) and the current rows of both people in `HANDOFF.md`;
+  neither branch had anything else in them but its own row.
+- Not done, from #73's review and left as it was: `covered_files` in
+  `tools/build_id.py` uses `glob`, so an untracked `.c`/`.h`/`.ld` left under
+  `patches/` changes that machine's number although the comment says "every
+  file git tracks". The review called it not blocking; `git ls-files patches`
+  would match the comment.
+- Branches `coop/71-fast-scenarios` and `coop/67-build-identity` deleted
+  (local and remote), the `67-build-identity` worktree removed. Its build
+  folder `build/67-build-identity-eu` (168 MB) and the two verify folders are
+  still there.
 
 ## #75: the playtest's desync with enemies (2026-10-20/21)
 
@@ -347,3 +393,14 @@ main checkout. The issue worktrees and their build folders are removed.
   when the player 2 follow-ups are done (#75 used them; `i22/` is gone).
 - When #88 is merged: the worktree `wt/75-enemy-desync` and its build
   folders `build/75-enemy-desync-eu` and `build/75-enemy-desync-win-eu`.
+- From #72 and #73 (2026-10-21), nothing points at them any more: the build
+  folder `build/67-build-identity-eu` (168 MB) and the verify folders
+  `verify/20261021-203717` and `verify/20261021-204655` (their numbers are in
+  the merge commits and in the note above).
+- Since #84 is merged: the worktree `wt/77-skip-intro` and its build folder
+  `build/77-skip-intro-eu` (the collaborator's note kept them for a further
+  review point, which did not come).
+- Stale local branches in the checkout, their pull requests merged:
+  `coop/29-windows-build` (#68), `coop/58-wsl2-setup` (#64),
+  `coop/63-run-wrapper` (#65), `coop/77-skip-intro` (#84, its remote branch
+  already gone).
