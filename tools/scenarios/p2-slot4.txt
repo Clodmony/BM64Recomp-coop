@@ -89,6 +89,6 @@ probe hit1
 pad 1 A
 wait 2
 pad 1 -
-wait 190
+wait 250
 probe down
 end

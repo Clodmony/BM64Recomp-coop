@@ -37,7 +37,7 @@ probe apart
 pad 0 A
 wait 2
 pad 0 -
-wait 180
+wait 240
 probe dead
 log the ghost walks away from enemy 8
 pad 0 - 0 1

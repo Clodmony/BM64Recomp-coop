@@ -8,11 +8,17 @@
 # room changes and player 1 comes along, still a ghost. (Since #55 a tile
 # step of player 1 would move player 2 next to it at once, into the exit too:
 # player 1 walks there instead.)
+# Since #78 the death animation plays first (probe dying: ghost=0,
+# alpha=255); the ghost follows COOP_DEATH_FRAMES frames later.
 #env BM64_COOP_WARP=0x29:0x13
 #env BM64_COOP_P2=4
 #env BM64_COOP_LOG_PLAYERS=1
 #check after "^coop: hit slot=0" "^coop: death slot=0 cause="
-#check after "^coop: death slot=0" "^coop: down slot=0 cause=1 lives=2 ghost$"
+#check after "^coop: death slot=0" "^coop: dying slot=0 cause=1 lives=2 frames=60$"
+#check after "^coop: dying slot=0" "^coop: down slot=0 cause=1 lives=2 ghost$"
+# the death animation plays first: no ghost yet, the look unchanged (#78)
+#check field dying 0 ghost = 0
+#check field dying 0 alpha = 255
 #check not-after "^coop: death slot=0" "^coop: freeze partner slot=4 on=1 death$"
 #check field dead 0 controlType = 1
 #check field dead 0 ghost = 1
@@ -50,7 +56,9 @@ probe apart
 pad 0 A
 wait 2
 pad 0 -
-wait 180
+wait 165
+probe dying
+wait 75
 probe dead
 pad 1 - -1 0.05
 wait 20

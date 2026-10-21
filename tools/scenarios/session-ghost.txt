@@ -10,8 +10,10 @@
 #check no-log ^coop: session (desync|lost|refused)
 #check-client no-log ^coop: session (desync|lost|refused)
 #check same-hashes
-#check after "^coop: death slot=0" "^coop: down slot=0 cause=1 lives=2 ghost$"
-#check-client after "^coop: death slot=0" "^coop: down slot=0 cause=1 lives=2 ghost$"
+#check after "^coop: death slot=0" "^coop: dying slot=0 cause=1 lives=2 frames=60$"
+#check after "^coop: dying slot=0" "^coop: down slot=0 cause=1 lives=2 ghost$"
+#check-client after "^coop: death slot=0" "^coop: dying slot=0 cause=1 lives=2 frames=60$"
+#check-client after "^coop: dying slot=0" "^coop: down slot=0 cause=1 lives=2 ghost$"
 #check not-after "^coop: death slot=0" "^coop: room teardown"
 #check-client not-after "^coop: death slot=0" "^coop: room teardown"
 #check field dead 0 ghost = 1
@@ -32,7 +34,7 @@
 #client wait 10
 #client probe apart
 #client wait 2
-#client wait 180
+#client wait 240
 #client probe dead
 #client pad 0 - -1 0.05
 #client wait 20
@@ -55,7 +57,7 @@ probe apart
 pad 0 A
 wait 2
 pad 0 -
-wait 180
+wait 240
 probe dead
 wait 20
 wait 10

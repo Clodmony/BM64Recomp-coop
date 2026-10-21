@@ -54,7 +54,7 @@
 #client wait 10
 #client probe apart
 #client wait 2
-#client wait 200
+#client wait 260
 #client probe dead
 #client end
 overlay 0x20
@@ -100,6 +100,6 @@ probe apart
 pad 0 A
 wait 2
 pad 0 -
-wait 200
+wait 260
 probe dead
 end
