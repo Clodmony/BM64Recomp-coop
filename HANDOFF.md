@@ -80,7 +80,6 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 |-------|--------|--------|-------|
 | #75 (the playtest's desync with enemies, Linux against Windows) | owner | `coop/75-enemy-desync` (merged) | pull request #88 **merged** 2026-10-21 (owner's one-off exception, no review), part of #75: the state hash covers the enemies, a desync names the parts that differ and both sides log their values of that frame (`coop: snapshot`), `compare_logs.py` shows them side by side; the random generator hashed at its real address. Not reproduced on one machine (ten sessions, Linux and Wine, enemies, cameras apart). Next (owner, 2026-10-21): the next playtest with a kit from `bm64recomp-coop` (#88 is in), then #87 (replay) |
 | #87 (record the agreed pads, so a desync can be replayed on one machine) | owner | `coop/87-session-replay` | taken 2026-10-21 (owner's word), in the place of #78 |
-| #78 (a downed player plays no death animation) | collaborator | `coop/78-death-anim` | done 2026-10-22, draft pull request **#92** (`Closes #78`), the owner's review asked for. The animation is played on the dying actor the way the death process does it, the dying player frozen for 60 frames, the ghost after it; a fall keeps the old path. Verify 10/10 stages, 597/597. **No run with a window**, so the eye check is open. **Reviewed by the owner 2026-10-23:** three bugs (a story death or a revive during the animation, the ghost flag 60 frames late); the owner's session fixes them on the branch, then merges (owner's word; `handoff/owner.md`) |
 
 ## Project decisions (bind both people)
 
@@ -120,12 +119,9 @@ GitHub *and* adding the row; remove the row when its pull request is merged.
 
 A shared pool: take one by claiming it under *In progress*.
 
-0. **New playtest findings (collaborator, 2026-10-20); #78 is the
-   collaborator's (owner, 2026-10-21), see *In progress*:**
-   **#78** a downed player plays no death animation (a consequence of #22:
-   the story death path is skipped whole, so the animation goes with it; it
-   needs a decision on how the animation runs on the dying actor, since the
-   death process always takes slot 0), **#81** player 2 does not dance after
+0. **New playtest findings (collaborator, 2026-10-20):** #78 (the death
+   animation) is **merged** (#92, 2026-10-23, the owner's review fixed on
+   the branch; `handoff/owner.md`), **#81** player 2 does not dance after
    a stage clear (the clear works on slot 0's actor only; it also needs a
    scripted way to clear a stage, which nothing has today) and **#83** the
    intro skip inside an online session, the part #77 left out.

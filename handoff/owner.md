@@ -6,47 +6,37 @@ each issue found, the decisions taken in those sessions and the cleanup still
 to approve. Decisions that bind both people are also listed in `HANDOFF.md`,
 *Project decisions*.
 
-Last updated 2026-10-23 (#92 reviewed; the owner's session fixes its findings on the branch, then merges).
+Last updated 2026-10-23 (#92 reviewed, fixed on its branch and merged).
 
-## Review of #92 (#78, the death animation), in progress (2026-10-23)
+## Review of #92 (#78, the death animation), fixed and merged (2026-10-23)
 
-- The owner asked for a review and a merge. #92 is the collaborator's
-  draft, with no GitHub review yet. A code review (reading only, nothing run)
-  found three bugs, confirmed by reading `patches/coop_player2.c`:
-  1. `coop_dying_tick` ghosts and releases the slot at frame 60 without
-     checking `coop_story_dead`. If the partner dies during the animation
-     (a story death, which freezes the other player until the retry), the
-     tick releases that frozen player.
-  2. A revive during the animation (a heart, a scene, a stage clear) clears
-     `coop_dying` but never releases player 1's freeze
-     (`func_80245208(0, 1)` from `coop_death_anim`). Player 2 is released by
-     its placement.
-  3. `coop_down` is set at once but `COOP_STATE_GHOST` only 60 frames
-     later, so enemies (`coop_enemy.c`), rivals and the HUD treat the dying
-     player as living, a target.
-- Also from the review, checked against the recompiled `func_8023EE40`:
-  the game sets actor bit 0x4000000 back right after it starts the
-  animation (`func_80231408(actor, 0x4000000)`). It waits until the model's
-  animation has ended (`obj+0xC & 0x41`), then sleeps 0x3C frames. The PR
-  leaves 0x4000000 cleared and counts a fixed 60 frames. Smaller points:
-  the tick runs ungated in every game (wrap it in `coop_p2_slot() != 0`);
-  the ghost-on code is duplicated (`coop_partner_death`); a stray blank line
-  in `coop_partner_tick`; the tick keeps counting in the pause menu and
-  across a room change or a pause-menu retry (end it at the room's
-  teardown/init); the cutscene freeze skips recording `coop_freeze_tile`
-  while player 2 is frozen by the animation; design.md claims a revive or
-  retry during the animation ends it, which no run covers.
-- **Owner decision (2026-10-23): fix the findings here, on
-  `coop/78-death-anim`, then merge** (instead of asking the collaborator for
-  changes).
-- Plan: worktree `~/dev-scratch/BM64Recomp-coop/wt/78-death-anim`; set the
-  ghost flag in the death's frame (look and release at the animation's
-  end); the tick ends early, without touching the slot, on a story death,
-  a revive or a room change; a revive during the animation releases
-  player 1; put 0x4000000 back as the game does; gate the hook; one
-  `coop_make_ghost` helper; scenarios for a revive and a partner death
-  during the animation; then `tools/verify.sh --full --version eu
-  --scenarios`, push, and merge locally.
+- The owner asked for a review and a merge of the collaborator's draft #92.
+  The review (code read) found three bugs. **Owner decision: fix them here,
+  on `coop/78-death-anim`, then merge** (not: request changes). Fixes
+  `5dcde3e`, `0df5776`; merged `c55ec3b`. The PR comment has the details;
+  design.md, *The death animation of a downed player*, the rules.
+  1. At its end the tick released a player that the partner's story death
+     had frozen until the retry. Now a story death stops the animation
+     without releasing anyone (`why=story`, `ghost-anim-story`).
+  2. A revive during the animation left player 1 frozen. Red on the PR's
+     code with the new `ghost-anim-heart` (`flags=0x2010000`, did not
+     move), green after.
+  3. The ghost flag came 60 frames after `coop_down`, so enemies aimed at
+     the dying player. The flag and `coop: down` come in the death's frame
+     again; only the look waits.
+- Also changed: the animation per cause as the story branches do (0x13 for
+  cause 0 `func_8023ECF4`, 0x14 for cause 1 `func_8023EF38`, the death
+  face; the PR's `func_8023EE40` is the rival-stage branch). Its end is the
+  game's test (model flags & 0x41): **168 frames** for cause 1, about 3.4 s,
+  not 60. The bits go back at the end. A scene's freeze, a room's teardown
+  (new call in the `func_80245868` hook) and a revive end it. The per-frame
+  tick is gated on `coop_p2_slot()`.
+- Verify `--full --version eu --scenarios` on `0df5776`: 10/10 stages,
+  632/632 checks. The merge's code equals the branch's (the base had only
+  handoff commits).
+- Not run: cause 0, a pause or a room change during the animation, the US
+  build, and a look at it on screen. The collaborator has not reviewed the
+  owner's fixes.
 
 ## #72 and #73: the two approved pull requests merged (2026-10-21)
 
