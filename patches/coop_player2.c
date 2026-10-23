@@ -648,13 +648,22 @@ void coop_partner_tick(s32 slot) {
 // opening dialogue); when player 1 was moved during the scene (a scripted
 // walk), the release keeps player 2 frozen until it is placed next to player
 // 1 again.
+// A scene's freeze ends a death animation (#78), with the ghost look; the
+// player is let go first, so player 2 is frozen with player 1 as usual.
 // A scene revives a downed player (#22) when it ends: a freeze of S that
 // began once player 1 had been free for COOP_SETTLE_FRAMES (not a room's
 // entry walk or opening) and is released in the same room (not an exit or a
 // death, which the room's teardown ends).
 void coop_freeze_partner(s32 on, s32 anim) {
     s32 tile[3];
+    s32 i;
 
+    for (i = 0; i < 2 && on; i++) {
+        if (coop_dying[i] != 0) { // a scene takes the player over: its own freeze holds it (#78)
+            coop_ghost_look(i, 1);
+            coop_dying_over(i, "scene");
+        }
+    }
     coop_scene_held = on;
     if (on) {
         coop_scene_on = coop_scene_on || (coop_p1_free >= COOP_SETTLE_FRAMES && !coop_p1_dying && !coop_story_dead);
@@ -681,9 +690,8 @@ void coop_freeze_partner(s32 on, s32 anim) {
             return;
         }
     }
-    if (on && (!(g_Players[coop_slot].flags & COOP_FLAG_FROZEN) || coop_dying[1]) &&
-        g_Players[0].levelClass != NULL) {
-        func_802454F8(0, coop_freeze_tile); // also when its death animation froze it (#78)
+    if (on && !(g_Players[coop_slot].flags & COOP_FLAG_FROZEN) && g_Players[0].levelClass != NULL) {
+        func_802454F8(0, coop_freeze_tile);
     }
     recomp_printf("coop: freeze partner slot=%d on=%d\n", coop_slot, on);
     if (anim) {

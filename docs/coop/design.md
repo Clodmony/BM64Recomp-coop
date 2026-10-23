@@ -861,11 +861,12 @@ owner's rule, 2026-10-21).
   back is the one before the death face. Log `coop: dying slot=S cause=C`,
   then `coop: dying over slot=S why=end frames=N`.
 - **Something else ends it first:** a revive (the bits back, the player let
-  go, `why=` the revive's reason), the partner's story death (`why=story`:
-  it holds both players until the retry, #23), a room's teardown (the
-  actors go; the next room spawns the downed player as a ghost). At its end
-  the player is not let go while a scene's freeze or player 2's pending
-  placement holds it: their own release does it.
+  go, `why=` the revive's reason); a scene's freeze of S (`why=scene`: the
+  ghost look, then the scene freezes both players as usual and its release
+  lets them go); the partner's story death (`why=story`: it holds both
+  players until the retry, #23); a room's teardown (the actors go; the next
+  room spawns the downed player as a ghost). A player 2 whose placement is
+  pending is not let go: the placement does it.
 
 Both machines of a session start it in the same frame and see the same
 flags, so the lockstep stays equal (`session-ghost`, the same hashes on
@@ -881,8 +882,9 @@ the death's frame (`enemy-ghost`). Each ending that comes first was run too:
 - `ghost-anim-story`: player 1 dies by its own bomb 63 frames into player
   2's animation, a story death (`why=story`); player 2 does not move with
   its pad until the room's teardown, and the retry brings both back.
-- `ghost-anim-scene`: a scene's release 24 frames into player 2's animation
-  revives it (`why=scene`); placed next to player 1, it walks.
+- `ghost-anim-scene`: a scene's freeze 13 frames into player 2's animation
+  ends it (`why=scene`) and freezes player 2 with player 1; the release
+  revives it, placed next to player 1, and it walks.
 - `ghost-anim-heart`: player 2 finds a heart 42 frames into player 1's
   animation and revives it (`why=heart`): player 1 is let go (flags 0) and
   walks. The earlier version left it frozen.
