@@ -761,8 +761,9 @@ How it is done (`patches/coop_player2.c`):
   existing actor, and the hook returns **0** instead of running the
   function: the damage handler then takes its "lives on" branch (hearts 1,
   0x802483B0), so the slot is never out. Log `coop: down slot=S cause=C
-  lives=L ghost`. Since #78 the death animation runs first (*The death
-  animation of a downed player* below) and that line comes at its end.
+  lives=L ghost`. Since #78 the look waits for the death animation (*The
+  death animation of a downed player* below); the flag and that line still
+  come in the death's frame.
 - **No damage:** a hook at `func_80248148`'s entry skips the handler for a
   ghost (`coop: ghost hit`). A fall (cause 3, the update's pit) puts the
   ghost back next to the living player (`coop: ghost fell`, `ghost-fall`).
@@ -821,44 +822,80 @@ nothing was seen of the death. The animation is **not** driven by the player
 update - during a story death that update does not run at all (measured: the
 hook at `func_8024E088` logged nothing between the death and the room's
 teardown) - but by the death process `func_8023F26C`, which the hook never
-lets start.
+lets start. Its story path picks a branch by the cause: 0 `func_8023ECF4`,
+1 `func_8023EF38`, 2 `func_8024364C`, 5 a squash; 4 has none.
+(`func_8023EE40`, which an earlier version of #78 copied, is the branch for
+a rival's slot in a rival stage.)
 
-What that process does for causes 0 and 1 (`func_8023EE40`, read from the
-recompiled code) is done on the dying player's own actor instead
-(`coop_death_anim`):
+For causes 0 and 1 `coop_death_anim` does to the dying player's own actor
+what their branches do (read from the recompiled code):
 
 ```
-func_802313DC(actor, 0xC000000);   // the actor flags it clears
-*(s32*)(obj + 0xC) &= ~0x4000;     // and the model bit with them
-func_80229E38(obj, 0x14, 0);       // the death animation
-func_80229E38(obj, -1, 1);
+func_802313DC(actor, 0x8000000);  // cause 1 clears 0xC000000 and sets
+                                  // 0x4000000 again a frame later
+*(s32*)(obj + 0xC) &= ~0x4000;    // the model's flags now follow track 0
+func_80229E38(obj, 0x13, 0);      // cause 0; 0x14 for cause 1
+func_80229E38(obj, -1, 1);        // track 1 cleared
+func_8022979C(obj, 4, 0xC);       // the death face
+func_8022979C(obj, 5, 0xD);
 ```
 
-with `obj` the model at actor +0x40. The dying player is frozen for it
-(`func_80245208`: control lock and damage guard, so its pad does nothing and
-a second hit cannot land); **the partner plays on** (owner's rule,
-2026-10-21). `COOP_DEATH_FRAMES` (60) frames later the per-frame tick
-(`coop_dying_tick`) puts on the ghost flag and look, releases the player and
-logs the `coop: down …` line the death's frame logged before. A **fall**
-(cause 3) keeps the old path: no animation, the ghost goes next to the
-partner at once (owner's rule, 2026-10-21). A revive, a retry or a battle
-during the animation ends it.
+with `obj` the model at actor +0x40. Not copied: their sounds (one of them
+`func_802362B8(0x7F)`), the effect processes they start, and cause 1's leap
+(actor +0x68 and the sparks). Causes 2, 4 and 5 and a **fall** (cause 3)
+keep the old path, the ghost look at once (a fall: next to the partner,
+owner's rule, 2026-10-21).
 
-Both machines of a session start it in the same frame and count the same
-frames, so the lockstep stays equal (`session-ghost`, the same hashes on
+- **Down from the death's frame.** The ghost flag and the `coop: down …`
+  line come at once, as before #78, so enemies and rivals leave the dying
+  player and the HUD shows it down. Only the look waits.
+- **Frozen while it plays** (`func_80245208`: control lock and damage
+  guard); **the partner plays on** (owner's rule, 2026-10-21).
+- **Its end** is the game's own test: the branches wait until the model's
+  flags have 0x41 (0x40 once track 0 has played, with 0x4000 off), then
+  sleep 0x3C frames before the retry. The per-frame tick
+  (`coop_dying_tick`) waits for the same flags (at most
+  `COOP_DEATH_FRAMES`, 600, should they never come), then puts the ghost
+  look on, puts the actor's 0xC000000 and the model's 0x4000 back as they
+  were before the death, and lets the player go. The look a revive puts
+  back is the one before the death face. Log `coop: dying slot=S cause=C`,
+  then `coop: dying over slot=S why=end frames=N`.
+- **Something else ends it first:** a revive (the bits back, the player let
+  go, `why=` the revive's reason), the partner's story death (`why=story`:
+  it holds both players until the retry, #23), a room's teardown (the
+  actors go; the next room spawns the downed player as a ghost). At its end
+  the player is not let go while a scene's freeze or player 2's pending
+  placement holds it: their own release does it.
+
+Both machines of a session start it in the same frame and see the same
+flags, so the lockstep stays equal (`session-ghost`, the same hashes on
 every frame).
 
-Measured (Europe, `p2-ghost`): `coop: dying slot=4 cause=1 lives=2
-frames=60`, then 60 frames later `coop: down slot=4 … ghost`; in between the
-slot has the death animation on its model (the model's animation field holds
-0x14, the one `func_8023EE40` sets), `ghost=0`, `alpha=255` and it does not
-move. **Not run:** what it looks like on screen - no run with a window was
-made for it, so this says the animation is set and timed, not that it is
-seen.
+Measured (Europe, scenarios, cause 1): the model's flags say the animation
+has played **168 frames** after it starts (`coop: dying over slot=S why=end
+frames=168` in `p2-ghost` and `p1-ghost`, about 3.4 s at 50 Hz); in between
+the slot is frozen (`flags=0x2010000`), down (`ghost=1`) with its own look
+(`alpha=255`), then it has the ghost look and moves. Enemies leave it from
+the death's frame (`enemy-ghost`). Each ending that comes first was run too:
+
+- `ghost-anim-story`: player 1 dies by its own bomb 63 frames into player
+  2's animation, a story death (`why=story`); player 2 does not move with
+  its pad until the room's teardown, and the retry brings both back.
+- `ghost-anim-scene`: a scene's release 24 frames into player 2's animation
+  revives it (`why=scene`); placed next to player 1, it walks.
+- `ghost-anim-heart`: player 2 finds a heart 42 frames into player 1's
+  animation and revives it (`why=heart`): player 1 is let go (flags 0) and
+  walks. The earlier version left it frozen.
+
+**Not run:** cause 0 (animation 0x13: no scenario dies of it), a pause or a
+room change during the animation, and what it looks like on screen (no run
+with a window was looked at), so this says the animation is set and timed,
+not how it looks.
 
 Runs (Europe, scenarios): `p2-ghost`, `p1-ghost`, `ghost-heart`,
 `ghost-rooms`, `ghost-scene`, `ghost-fall`, `ghost-retry`,
-`p2-p1-death-freeze`, and `session-ghost` (an online session on one machine:
+`p2-p1-death-freeze`, `ghost-anim-story`, `ghost-anim-scene`,
+`ghost-anim-heart`, and `session-ghost` (an online session on one machine:
 player 1 downed, the same hashes on every frame in both games).
 
 Not done or not run: a stage clear and a real cutscene with a downed player;

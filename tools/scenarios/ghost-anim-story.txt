@@ -1,0 +1,71 @@
+# The partner's story death during a death animation (#78): player 2 is
+# downed as in p2-ghost and plays its death animation; player 1 (one heart)
+# lays a bomb on its own tile 60 frames after player 2's, out of the line of
+# player 2's blast, and dies by it during player 2's animation. Both players
+# are down: a story death. It holds player 2 frozen until the retry (#23),
+# so the animation stops without letting player 2 go (before the fix, it let
+# player 2 walk at its end), and the retry brings both back as players.
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_P2=4
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_SEED=1
+#check after "^coop: dying slot=4 cause=1$" "^coop: death slot=0 cause="
+#check no-log ^coop: down slot=0
+#check after "^coop: death slot=0" "^coop: freeze partner slot=4 on=1 death$"
+#check after "^coop: death slot=0" "^coop: dying over slot=4 why=story frames="
+#check no-log ^coop: dying over slot=4 why=end
+#check still dead later 4 1
+#check after "^coop: probe later$" "^coop: room teardown"
+#check after "^coop: death slot=0" "^coop: overlay 0x29$"
+#check after "^coop: death slot=0" "^coop: place slot=4 tile="
+#check field retry 4 ghost = 0
+#check field retry 4 alpha = 255
+#check moved retry walk 4 100
+overlay 0x29
+wait 300
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+wait 10
+pad 1 - 1 0.05
+wait 15
+pad 1 -
+wait 10
+pad 1 - -1 0.05
+wait 30
+pad 1 -
+wait 10
+pad 0 - 1 0.05
+wait 15
+pad 0 -
+wait 10
+probe start
+pad 1 A
+wait 2
+pad 1 -
+wait 400
+pad 1 A
+wait 2
+pad 1 -
+wait 60
+pad 0 A
+wait 2
+pad 0 -
+wait 200
+probe dead
+pad 1 - -1 0.05
+wait 30
+probe later
+pad 1 -
+overlay 0x29
+wait 300
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+wait 10
+probe retry
+pad 1 - -1 0.05
+wait 30
+pad 1 -
+probe walk
+end

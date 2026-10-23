@@ -606,9 +606,10 @@ text = """
     void coop_dying_tick(uint8_t* rdram, recomp_context* ctx);
     int32_t args[14];
     uint32_t requests;
+    extern int32_t coop_p2_slot(void);
     coop_log_frame(rdram);
-    { // coop: a death animation runs out here (#78), not in a player's
-      // update: the update of a frozen player does not run
+    if (coop_p2_slot() != 0) { // a death animation runs out here (#78), not in a
+        // player's update: the update of a frozen player does not run
         recomp_context c = *ctx;
         c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
         c.r29 -= 0x40;
@@ -1092,8 +1093,16 @@ text = """
 {
     extern void coop_log_player_event(const char* event, int32_t slot, const char* a_name, int32_t a, const char* b_name, int32_t b);
     extern void coop_note_item_gone(uint32_t item);
+    extern int32_t coop_p2_slot(void);
+    void coop_room_teardown(uint8_t* rdram, recomp_context* ctx);
     coop_log_player_event("room teardown", -1, NULL, 0, NULL, 0);
     coop_note_item_gone(0);
+    if (coop_p2_slot() != 0) { // a death animation ends with its room (#78)
+        recomp_context c = *ctx;
+        c.f_odd = ctx->mips3_float_mode ? &c.f1.u32l : &c.f0.u32h;
+        c.r29 -= 0x40;
+        coop_room_teardown(rdram, &c);
+    }
 }
 """
 
