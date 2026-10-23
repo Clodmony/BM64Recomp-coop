@@ -3,8 +3,8 @@
 # enemies, docs/coop/building.md). Enemy 8 (type 0x17) aims at player 1, the
 # only player near, as the room starts. Player 1 then dies by its own bomb
 # (p1-ghost) and is down, a ghost: from then on no enemy aims at the ghost,
-# enemy 8 aims at player 2. The ghost walks off: with both players out of
-# range enemy 8 is taken out. Player 2 alone then walks towards it: it spawns
+# enemy 8 aims at player 2. With both players out of its range (the ghost
+# counts) enemy 8 is taken out; the ghost walks off too. Player 2 alone then walks towards it: it spawns
 # again at player 2's range (#51) and aims at player 2.
 #env BM64_COOP_WARP=0x29:0x13
 #env BM64_COOP_P2=4
@@ -19,7 +19,7 @@
 #check field dead 4 ghost = 0
 #check after "^coop: down slot=0 " "^coop: enemy aim rec=8 slot=4 ghost=0 "
 #check not-after "^coop: down slot=0 " "^coop: enemy aim rec=[0-9]+ slot=0 ghost=1 "
-#check after "^coop: input: the ghost walks away from enemy 8$" "^coop: enemy despawn rec=8 "
+#check after "^coop: down slot=0 " "^coop: enemy despawn rec=8 "
 #check after "^coop: input: player 2 walks to enemy 8$" "^coop: enemy spawn rec=8 .* near=4$"
 #check after "^coop: input: player 2 walks to enemy 8$" "^coop: enemy aim rec=8 slot=4 ghost=0 "
 #check field later 4 ghost = 0
@@ -37,7 +37,7 @@ probe apart
 pad 0 A
 wait 2
 pad 0 -
-wait 180
+wait 350
 probe dead
 log the ghost walks away from enemy 8
 pad 0 - 0 1

@@ -1,0 +1,48 @@
+# A heart's revive during player 1's death animation (#78): player 1 is
+# downed as in p1-ghost and plays its death animation, frozen. A drop step
+# knocks a heart out of player 2 (seed 1: it flies along +x and lands at
+# about 8150, 10450) and player 2 walks there; the heart revives player 1
+# (#22). The revive ends the animation and lets player 1 go: before the fix
+# player 1 stayed frozen (control lock) after a revive during the animation.
+#env BM64_COOP_WARP=0x29:0x13
+#env BM64_COOP_P2=4
+#env BM64_COOP_LOG_PLAYERS=1
+#env BM64_COOP_SEED=1
+#check after "^coop: dying slot=0 cause=1$" "^coop: heart found slot=4$"
+#check after "^coop: heart found slot=4$" "^coop: dying over slot=0 why=heart frames="
+#check after "^coop: dying over slot=0 why=heart" "^coop: revive slot=0 why=heart hearts=2 lives=1$"
+#check no-log ^coop: dying over slot=0 why=end
+#check field dying 0 ghost = 1
+#check field revived 0 ghost = 0
+#check field revived 0 alpha = 255
+#check field revived 0 hearts = 2
+#check field revived 0 flags = 0
+#check moved revived walked 0 100
+overlay 0x29
+wait 300
+probe start
+pad 0 - 0.05 -1
+wait 15
+pad 0 -
+pad 1 - 1 0.05
+wait 30
+pad 1 -
+wait 10
+probe apart
+pad 0 A
+wait 2
+pad 0 -
+wait 165
+probe dying
+drop 4
+pad 1 - 0.05 -1
+wait 46
+pad 1 -
+wait 120
+probe revived
+pad 0 - 0.05 -1
+wait 30
+pad 0 -
+wait 10
+probe walked
+end

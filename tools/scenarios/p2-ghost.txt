@@ -4,6 +4,10 @@
 # 0x200 of player +0x68) and the ghost look (alpha 0x80), one heart; there is
 # no timed respawn and no shared life is spent. The ghost moves with pad 1
 # and lays no bomb.
+# Since #78 the death animation plays first: player 2 is down (the ghost
+# flag) from the death's frame, frozen with its own look while the
+# animation plays (probe dying: ghost=1, alpha=255, it does not move); the
+# ghost look follows once the model says it has played.
 #env BM64_COOP_WARP=0x29:0x13
 #env BM64_COOP_P2=4
 #env BM64_COOP_LOG_PLAYERS=1
@@ -11,6 +15,12 @@
 #
 #check after "^coop: hit slot=4" "^coop: death slot=4 cause="
 #check after "^coop: death slot=4" "^coop: down slot=4 cause=1 lives=2 ghost$"
+#check after "^coop: down slot=4" "^coop: dying slot=4 cause=1$"
+#check after "^coop: probe dying$" "^coop: dying over slot=4 why=end frames="
+# the death animation plays first: down, but its own look (#78)
+#check field dying 4 ghost = 1
+#check field dying 4 alpha = 255
+#check still dying down 4 1
 #check not-after "^coop: death slot=4" "^coop: room teardown"
 #check no-log ^coop: death slot=0
 #check field down 4 controlType = 2
@@ -53,6 +63,8 @@ probe hit1
 pad 1 A
 wait 2
 pad 1 -
+wait 170
+probe dying
 wait 190
 probe down
 wait 300

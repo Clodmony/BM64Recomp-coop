@@ -46,6 +46,7 @@ wait 2
 pad 1 -
 wait 190
 probe down
+wait 160
 pad 1 - -1 0.05
 wait 300
 pad 1 -

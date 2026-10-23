@@ -61,6 +61,7 @@ void func_802454F8(s32 slot, s32* tile);
 void g_SpawnPlayer(s32 slot);
 void func_80245208(s32 slot, s32 on);
 void func_8022979C(u8* obj, s32 part, s32 variant); // a model part's variant
+s32 func_80229E38(u8* obj, s32 anim, s32 mode);     // a model's animation (#78)
 void func_80231408(u8* actor, s32 bits);            // actor +0x8 bits on (draw mode 0x80000)
 void func_802313DC(u8* actor, s32 bits);            // and off
 void func_8027B39C(s32 type, s32 slot);             // knock an item out of a slot (4 a heart)

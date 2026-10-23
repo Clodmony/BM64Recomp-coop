@@ -9,6 +9,7 @@
 #define COOP_P2_PAD 1
 #define COOP_P2_HEARTS 2        // at a room's start and at a revive
 #define COOP_SETTLE_FRAMES 60   // player 1 free this long before player 2 is placed
+#define COOP_DEATH_FRAMES 600   // a death animation that never ends ends here (#78)
 #define COOP_PLACE_CLEAR 80.0f  // a placed player's tile centre at least this far from the partner
 
 static s32 coop_slot = -1; // player 2's slot in this room, -1 for none
@@ -17,6 +18,7 @@ static s32 coop_p1_free;    // frames player 1 has been free of walks and scenes
 static s32 coop_place_pending;
 static s32 coop_freeze_tile[3]; // player 1's tile when a cutscene froze it
 static s32 coop_scene_frozen;   // player 2 frozen with player 1 by that cutscene
+static s32 coop_scene_held;     // S frozen by a cutscene now (between its freeze and release)
 static s32 coop_p1_dying;       // player 1's story death runs, until the next room init (#23)
 static s32 coop_p1_floor[3];    // the last free floor tile player 1 stood on in this room
 static s32 coop_p1_floor_set;
@@ -160,27 +162,38 @@ static s32 coop_living(s32 i) {
     return p1->controlType == 1 && p1->levelClass != NULL && p1->heartCount > 0;
 }
 
+// Keeps the slot's own look, the one a revive puts back (once until then).
+static void coop_look_save(s32 i) {
+    u8* actor = g_Players[coop_slot_of(i)].levelClass;
+    CoopLook* look = &coop_look[i];
+    u8* obj;
+    u8* parts;
+
+    if (actor == NULL || look->saved) {
+        return;
+    }
+    obj = *(u8**)(actor + 0x40);
+    parts = *(u8**)(*(u8**)(obj + 0x4C) + 0x4); // func_8022979C's table: part * 8 + 4
+    look->saved = 1;
+    look->parts[0] = *(s32*)(parts + 4 * 8 + 4);
+    look->parts[1] = *(s32*)(parts + 5 * 8 + 4);
+    look->alpha = *(s16*)(obj + 0x36);
+    look->bits = (*(s32*)(obj + 0xC) & 0x1000) | (*(s32*)(actor + 0x8) & 0x80000);
+}
+
 // The look g_SpawnPlayer gives a slot spawned with the ghost flag
 // (0x80245AF0-0x80245B64), put on the slot's actor (on) or taken off again.
 static void coop_ghost_look(s32 i, s32 on) {
     u8* actor = g_Players[coop_slot_of(i)].levelClass;
     CoopLook* look = &coop_look[i];
     u8* obj;
-    u8* parts;
 
     if (actor == NULL) {
         return;
     }
     obj = *(u8**)(actor + 0x40);
-    parts = *(u8**)(*(u8**)(obj + 0x4C) + 0x4); // func_8022979C's table: part * 8 + 4
     if (on) {
-        if (!look->saved) {
-            look->saved = 1;
-            look->parts[0] = *(s32*)(parts + 4 * 8 + 4);
-            look->parts[1] = *(s32*)(parts + 5 * 8 + 4);
-            look->alpha = *(s16*)(obj + 0x36);
-            look->bits = (*(s32*)(obj + 0xC) & 0x1000) | (*(s32*)(actor + 0x8) & 0x80000);
-        }
+        coop_look_save(i);
         func_8022979C(obj, 4, 4);
         func_8022979C(obj, 5, 5);
         func_80231408(actor, 0x80000);
@@ -198,6 +211,116 @@ static void coop_ghost_look(s32 i, s32 on) {
     }
     *(s16*)(obj + 0x36) = look->alpha;
     *(s32*)(obj + 0xC) = (*(s32*)(obj + 0xC) & ~0x1000) | (look->bits & 0x1000);
+}
+
+// The death animation of a downed player (#78). Before #78 a player that died
+// while the partner lived became the ghost in the same frame, so nothing was
+// seen of the death: the story death path, which plays the animation, is
+// skipped whole (#22). The game plays it from the death process
+// (func_8023F26C, which the hook never lets start), per cause; for causes 0
+// and 1 (func_8023ECF4, func_8023EF38) this does what those branches do to
+// the dying player's actor and model: the actor's bit 0x8000000 off (cause 1
+// clears 0x4000000 too and sets it again a frame later), the model's 0x4000
+// off (its flags then follow the animation: 0x40 once it has played), the
+// animation (0x13, 0x14) on track 0, track 1 cleared, and the death face
+// (parts 4 and 5). Their sounds, effect processes and cause 1's leap are not
+// copied. The player is down and a ghost from the death's frame (flag,
+// coop_partner_death: enemies and rivals leave it, the HUD shows it); it is
+// frozen for the animation (func_80245208: control lock and damage guard);
+// the partner plays on (owner's rule, 2026-10-21). When the model says the
+// animation has played (+0xC & 0x41, the test of the game's own branches),
+// coop_dying_tick puts the ghost look on and lets the player go. Both
+// machines of a session run the same frames, so the lockstep stays equal.
+static s32 coop_dying[2];      // frames the death animation has run, 0 for none
+static s32 coop_dying_bits[2]; // actor +0x8 bits 0xC000000 and model +0xC bit 0x4000 before it
+
+// Starts it; 0 when the cause has none or there is no actor to play it on.
+static s32 coop_death_anim(s32 i, s32 cause) {
+    s32 slot = coop_slot_of(i);
+    u8* actor = g_Players[slot].levelClass;
+    u8* obj;
+
+    if ((cause != 0 && cause != 1) || actor == NULL || (obj = *(u8**)(actor + 0x40)) == NULL) {
+        return 0;
+    }
+    coop_look_save(i); // the look before the death face, for a revive
+    coop_dying_bits[i] = (*(s32*)(actor + 0x8) & 0xC000000) | (*(s32*)(obj + 0xC) & 0x4000);
+    func_802313DC(actor, 0x8000000);
+    if (cause == 1) {
+        func_80231408(actor, 0x4000000);
+    }
+    *(s32*)(obj + 0xC) &= ~0x4000;
+    func_80229E38(obj, cause == 0 ? 0x13 : 0x14, 0);
+    func_80229E38(obj, -1, 1);
+    func_8022979C(obj, 4, 0xC);
+    func_8022979C(obj, 5, 0xD);
+    func_80245208(slot, 1);
+    coop_dying[i] = 1;
+    recomp_printf("coop: dying slot=%d cause=%d\n", slot, cause);
+    return 1;
+}
+
+static void coop_dying_stop(s32 i, const char* why) {
+    recomp_printf("coop: dying over slot=%d why=%s frames=%d\n", coop_slot_of(i), why, coop_dying[i]);
+    coop_dying[i] = 0;
+}
+
+// Ends it on the living actor: the bits back as they were, and the player let
+// go unless something else holds it (a scene's freeze of S, which freezes
+// player 2 with player 1, or player 2's pending placement: their own release
+// lets it go).
+static void coop_dying_over(s32 i, const char* why) {
+    s32 slot = coop_slot_of(i);
+    u8* actor = g_Players[slot].levelClass;
+    u8* obj = *(u8**)(actor + 0x40);
+
+    func_802313DC(actor, 0xC000000);
+    func_80231408(actor, coop_dying_bits[i] & 0xC000000);
+    *(s32*)(obj + 0xC) = (*(s32*)(obj + 0xC) & ~0x4000) | (coop_dying_bits[i] & 0x4000);
+    if (!coop_scene_held && !(i == 1 && coop_place_pending)) {
+        func_80245208(slot, 0);
+    }
+    coop_dying_stop(i, why);
+}
+
+// From the per-frame hook (bm64.us.toml, func_8023A208), not from a player's
+// update, which a freeze or a death can stop. A story death of the partner
+// during the animation (both players down) takes over: it holds this player
+// frozen until the retry (#23), and the actor is left to it.
+void coop_dying_tick(void) {
+    s32 i;
+
+    for (i = 0; i < 2; i++) {
+        u8* obj;
+
+        if (coop_dying[i] == 0) {
+            continue;
+        }
+        if (coop_story_dead) {
+            coop_dying_stop(i, "story");
+            continue;
+        }
+        obj = *(u8**)(g_Players[coop_slot_of(i)].levelClass + 0x40);
+        if (!(*(s32*)(obj + 0xC) & 0x41) && coop_dying[i] < COOP_DEATH_FRAMES) {
+            coop_dying[i]++;
+            continue;
+        }
+        coop_ghost_look(i, 1);
+        coop_dying_over(i, "end");
+    }
+}
+
+// Hook at the entry of func_80245868, a room's teardown: its actors go, and
+// with them a death animation still running (the next room spawns a downed
+// player as a ghost).
+void coop_room_teardown(void) {
+    s32 i;
+
+    for (i = 0; i < 2; i++) {
+        if (coop_dying[i] != 0) {
+            coop_dying_stop(i, "room");
+        }
+    }
 }
 
 // Puts a downed or revived player next to the living one: player 2 by the
@@ -254,6 +377,9 @@ static void coop_revive(s32 i, const char* why, s32 fresh, s32 place) {
     coop_down[i] = 0;
     p->states &= ~COOP_STATE_GHOST;
     p->heartCount = COOP_P2_HEARTS;
+    if (coop_dying[i] && !fresh) {
+        coop_dying_over(i, why); // a revive during the death animation ends it (#78)
+    }
     if (!fresh) {
         coop_ghost_look(i, 0);
     }
@@ -337,6 +463,7 @@ void coop_stage_init(s32 slot) {
     coop_p1_free = 0;
     coop_scene_on = 0;
     coop_scene_frozen = 0;
+    coop_scene_held = 0;
     coop_p1_dying = 0;
     coop_p1_floor_set = 0;
     if (g_LevelLoader & 0x4) {
@@ -396,8 +523,11 @@ s32 coop_partner_death(s32 slot, s32 cause) {
     }
     coop_down[i] = 1;
     g_Players[slot].states |= COOP_STATE_GHOST;
-    coop_ghost_look(i, 1);
     recomp_printf("coop: down slot=%d cause=%d lives=%d ghost\n", slot, cause, D_802AC624);
+    if (coop_death_anim(i, cause)) {
+        return 1; // the ghost look follows at the animation's end (coop_dying_tick)
+    }
+    coop_ghost_look(i, 1);
     if (cause == 3) {
         coop_place_down(i); // a fall: out of the pit, next to the partner
     }
@@ -518,13 +648,23 @@ void coop_partner_tick(s32 slot) {
 // opening dialogue); when player 1 was moved during the scene (a scripted
 // walk), the release keeps player 2 frozen until it is placed next to player
 // 1 again.
+// A scene's freeze ends a death animation (#78), with the ghost look; the
+// player is let go first, so player 2 is frozen with player 1 as usual.
 // A scene revives a downed player (#22) when it ends: a freeze of S that
 // began once player 1 had been free for COOP_SETTLE_FRAMES (not a room's
 // entry walk or opening) and is released in the same room (not an exit or a
 // death, which the room's teardown ends).
 void coop_freeze_partner(s32 on, s32 anim) {
     s32 tile[3];
+    s32 i;
 
+    for (i = 0; i < 2 && on; i++) {
+        if (coop_dying[i] != 0) { // a scene takes the player over: its own freeze holds it (#78)
+            coop_ghost_look(i, 1);
+            coop_dying_over(i, "scene");
+        }
+    }
+    coop_scene_held = on;
     if (on) {
         coop_scene_on = coop_scene_on || (coop_p1_free >= COOP_SETTLE_FRAMES && !coop_p1_dying && !coop_story_dead);
     } else if (coop_scene_on) {
