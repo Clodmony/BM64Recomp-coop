@@ -37,6 +37,11 @@ Last updated 2026-10-23 (#92 reviewed, fixed on its branch and merged).
 - Not run: cause 0, a pause or a room change during the animation, the US
   build, and a look at it on screen. The collaborator has not reviewed the
   owner's fixes.
+- **Owner decisions (end of this session, 2026-10-23):** the full length
+  stays (the game's own end, 168 frames, not a cap); no review request to
+  the collaborator, the PR comment and this note tell them; the branch and
+  worktree are removed, and the session's scratch (build folder, verify and
+  run folders, loose files) is deleted.
 
 ## #72 and #73: the two approved pull requests merged (2026-10-21)
 
